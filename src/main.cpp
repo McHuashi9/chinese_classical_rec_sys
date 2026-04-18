@@ -202,16 +202,16 @@ void displayUserAbilities(const User& user) {
     table.add_row({"维度", "能力值"});
     table[0].format().font_style({tabulate::FontStyle::bold});
     
-    table.add_row({"d1 (平均句长)", formatDouble(user.getD1Ability())});
-    table.add_row({"d2 (句子数)", formatDouble(user.getD2Ability())});
-    table.add_row({"d3 (虚词比例)", formatDouble(user.getD3Ability())});
-    table.add_row({"d4 (字平均对数频次)", formatDouble(user.getD4Ability())});
-    table.add_row({"d5 (通假字密度)", formatDouble(user.getD5Ability())});
-    table.add_row({"d6 (古汉语困惑度)", formatDouble(user.getD6Ability())});
-    table.add_row({"d7 (今汉语困惑度)", formatDouble(user.getD7Ability())});
-    table.add_row({"d8 (词汇多样性)", formatDouble(user.getD8Ability())});
-    table.add_row({"d9 (典故密度)", formatDouble(user.getD9Ability())});
-    table.add_row({"d10 (语义复杂度)", formatDouble(user.getD10Ability())});
+    table.add_row({"d1 (平均句长)", formatDouble(user.getAbility(0))});
+    table.add_row({"d2 (句子数)", formatDouble(user.getAbility(1))});
+    table.add_row({"d3 (虚词比例)", formatDouble(user.getAbility(2))});
+    table.add_row({"d4 (字平均对数频次)", formatDouble(user.getAbility(3))});
+    table.add_row({"d5 (通假字密度)", formatDouble(user.getAbility(4))});
+    table.add_row({"d6 (古汉语困惑度)", formatDouble(user.getAbility(5))});
+    table.add_row({"d7 (今汉语困惑度)", formatDouble(user.getAbility(6))});
+    table.add_row({"d8 (词汇多样性)", formatDouble(user.getAbility(7))});
+    table.add_row({"d9 (典故密度)", formatDouble(user.getAbility(8))});
+    table.add_row({"d10 (语义复杂度)", formatDouble(user.getAbility(9))});
     
     // 数值列右对齐
     table.column(1).format().font_align(tabulate::FontAlign::right);

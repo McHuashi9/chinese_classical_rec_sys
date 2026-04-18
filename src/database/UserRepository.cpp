@@ -75,16 +75,16 @@ static int getUserCallback(void* data, int argc, char** argv, char** azColName) 
     // 字段映射表：列名 -> setter函数
     static const std::unordered_map<std::string, std::function<void(User*, const char*)>> fieldMap = {
         {"name", [](User* u, const char* v) { u->setName(v); }},
-        {"d1_ability", [](User* u, const char* v) { u->setD1Ability(std::atof(v)); }},
-        {"d2_ability", [](User* u, const char* v) { u->setD2Ability(std::atof(v)); }},
-        {"d3_ability", [](User* u, const char* v) { u->setD3Ability(std::atof(v)); }},
-        {"d4_ability", [](User* u, const char* v) { u->setD4Ability(std::atof(v)); }},
-        {"d5_ability", [](User* u, const char* v) { u->setD5Ability(std::atof(v)); }},
-        {"d6_ability", [](User* u, const char* v) { u->setD6Ability(std::atof(v)); }},
-        {"d7_ability", [](User* u, const char* v) { u->setD7Ability(std::atof(v)); }},
-        {"d8_ability", [](User* u, const char* v) { u->setD8Ability(std::atof(v)); }},
-        {"d9_ability", [](User* u, const char* v) { u->setD9Ability(std::atof(v)); }},
-        {"d10_ability", [](User* u, const char* v) { u->setD10Ability(std::atof(v)); }},
+        {"d1_ability", [](User* u, const char* v) { u->setAbility(0, std::atof(v)); }},
+        {"d2_ability", [](User* u, const char* v) { u->setAbility(1, std::atof(v)); }},
+        {"d3_ability", [](User* u, const char* v) { u->setAbility(2, std::atof(v)); }},
+        {"d4_ability", [](User* u, const char* v) { u->setAbility(3, std::atof(v)); }},
+        {"d5_ability", [](User* u, const char* v) { u->setAbility(4, std::atof(v)); }},
+        {"d6_ability", [](User* u, const char* v) { u->setAbility(5, std::atof(v)); }},
+        {"d7_ability", [](User* u, const char* v) { u->setAbility(6, std::atof(v)); }},
+        {"d8_ability", [](User* u, const char* v) { u->setAbility(7, std::atof(v)); }},
+        {"d9_ability", [](User* u, const char* v) { u->setAbility(8, std::atof(v)); }},
+        {"d10_ability", [](User* u, const char* v) { u->setAbility(9, std::atof(v)); }},
         {"d1_base_ability", [](User* u, const char* v) { u->setBaseAbility(0, std::atof(v)); }},
         {"d2_base_ability", [](User* u, const char* v) { u->setBaseAbility(1, std::atof(v)); }},
         {"d3_base_ability", [](User* u, const char* v) { u->setBaseAbility(2, std::atof(v)); }},
@@ -147,16 +147,9 @@ bool UserRepository::saveUser(const User& user) {
     
     // INSERT 部分的参数
     params.push_back(user.getName());  // name
-    params.push_back(user.getD1Ability());
-    params.push_back(user.getD2Ability());
-    params.push_back(user.getD3Ability());
-    params.push_back(user.getD4Ability());
-    params.push_back(user.getD5Ability());
-    params.push_back(user.getD6Ability());
-    params.push_back(user.getD7Ability());
-    params.push_back(user.getD8Ability());
-    params.push_back(user.getD9Ability());
-    params.push_back(user.getD10Ability());
+    for (int i = 0; i < 10; ++i) {
+        params.push_back(user.getAbility(i));
+    }
     params.push_back(user.getBaseAbility(0));
     params.push_back(user.getBaseAbility(1));
     params.push_back(user.getBaseAbility(2));
@@ -171,16 +164,9 @@ bool UserRepository::saveUser(const User& user) {
     
     // UPDATE 部分的参数
     params.push_back(user.getName());  // name
-    params.push_back(user.getD1Ability());
-    params.push_back(user.getD2Ability());
-    params.push_back(user.getD3Ability());
-    params.push_back(user.getD4Ability());
-    params.push_back(user.getD5Ability());
-    params.push_back(user.getD6Ability());
-    params.push_back(user.getD7Ability());
-    params.push_back(user.getD8Ability());
-    params.push_back(user.getD9Ability());
-    params.push_back(user.getD10Ability());
+    for (int i = 0; i < 10; ++i) {
+        params.push_back(user.getAbility(i));
+    }
     params.push_back(user.getBaseAbility(0));
     params.push_back(user.getBaseAbility(1));
     params.push_back(user.getBaseAbility(2));

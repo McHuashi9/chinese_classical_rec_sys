@@ -38,56 +38,16 @@ public:
     double getAbility(int index) const;
     
     // ============================================
-    // 维度便捷接口 (Dimension Convenience API)
+    // 注意：已移除维度便捷接口以遵循 DRY 原则
     // ============================================
     // 设计说明：
-    // 虽然存在统一接口 getAbility/setAbility，但保留这些命名
-    // getter/setter 是有意的，原因如下：
-    // 1. 类型安全：避免数组越界风险
-    // 2. 可读性：调用方代码更清晰 (如 user.getD1Ability())
-    // 3. IDE 支持：自动补全和类型提示更友好
-    // 4. 兼容性：不破坏现有调用代码
+    // 原设计包含 d1-d10 的独立 getter/setter 方法 (20处重复)。
+    // 根据 L3 代码审查 (DRY 阈值：最多3次重复)，已移除这些方法。
+    // 请使用统一的 getAbility/setAbility 接口，通过索引访问。
+    // 维度映射：d1=0, d2=1, ..., d10=9
     // ============================================
     
-    // d1: 平均句长能力 (f1)
-    void setD1Ability(double ability);
-    double getD1Ability() const;
-    
-    // d2: 句子数能力 (f3)
-    void setD2Ability(double ability);
-    double getD2Ability() const;
-    
-    // d3: 虚词比例能力 (f5)
-    void setD3Ability(double ability);
-    double getD3Ability() const;
-    
-    // d4: 字平均对数频次能力 (f6)
-    void setD4Ability(double ability);
-    double getD4Ability() const;
-    
-    // d5: 通假字密度能力 (f8)
-    void setD5Ability(double ability);
-    double getD5Ability() const;
-    
-    // d6: 古汉语困惑度能力 (f9)
-    void setD6Ability(double ability);
-    double getD6Ability() const;
-    
-    // d7: 今汉语困惑度能力 (f10)
-    void setD7Ability(double ability);
-    double getD7Ability() const;
-    
-    // d8: MATTR词汇多样性能力 (f11)
-    void setD8Ability(double ability);
-    double getD8Ability() const;
-    
-    // d9: 典故密度能力 (f12)
-    void setD9Ability(double ability);
-    double getD9Ability() const;
-    
-    // d10: 语义复杂度能力 (f13)
-    void setD10Ability(double ability);
-    double getD10Ability() const;
+
     
     /**
      * @brief 获取平均能力值

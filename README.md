@@ -179,7 +179,8 @@ chinese_classical_rec_sys/
 ├── third_party/              # 第三方库
 │   ├── spdlog/               # 高性能日志库
 │   ├── sqlite3/              # 嵌入式数据库
-│   └── catch2/               # 测试框架
+│   ├── catch2/               # 测试框架
+│   └── tabulate-1.5/         # 表格格式化库
 ├── processed_classical/      # 处理后的古文数据（白名单包含）
 │   ├── textbook_annotated/   # 语文教材带注释版
 │   ├── anthology/            # 古文观止原文
