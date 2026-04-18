@@ -128,12 +128,12 @@ double ReadCommand::displayContent(const std::string& content) {
     
     auto startTime = std::chrono::steady_clock::now();
     nowide::cout << content;
+    auto endTime = std::chrono::steady_clock::now();
     
     const int linesPerPage = 20;
     int totalLines = calculateLineCount(content);
     displayWithPagination(totalLines, linesPerPage);
     
-    auto endTime = std::chrono::steady_clock::now();
     return std::chrono::duration<double>(endTime - startTime).count();
 }
 
