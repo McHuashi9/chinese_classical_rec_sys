@@ -34,11 +34,26 @@ void initUser(UserRepository& userRepo, User& currentUser);
 std::string promptUserName();
 void displayUserAbilities(const User& user);
 
+#ifdef _WIN32
+void checkConsoleFont() {
+    CONSOLE_FONT_INFOEX fontInfo;
+    fontInfo.cbSize = sizeof(CONSOLE_FONT_INFOEX);
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (GetCurrentConsoleFontEx(hConsole, FALSE, &fontInfo)) {
+        if (!(fontInfo.FontFamily & TMPF_TRUETYPE)) {
+            nowide::cout << "提示：当前控制台字体可能影响表格显示，建议使用 TrueType 等宽字体（如 Consolas）。" << std::endl;
+        }
+    }
+}
+#endif
+
 int main() {
 #ifdef _WIN32
     // 设置 Windows 控制台编码为 UTF-8
     SetConsoleOutputCP(65001);
     SetConsoleCP(65001);
+    // 检查控制台字体
+    checkConsoleFont();
 #endif
     // 设置 C++ locale 以支持宽字符
     std::setlocale(LC_ALL, "");

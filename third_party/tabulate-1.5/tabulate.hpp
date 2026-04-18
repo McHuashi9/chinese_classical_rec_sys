@@ -6148,44 +6148,39 @@ inline size_t get_sequence_length(const std::string &text, const std::string &lo
     return text.length();
 
 #if defined(_WIN32) || defined(_WIN64)
-  // Windows 下使用 WideCharToMultiByte 或手动计算
-  // 简单但有效的方法：判断每个 UTF-8 字符的首字节，汉字范围算 2 宽度
+  (void)locale; // unused parameter
+
   size_t width = 0;
   for (size_t i = 0; i < text.size(); ) {
-    unsigned char c = text[i];
-    if (c < 0x80) {
+    unsigned char c = static_cast<unsigned char>(text[i]);
+
+    // 单字节 ASCII 字符 (0xxxxxxx)
+    if ((c & 0x80) == 0) {
       width += 1;
       i += 1;
-    } else if ((c & 0xE0) == 0xC0) {
-      // 2字节字符（拉丁扩展等），一般算1宽度
-      width += 1;
+    }
+    // 2 字节 UTF-8 字符 (110xxxxx 10xxxxxx)
+    else if ((c & 0xE0) == 0xC0) {
+      width += 1;      // 拉丁扩展字符通常视为半角，宽度 1
       i += 2;
-    } else if ((c & 0xF0) == 0xE0) {
-      // 3字节字符，常见中文在此范围
-      // 判断是否为 CJK 统一表意字符范围（U+4E00 ~ U+9FFF）
-      if (i + 2 < text.size()) {
-        unsigned char c2 = text[i+1];
-        unsigned char c3 = text[i+2];
-        unsigned int cp = ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
-        if (cp >= 0x4E00 && cp <= 0x9FFF) {
-          width += 2;  // 汉字占2宽度
-        } else {
-          width += 1;
-        }
-      } else {
-        width += 1;
-      }
-      i += 3;
-    } else if ((c & 0xF8) == 0xF0) {
-      // 4字节字符（emoji等），算2宽度
+    }
+    // 3 字节 UTF-8 字符 (1110xxxx 10xxxxxx 10xxxxxx)
+    // 包括中文汉字（U+4E00~U+9FFF）、全角标点、日韩文等，控制台均视为全角（宽度2）
+    else if ((c & 0xF0) == 0xE0) {
       width += 2;
+      i += 3;
+    }
+    // 4 字节 UTF-8 字符 (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+    else if ((c & 0xF8) == 0xF0) {
+      width += 2;      // Emoji 等，在控制台中通常占 2 宽度
       i += 4;
-    } else {
+    }
+    // 无效 UTF-8 序列，保守处理
+    else {
       width += 1;
       i += 1;
     }
   }
-  (void)locale; // unused parameter
   return width;
 #elif defined(__unix__) || defined(__unix) || defined(__APPLE__)
   auto result = get_wcswidth(text, locale, text.size());

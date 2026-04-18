@@ -29,9 +29,8 @@ jobs:
           mkdir package\data
           copy build\Release\chinese_classical_rec_sys.exe package\
           copy build\data\classical.db package\data\
-          Compress-Archive -Path package\* -DestinationPath test-windows.zip
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: test-windows
-          path: test-windows.zip
+          path: package/
