@@ -50,57 +50,8 @@ public:
     double getDifficulty(int index) const;
     void setDifficulty(int index, double value);
     
-    // ============================================
-    // 维度便捷接口 (Dimension Convenience API)
-    // ============================================
-    // 设计说明：
-    // 虽然存在统一接口 getDifficulty/setDifficulty，但保留这些命名
-    // getter/setter 是有意的，原因如下：
-    // 1. 类型安全：避免数组越界风险
-    // 2. 可读性：调用方代码更清晰 (如 text.getF1AvgSentenceLength())
-    // 3. IDE 支持：自动补全和类型提示更友好
-    // 4. 兼容性：不破坏现有调用代码
-    // ============================================
-    
-    // d1: 平均句长
-    void setF1AvgSentenceLength(double v);
-    double getF1AvgSentenceLength() const;
-    
-    // d2: 句子数
-    void setF3SentenceCount(double v);
-    double getF3SentenceCount() const;
-    
-    // d3: 虚词比例
-    void setF5FunctionWordRatio(double v);
-    double getF5FunctionWordRatio() const;
-    
-    // d4: 字平均对数频次
-    void setF6AvgCharLogFreq(double v);
-    double getF6AvgCharLogFreq() const;
-    
-    // d5: 通假字密度
-    void setF8TongjiaziDensity(double v);
-    double getF8TongjiaziDensity() const;
-    
-    // d6: 古汉语困惑度
-    void setF9PplAncient(double v);
-    double getF9PplAncient() const;
-    
-    // d7: 今汉语困惑度
-    void setF10PplModern(double v);
-    double getF10PplModern() const;
-    
-    // d8: MATTR词汇多样性
-    void setF11Mattr(double v);
-    double getF11Mattr() const;
-    
-    // d9: 典故密度
-    void setF12AllusionDensity(double v);
-    double getF12AllusionDensity() const;
-    
-    // d10: 语义复杂度
-    void setF13SemanticComplexity(double v);
-    double getF13SemanticComplexity() const;
+
+
     
 private:
     int id;

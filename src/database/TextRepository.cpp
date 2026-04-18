@@ -45,16 +45,16 @@ static void populateTextFromRow(Text& text, int argc, char** argv, char** azColN
         {"author", [](Text* t, const char* v) { t->setAuthor(v); }},
         {"dynasty", [](Text* t, const char* v) { t->setDynasty(v); }},
         {"content", [](Text* t, const char* v) { t->setContent(v); }},
-        {"f1_avg_sentence_length", [](Text* t, const char* v) { t->setF1AvgSentenceLength(std::atof(v)); }},
-        {"f3_sentence_count", [](Text* t, const char* v) { t->setF3SentenceCount(std::atof(v)); }},
-        {"f5_function_word_ratio", [](Text* t, const char* v) { t->setF5FunctionWordRatio(std::atof(v)); }},
-        {"f6_avg_char_log_freq", [](Text* t, const char* v) { t->setF6AvgCharLogFreq(std::atof(v)); }},
-        {"f8_tongjiazi_density", [](Text* t, const char* v) { t->setF8TongjiaziDensity(std::atof(v)); }},
-        {"f9_ppl_ancient", [](Text* t, const char* v) { t->setF9PplAncient(std::atof(v)); }},
-        {"f10_ppl_modern", [](Text* t, const char* v) { t->setF10PplModern(std::atof(v)); }},
-        {"f11_mattr", [](Text* t, const char* v) { t->setF11Mattr(std::atof(v)); }},
-        {"f12_allusion_density", [](Text* t, const char* v) { t->setF12AllusionDensity(std::atof(v)); }},
-        {"f13_semantic_complexity", [](Text* t, const char* v) { t->setF13SemanticComplexity(std::atof(v)); }}
+        {"f1_avg_sentence_length", [](Text* t, const char* v) { t->setDifficulty(0, std::atof(v)); }},
+        {"f3_sentence_count", [](Text* t, const char* v) { t->setDifficulty(1, std::atof(v)); }},
+        {"f5_function_word_ratio", [](Text* t, const char* v) { t->setDifficulty(2, std::atof(v)); }},
+        {"f6_avg_char_log_freq", [](Text* t, const char* v) { t->setDifficulty(3, std::atof(v)); }},
+        {"f8_tongjiazi_density", [](Text* t, const char* v) { t->setDifficulty(4, std::atof(v)); }},
+        {"f9_ppl_ancient", [](Text* t, const char* v) { t->setDifficulty(5, std::atof(v)); }},
+        {"f10_ppl_modern", [](Text* t, const char* v) { t->setDifficulty(6, std::atof(v)); }},
+        {"f11_mattr", [](Text* t, const char* v) { t->setDifficulty(7, std::atof(v)); }},
+        {"f12_allusion_density", [](Text* t, const char* v) { t->setDifficulty(8, std::atof(v)); }},
+        {"f13_semantic_complexity", [](Text* t, const char* v) { t->setDifficulty(9, std::atof(v)); }}
     };
     
     for (int i = 0; i < argc; i++) {
@@ -137,13 +137,10 @@ bool TextRepository::saveText(const Text& text) {
     };
     
     // 10维特征参数
-    std::vector<double> realParams = {
-        text.getF1AvgSentenceLength(), text.getF3SentenceCount(),
-        text.getF5FunctionWordRatio(), text.getF6AvgCharLogFreq(),
-        text.getF8TongjiaziDensity(), text.getF9PplAncient(),
-        text.getF10PplModern(), text.getF11Mattr(),
-        text.getF12AllusionDensity(), text.getF13SemanticComplexity()
-    };
+    std::vector<double> realParams;
+    for (int i = 0; i < 10; i++) {
+        realParams.push_back(text.getDifficulty(i));
+    }
     
     return db->executeSQL(
         "INSERT INTO classical_text (title, author, dynasty, content, "
@@ -166,14 +163,11 @@ bool TextRepository::updateText(const Text& text) {
     };
     
     // 10维特征参数 + id
-    std::vector<double> realParams = {
-        text.getF1AvgSentenceLength(), text.getF3SentenceCount(),
-        text.getF5FunctionWordRatio(), text.getF6AvgCharLogFreq(),
-        text.getF8TongjiaziDensity(), text.getF9PplAncient(),
-        text.getF10PplModern(), text.getF11Mattr(),
-        text.getF12AllusionDensity(), text.getF13SemanticComplexity(),
-        static_cast<double>(text.getId())
-    };
+    std::vector<double> realParams;
+    for (int i = 0; i < 10; i++) {
+        realParams.push_back(text.getDifficulty(i));
+    }
+    realParams.push_back(static_cast<double>(text.getId()));
     
     return db->executeSQL(
         "UPDATE classical_text SET "

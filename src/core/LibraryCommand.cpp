@@ -97,36 +97,42 @@ double LibraryCommand::calculateCompositeDifficulty(const Text& text) {
     double sum = 0.0;
     int count = 0;
     
-    // d1: 平均句长
-    sum += text.getF1AvgSentenceLength();
-    count++;
-    // d2: 句子数（取对数归一化）
-    sum += std::log(text.getF3SentenceCount() + 1);
-    count++;
-    // d3: 虚词比例
-    sum += text.getF5FunctionWordRatio() * 100;
-    count++;
-    // d4: 字平均对数频次（取负值，越小越难）
-    sum += text.getF6AvgCharLogFreq() * -30;
-    count++;
-    // d5: 通假字密度
-    sum += text.getF8TongjiaziDensity() * 1000;
-    count++;
-    // d6: 古汉语困惑度
-    sum += text.getF9PplAncient() / 10;
-    count++;
-    // d7: 今汉语困惑度
-    sum += text.getF10PplModern() / 10;
-    count++;
-    // d8: MATTR词汇多样性
-    sum += (1.0 - text.getF11Mattr()) * 100;
-    count++;
-    // d9: 典故密度
-    sum += text.getF12AllusionDensity() * 1000;
-    count++;
-    // d10: 语义复杂度
-    sum += text.getF13SemanticComplexity() * 100;
-    count++;
+    for (int i = 0; i < 10; i++) {
+        double val = text.getDifficulty(i);
+        switch (i) {
+            case 0: // d1: 平均句长
+                sum += val;
+                break;
+            case 1: // d2: 句子数（取对数归一化）
+                sum += std::log(val + 1);
+                break;
+            case 2: // d3: 虚词比例
+                sum += val * 100;
+                break;
+            case 3: // d4: 字平均对数频次（取负值，越小越难）
+                sum += val * -30;
+                break;
+            case 4: // d5: 通假字密度
+                sum += val * 1000;
+                break;
+            case 5: // d6: 古汉语困惑度
+                sum += val / 10;
+                break;
+            case 6: // d7: 今汉语困惑度
+                sum += val / 10;
+                break;
+            case 7: // d8: MATTR词汇多样性
+                sum += (1.0 - val) * 100;
+                break;
+            case 8: // d9: 典故密度
+                sum += val * 1000;
+                break;
+            case 9: // d10: 语义复杂度
+                sum += val * 100;
+                break;
+        }
+        count++;
+    }
     
     return sum / count;
 }
