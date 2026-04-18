@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: chinese_classical_rec_sys
+            asset_name: chinese_classical_rec_sys-${{ github.ref_name }}-linux
+          - os: windows-latest
+            artifact_name: chinese_classical_rec_sys.exe
+            asset_name: chinese_classical_rec_sys-${{ github.ref_name }}-windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.28'
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --target chinese_classical_rec_sys
+
+      - name: Build tests with verbose output
+        run: cmake --build build --config Release --target run_tests --verbose
+        continue-on-error: true
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Generate database
+        run: python scripts/init_data.py
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # 创建带版本号的顶层目录
+          mkdir -p ${{ matrix.asset_name }}/data
+          cp build/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
+          cp build/data/classical.db ${{ matrix.asset_name }}/data/
+          cp LICENSE ${{ matrix.asset_name }}/
+          tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
+          echo "ASSET_PATH=${{ matrix.asset_name }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # 创建带版本号的顶层目录
+          mkdir ${{ matrix.asset_name }}\data
+          copy build\Release\${{ matrix.artifact_name }} ${{ matrix.asset_name }}\
+          copy build\data\classical.db ${{ matrix.asset_name }}\data\
+          copy LICENSE ${{ matrix.asset_name }}\
+          Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.asset_name }}.zip
+          echo "ASSET_PATH=${{ matrix.asset_name }}.zip" >> $env:GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ env.ASSET_PATH }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chinese_classical_rec_sys-${{ github.ref_name }}-linux
+          path: artifacts
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chinese_classical_rec_sys-${{ github.ref_name }}-windows
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
