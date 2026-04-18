@@ -1,0 +1,4 @@
+# 精简依赖 - 仅用于 CI/CD 构建
+# init_data.py 实际只依赖 numpy（其余为 Python 标准库）
+
+numpy>=1.20.0

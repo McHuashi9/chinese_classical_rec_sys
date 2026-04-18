@@ -1,0 +1,37 @@
+name: Test Windows Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run tests
+        run: ctest --test-dir build -C Release
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Generate database
+        run: python scripts/init_data.py
+      - name: Package
+        run: |
+          mkdir package\data
+          copy build\Release\chinese_classical_rec_sys.exe package\
+          copy build\data\classical.db package\data\
+          Compress-Archive -Path package\* -DestinationPath test-windows.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-windows
+          path: test-windows.zip
