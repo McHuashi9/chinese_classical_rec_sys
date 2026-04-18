@@ -109,8 +109,9 @@ void RecommendCommand::displayRecommendations(
         }
     }
     
-    // 对齐：序号、匹配度右对齐
+    // 对齐：序号、匹配度右对齐，标题左对齐
     table.column(0).format().font_align(tabulate::FontAlign::right);
+    table.column(1).format().font_align(tabulate::FontAlign::left);
     table.column(3).format().font_align(tabulate::FontAlign::right);
     
     // 边框样式（可复用 LibraryCommand 中的设置，或单独定义）

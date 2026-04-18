@@ -159,8 +159,9 @@ void LibraryCommand::displayTexts(const std::vector<Text>& texts) {
         });
     }
     
-    // 列对齐设置：ID 和难度右对齐
+    // 列对齐设置：ID 和难度右对齐，标题左对齐
     table.column(0).format().font_align(tabulate::FontAlign::right);
+    table.column(1).format().font_align(tabulate::FontAlign::left);
     table.column(4).format().font_align(tabulate::FontAlign::right);
     
     // 边框样式（使用 Unicode 框线字符，若终端不支持可改为 ASCII）
