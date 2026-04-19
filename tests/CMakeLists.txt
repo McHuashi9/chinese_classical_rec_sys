@@ -7,6 +7,7 @@ include_directories(${CMAKE_SOURCE_DIR}/third_party/catch2)
 set(TEST_SOURCES
     test_main.cpp
     test_math_functions.cpp
+    test_table_formatter.cpp
 )
 
 # Catch2 编译源
