@@ -5,6 +5,7 @@
 #include <sstream>
 #include <cmath>
 #include <tabulate.hpp>
+#include "utils/TableFormatter.h"
 
 
 LibraryCommand::LibraryCommand(TextRepository* textRepo) : textRepo(textRepo) {}
@@ -138,19 +139,11 @@ double LibraryCommand::calculateCompositeDifficulty(const Text& text) {
 }
 
 void LibraryCommand::displayTexts(const std::vector<Text>& texts) {
-    tabulate::Table table;
-    
-    // 启用多字节字符支持（必须！否则中文宽度计算错误）
-    table.format().multi_byte_characters(true).locale("");
+    tabulate::Table table = TableFormatter::createStyledTable();
     
     // 添加表头
     table.add_row({"ID", "标题", "作者", "朝代", "综合难度"});
-    
-    // 表头样式：加粗、黄色、居中
-    table[0].format()
-        .font_style({tabulate::FontStyle::bold})
-        .font_color(tabulate::Color::yellow)
-        .font_align(tabulate::FontAlign::center);
+    TableFormatter::styleHeader(table);
     
     // 添加数据行
     for (const auto& text : texts) {
@@ -169,17 +162,9 @@ void LibraryCommand::displayTexts(const std::vector<Text>& texts) {
     table.column(0).format().font_align(tabulate::FontAlign::right);
     table.column(1).format().font_align(tabulate::FontAlign::left);
     table.column(4).format().font_align(tabulate::FontAlign::right);
-    
-    // 边框样式（使用 Unicode 框线字符，若终端不支持可改为 ASCII）
-    table.format()
-        .border_top("─")
-        .border_bottom("─")
-        .border_left("│")
-        .border_right("│")
-        .corner_top_left("┌")
-        .corner_top_right("┐")
-        .corner_bottom_left("└")
-        .corner_bottom_right("┘");
+
+    // 应用边框样式
+    TableFormatter::applyBorderStyle(table);
         
     nowide::cout << table << std::endl;
 }

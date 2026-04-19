@@ -6,6 +6,7 @@
 #include <map>
 #include <ctime>
 #include <tabulate.hpp>
+#include "utils/TableFormatter.h"
 
 
 RecommendCommand::RecommendCommand(UserRepository* userRepo, TextRepository* textRepo,
@@ -82,15 +83,11 @@ void RecommendCommand::displayRecommendations(
         textMap[text.getId()] = &text;
     }
     
-    tabulate::Table table;
-    table.format().multi_byte_characters(true).locale("");
+    tabulate::Table table = TableFormatter::createStyledTable();
     
     // 表头
     table.add_row({"序号", "标题", "作者", "匹配度"});
-    table[0].format()
-        .font_style({tabulate::FontStyle::bold})
-        .font_color(tabulate::Color::yellow)
-        .font_align(tabulate::FontAlign::center);
+    TableFormatter::styleHeader(table);
     
     // 数据行
     int rank = 1;
@@ -113,17 +110,9 @@ void RecommendCommand::displayRecommendations(
     table.column(0).format().font_align(tabulate::FontAlign::right);
     table.column(1).format().font_align(tabulate::FontAlign::left);
     table.column(3).format().font_align(tabulate::FontAlign::right);
-    
-    // 边框样式（可复用 LibraryCommand 中的设置，或单独定义）
-    table.format()
-        .border_top("─")
-        .border_bottom("─")
-        .border_left("│")
-        .border_right("│")
-        .corner_top_left("┌")
-        .corner_top_right("┐")
-        .corner_bottom_left("└")
-        .corner_bottom_right("┘");
+
+    // 应用边框样式
+    TableFormatter::applyBorderStyle(table);
         
     nowide::cout << table << std::endl;
     nowide::cout << "匹配度越高，文章难度越适合您当前的能力水平。\n";

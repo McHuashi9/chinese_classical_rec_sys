@@ -26,6 +26,7 @@
 #include "database/LearningIncrementRepository.h"
 #include "models/User.h"
 #include <tabulate.hpp>
+#include "utils/TableFormatter.h"
 #include <iomanip>
 #include <sstream>
 
@@ -189,8 +190,7 @@ int main() {
 }
 
 void displayUserAbilities(const User& user) {
-    tabulate::Table table;
-    table.format().multi_byte_characters(true).locale("");
+    tabulate::Table table = TableFormatter::createStyledTable();
     
     // 格式化 lambda
     auto formatDouble = [](double value) -> std::string {
@@ -200,7 +200,7 @@ void displayUserAbilities(const User& user) {
     };
     
     table.add_row({"维度", "能力值"});
-    table[0].format().font_style({tabulate::FontStyle::bold});
+    TableFormatter::styleHeader(table);
     
     table.add_row({"d1 (平均句长)", formatDouble(user.getAbility(0))});
     table.add_row({"d2 (句子数)", formatDouble(user.getAbility(1))});
@@ -215,17 +215,9 @@ void displayUserAbilities(const User& user) {
     
     // 数值列右对齐
     table.column(1).format().font_align(tabulate::FontAlign::right);
-    
-    // 简洁边框
-    table.format()
-        .border_top("─")
-        .border_bottom("─")
-        .border_left("│")
-        .border_right("│")
-        .corner_top_left("┌")
-        .corner_top_right("┐")
-        .corner_bottom_left("└")
-        .corner_bottom_right("┘");
+
+    // 应用边框样式
+    TableFormatter::applyBorderStyle(table);
         
     nowide::cout << table << std::endl;
 }
