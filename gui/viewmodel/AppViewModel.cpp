@@ -185,10 +185,7 @@ QVariantMap AppViewModel::getAbilityBreakdown() const
 
 void AppViewModel::setLibraryFilter(const QString &filter)
 {
-    if (filter.isEmpty())
-        m_libraryProxy->setFilterFixedString("");
-    else
-        m_libraryProxy->setFilterFixedString(filter);
+    m_libraryProxy->setFilterText(filter);
 }
 
 QObject* AppViewModel::libraryProxyModel()

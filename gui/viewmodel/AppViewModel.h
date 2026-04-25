@@ -25,19 +25,26 @@ class TextFilterProxyModel : public QSortFilterProxyModel {
 public:
     explicit TextFilterProxyModel(QObject *parent = nullptr)
         : QSortFilterProxyModel(parent) {
-        setFilterCaseSensitivity(Qt::CaseInsensitive);
     }
+
+    void setFilterText(const QString &text) {
+        m_filterText = text;
+        invalidateFilter();
+    }
+
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override {
-        QString pattern = filterRegularExpression().pattern();
-        if (pattern.isEmpty())
+        if (m_filterText.isEmpty())
             return true;
         QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent);
         QString title = sourceModel()->data(idx, TextListModel::TitleRole).toString();
         QString author = sourceModel()->data(idx, TextListModel::AuthorRole).toString();
-        return title.contains(pattern, Qt::CaseInsensitive)
-            || author.contains(pattern, Qt::CaseInsensitive);
+        return title.contains(m_filterText, Qt::CaseInsensitive)
+            || author.contains(m_filterText, Qt::CaseInsensitive);
     }
+
+private:
+    QString m_filterText;
 };
 
 class AppViewModel : public QObject {
