@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file alias="Theme.qml">qml/Theme.qml</file>
+        <file alias="qmldir">qml/qmldir</file>
+        <file alias="Sidebar.qml">qml/Sidebar.qml</file>
+        <file alias="LibraryPage.qml">qml/LibraryPage.qml</file>
+        <file alias="RecommendPage.qml">qml/RecommendPage.qml</file>
+        <file alias="ReadPage.qml">qml/ReadPage.qml</file>
+        <file alias="AbilityPage.qml">qml/AbilityPage.qml</file>
+        <file alias="SettingsPage.qml">qml/SettingsPage.qml</file>
+        <file alias="MainWindow.qml">qml/MainWindow.qml</file>
+    </qresource>
+</RCC>

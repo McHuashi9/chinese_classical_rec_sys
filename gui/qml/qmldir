@@ -1,0 +1,7 @@
+singleton Theme 1.0 Theme.qml
+Sidebar 1.0 Sidebar.qml
+LibraryPage 1.0 LibraryPage.qml
+RecommendPage 1.0 RecommendPage.qml
+ReadPage 1.0 ReadPage.qml
+AbilityPage 1.0 AbilityPage.qml
+SettingsPage 1.0 SettingsPage.qml

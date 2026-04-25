@@ -1,0 +1,40 @@
+# === 默认忽略所有内容 ===
+/*
+
+# === 保留 C++ 项目代码 ===
+!/src/
+!/include/
+!/tests/
+!/third_party/
+!/gui/
+!/CMakeLists.txt
+!/.gitignore
+
+# === 保留指定文件 ===
+!/README.md
+!/LICENSE
+!/.github/
+!/design-spec.md
+!/requirements-ci.txt
+!/scripts/
+!/scripts/init_data.py
+
+# === 保留 processed_classical 指定内容 ===
+processed_classical/*
+!/processed_classical/
+!/processed_classical/textbook_annotated/
+!/processed_classical/anthology/
+!/processed_classical/features.json
+
+# === 忽略 scripts 下其他内容 ===
+/scripts/*
+!/scripts/init_data.py
+
+# === 忽略构建产物和缓存 ===
+build/
+venv/
+.ruff_cache/
+**/__pycache__/
+*.pyc
+*.o
+*.a
