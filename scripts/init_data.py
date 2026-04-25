@@ -129,7 +129,7 @@ def print_progress_bar(current: int, total: int, prefix: str = "", width: int = 
         print()  # 完成后换行
 
 # 数据库路径
-DB_PATH = "build/data/classical.db"
+DB_PATH = "data/classical.db"
 
 # 数据路径
 TEXTBOOK_DIR = "processed_classical/textbook_annotated"

@@ -9,14 +9,23 @@ ApplicationWindow {
     minimumHeight: 768
     visible: true
 
-    FontLoader { source: fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf" }
-    FontLoader { source: fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf" }
-    FontLoader { source: fontDir + "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf" }
-    FontLoader { source: fontDir + "LXGWWenKai-Regular/LXGWWenKai-Light.ttf" }
-    FontLoader { source: fontDir + "LXGWWenKai-Regular/LXGWWenKai-Medium.ttf" }
-    FontLoader { source: fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf" }
-    FontLoader { source: fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf" }
-    FontLoader { source: fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf" }
+    FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf" }
+    FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf" }
+    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf" }
+    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Light.ttf" }
+    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Medium.ttf" }
+    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf" }
+    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf" }
+    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf" }
+
+    Connections {
+        target: contentStack.currentItem
+        function onOpenText(textId) {
+            var props = {"textId": textId};
+            var page = readPage.createObject(contentStack, props);
+            contentStack.push(page);
+        }
+    }
 
     Component {
         id: libraryPage
@@ -28,7 +37,7 @@ ApplicationWindow {
     }
     Component {
         id: readPage
-        ReadPage {}
+        ReadPage { textId: 0 }
     }
     Component {
         id: abilityPage

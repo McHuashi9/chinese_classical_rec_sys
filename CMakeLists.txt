@@ -80,6 +80,8 @@ file(COPY ${CMAKE_SOURCE_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
 qt_add_executable(${PROJECT_NAME}
     gui/main_gui.cpp
     gui/viewmodel/AppViewModel.cpp
+    gui/viewmodel/TextListModel.cpp
+    gui/viewmodel/RecommendationModel.cpp
     gui/qml.qrc
 )
 

@@ -22,6 +22,9 @@ int main(int argc, char *argv[])
 
     AppViewModel viewModel;
 
+    const QString dbPath = QCoreApplication::applicationDirPath() + "/data/classical.db";
+    viewModel.initialize(dbPath);
+
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("appViewModel", &viewModel);
     engine.rootContext()->setContextProperty("fontDir", fontsPath);
