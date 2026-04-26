@@ -93,57 +93,35 @@ Page {
 
                     populate: Transition {
                         SequentialAnimation {
-                            PauseAnimation { duration: Math.min(ViewTransition.index, 30) * 30 }
-                            ParallelAnimation {
-                                NumberAnimation {
-                                    property: "y"
-                                    from: ViewTransition.item.y - 20
-                                    duration: 150
-                                    easing.type: Easing.OutQuad
-                                }
-                                NumberAnimation {
-                                    property: "opacity"
-                                    from: 0
-                                    to: 1
-                                    duration: 150
-                                }
+                            PauseAnimation { duration: Math.max(0, Math.min(ViewTransition.index, 30)) * 30 }
+                            NumberAnimation {
+                                property: "opacity"
+                                from: 0
+                                to: 1
+                                duration: 200
+                                easing.type: Easing.OutQuad
                             }
                         }
                     }
 
                     add: Transition {
                         SequentialAnimation {
-                            PauseAnimation { duration: Math.min(ViewTransition.index, 20) * 30 }
-                            ParallelAnimation {
-                                NumberAnimation {
-                                    property: "y"
-                                    from: ViewTransition.item.y - 12
-                                    duration: 150
-                                    easing.type: Easing.OutQuad
-                                }
-                                NumberAnimation {
-                                    property: "opacity"
-                                    from: 0
-                                    to: 1
-                                    duration: 150
-                                }
+                            PauseAnimation { duration: Math.max(0, Math.min(ViewTransition.index, 20)) * 30 }
+                            NumberAnimation {
+                                property: "opacity"
+                                from: 0
+                                to: 1
+                                duration: 200
+                                easing.type: Easing.OutQuad
                             }
                         }
                     }
 
                     remove: Transition {
-                        ParallelAnimation {
-                            NumberAnimation {
-                                property: "y"
-                                to: ViewTransition.item.y - 8
-                                duration: 120
-                                easing.type: Easing.InQuad
-                            }
-                            NumberAnimation {
-                                property: "opacity"
-                                to: 0
-                                duration: 120
-                            }
+                        NumberAnimation {
+                            property: "opacity"
+                            to: 0
+                            duration: 150
                         }
                     }
 
