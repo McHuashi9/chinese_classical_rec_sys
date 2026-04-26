@@ -39,9 +39,7 @@ Page {
 
     ColumnLayout {
         anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
+            fill: parent
             margins: Theme.baseUnit * 3
         }
         width: Math.min(parent.width, 900)
