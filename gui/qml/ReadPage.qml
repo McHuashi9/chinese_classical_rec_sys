@@ -134,9 +134,7 @@ Page {
                 }
                 spacing: 4
 
-                property int virtualPage: flick.visibleArea.heightRatio > 0
-                    ? Math.ceil(flick.contentY / (flick.height * flick.visibleArea.heightRatio)) + 1
-                    : 1
+                property int virtualPage: Math.floor(flick.contentY / Math.max(flick.height, 1)) + 1
 
                 Text {
                     text: "\u1A2F"
