@@ -20,7 +20,11 @@ Page {
             Layout.fillHeight: true
 
             ColumnLayout {
-                anchors.centerIn: parent
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    top: parent.top
+                    bottom: parent.bottom
+                }
                 width: Math.min(parent.width, 900)
                 spacing: Theme.baseUnit * 2
 

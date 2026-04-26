@@ -26,7 +26,9 @@ bool AppViewModel::initialize(const QString &dbPath)
     try {
         m_dbMgr = std::make_unique<DatabaseManager>();
         if (!m_dbMgr->open(dbPath.toStdString())) {
-            emit errorOccurred(QString::fromStdString("无法打开数据库: " + m_dbMgr->getLastError()));
+            const QString err = QString::fromStdString("无法打开数据库: " + m_dbMgr->getLastError());
+            fprintf(stderr, "[AppViewModel] %s\n", qPrintable(err));
+            emit errorOccurred(err);
             return false;
         }
 
@@ -42,6 +44,7 @@ bool AppViewModel::initialize(const QString &dbPath)
         }
 
         m_allTexts = m_textRepo->getAllTexts();
+        fprintf(stderr, "[AppViewModel] 已加载 %zu 篇古文\n", m_allTexts.size());
         m_textListModel->setTexts(m_allTexts);
         m_libraryProxy->setSourceModel(m_textListModel);
 
@@ -56,7 +59,9 @@ bool AppViewModel::initialize(const QString &dbPath)
 
         return true;
     } catch (const std::exception &e) {
-        emit errorOccurred(QString::fromStdString(std::string("初始化失败: ") + e.what()));
+        const QString err = QString::fromStdString(std::string("初始化失败: ") + e.what());
+        fprintf(stderr, "[AppViewModel] %s\n", qPrintable(err));
+        emit errorOccurred(err);
         return false;
     }
 }
