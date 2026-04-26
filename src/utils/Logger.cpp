@@ -65,11 +65,15 @@ std::shared_ptr<spdlog::logger> Logger::getLogger() const {
 void Logger::setLevel(const std::string& level) {
     if (level == "debug") {
         spdlog::set_level(spdlog::level::debug);
+        spdlog::default_logger_raw()->set_level(spdlog::level::debug);
     } else if (level == "info") {
         spdlog::set_level(spdlog::level::info);
+        spdlog::default_logger_raw()->set_level(spdlog::level::info);
     } else if (level == "warn") {
         spdlog::set_level(spdlog::level::warn);
+        spdlog::default_logger_raw()->set_level(spdlog::level::warn);
     } else if (level == "error") {
         spdlog::set_level(spdlog::level::err);
+        spdlog::default_logger_raw()->set_level(spdlog::level::err);
     }
 }
