@@ -1,6 +1,5 @@
 #include "core/RecommendationEngine.h"
 #include "utils/FeatureExtractor.h"
-#include "utils/Logger.h"
 #include <cmath>
 #include <algorithm>
 
@@ -63,8 +62,6 @@ std::vector<std::pair<int, double>> RecommendationEngine::recommend(
     const std::vector<Text>& texts,
     int topK
 ) const {
-    LOG_DEBUG("开始推荐计算，文章数量: {}, topK: {}", texts.size(), topK);
-    
     std::vector<std::pair<int, double>> scores;
     scores.reserve(texts.size());
     
@@ -81,10 +78,6 @@ std::vector<std::pair<int, double>> RecommendationEngine::recommend(
     
     if (static_cast<int>(scores.size()) > topK) {
         scores.resize(topK);
-    }
-    
-    if (!scores.empty()) {
-        LOG_DEBUG("推荐完成，最高概率: {:.4f} (文章ID: {})", scores[0].second, scores[0].first);
     }
     
     return scores;

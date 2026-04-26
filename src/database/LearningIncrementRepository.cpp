@@ -61,7 +61,6 @@ bool LearningIncrementRepository::addIncrement(int userId, int dimension, double
         return false;
     }
     
-    LOG_DEBUG("记录增量: 维度={}, delta={:.6f}, type={}", dimension, delta, type);
     return true;
 }
 
