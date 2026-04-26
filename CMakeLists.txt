@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# spdlog 编译时启用所有日志级别，运行时由 set_level 控制
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+
 # MSVC 编译选项（UTF-8 编码支持）
 if(MSVC)
     add_compile_options(/utf-8)
