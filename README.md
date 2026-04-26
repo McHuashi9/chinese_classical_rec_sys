@@ -1,7 +1,7 @@
 # 文言文个性化学习推荐系统
 
 <p align="center">
-  <strong>基于 C++ 的CLI文言文个性化学习推荐系统</strong>
+  <strong>基于 Qt 6 + QML 的 GUI 桌面应用，根据古文能力水平提供个性化阅读推荐</strong>
 </p>
 
 <p align="center">
@@ -16,56 +16,33 @@
 
 ## 项目概述
 
-中国古文推荐系统是一个基于 C++ 的命令行应用程序，旨在根据学习者的古文能力水平提供个性化的阅读推荐。兼容 Windows 和 Linux。
+中国古文推荐系统是一个基于 Qt 6 + QML 的桌面 GUI 应用，面向文言文学习者。系统通过 10 维特征模型量化 268 篇古文的难度，追踪用户阅读后的能力变化，使用高斯 i+1 模型生成个性化推荐。
+
+兼容 Windows 和 Linux 平台。
 
 ## 功能特性
 
-### 核心功能
+### 五大页面
 
-| 功能 | 描述 |
+| 页面 | 描述 |
 |------|------|
-| 古文库浏览 | 分页浏览 264 篇经典古文 |
-| 个性化推荐 | 基于能力水平的智能推荐 |
-| 阅读追踪 | 阅读后自动更新能力模型，支持长期遗忘效应 |
-| 用户管理 | SQLite 持久化存储 |
+| 文库 | 搜索 + 列表浏览 268 篇古文，点击进入阅读 |
+| 推荐 | 设定篇数，一键生成个性化推荐，显示匹配度百分比 |
+| 阅读 | 版框正文（思源宋体 18px / 行高 1.8）+ 计时器，<30s 不触发知识追踪 |
+| 能力 | 10 轴 Canvas 雷达图 + 各维度数值进度条 |
+| 设置 | 亮/暗主题切换（QSettings 持久化）+ 日志级别 ComboBox |
 
-### 命令系统
+### 主题系统
 
-```
-> help                    # 显示帮助信息
-> library [页码]          # 分页浏览文章库（每页 10 篇）
-> recommend [数量]        # 个性化推荐（默认 5 篇，最多 20 篇）
-> read <文章ID>           # 阅读文章并触发知识追踪
-> log [debug|info|warn|error]  # 设置日志级别
-> exit                    # 退出程序
-```
+- 10 色 Token（paper / card / ink / vermilion / border 等），全部 UI 元素引用 Token
+- 亮/暗双模式，一键切换，重启保留偏好
+- 三款字体：霞鹜文楷（标题）· 思源宋体（正文）· HarmonyOS Sans（UI）
 
-### 使用示例
+### 交互状态
 
-```
-> recommend 3
-正在计算推荐...
-+------+----------------+--------+--------+
-| 序号 |      标题      |  作者  | 匹配度 |
-+------+----------------+--------+--------+
-|    1 | 苏秦以连横说秦 | (不详) | 1.0000 |
-+------+----------------+--------+--------+
-|    2 | 宋玉对楚王问   | (不详) | 1.0000 |
-+------+----------------+--------+--------+
-|    3 | 游侠列传序     | (不详) | 1.0000 |
-+------+----------------+--------+--------+
-匹配度越高，文章难度越适合您当前的能力水平。
-
-> read 1
-═══════════════════════════════════════════════════
-  《苏秦以连横说秦》
-───────────────────────────────────────────────────
-  【先秦】佚名
-═══════════════════════════════════════════════════
-
-苏秦始将连横说秦惠王曰：“大王之国，西有巴、蜀、汉中之利...
-[阅读完成] 能力已更新
-```
+所有可交互元素覆盖 default / hover / press / disabled 四态，过渡 150–200ms。
+页面切换：侧栏导航横向滑动 200ms，阅读页淡入淡出。
+列表项：自上而下 30ms 错开淡入。
 
 ## 快速开始
 
@@ -74,6 +51,7 @@
 | 组件 | 版本要求 |
 |------|----------|
 | C++ 编译器 | 支持 C++17 (GCC 7+, Clang 5+, MSVC 2017+) |
+| Qt | 6.x (QML + Quick Controls) |
 | CMake | 3.28+ |
 | Python | 3.12+ |
 
@@ -88,7 +66,9 @@ cd chinese_classical_rec_sys
 python scripts/init_data.py
 
 # 构建
-mkdir -p build && cd build && cmake .. && make
+mkdir -p build && cd build
+cmake .. -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64
+make -j$(nproc)
 
 # 运行
 ./chinese_classical_rec_sys
@@ -103,7 +83,7 @@ python scripts/init_data.py
 ```
 
 **脚本功能**：
-- 从 `processed_classical/` 读取 264 篇古文（语文教材 63 篇 + 古文观止 213 篇 - 12 篇重复）
+- 从 `processed_classical/` 读取 268 篇古文（语文教材 63 篇 + 古文观止 213 篇 - 12 篇重复 + 补充）
 - 导入 10 维特征数据（`features.json`）
 - 创建 SQLite 数据库 `data/classical.db`
 - 程序首次启动时自动创建用户表
@@ -111,10 +91,8 @@ python scripts/init_data.py
 ### 运行测试
 
 ```bash
-cd build && cmake .. && make run_tests
+cd build && cmake .. -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64 && make run_tests
 ./tests/run_tests
-# 或使用 ctest
-ctest --output-on-failure
 ```
 
 ## 算法原理
@@ -167,32 +145,25 @@ $$
 
 ```
 chinese_classical_rec_sys/
-├── include/                  # C++ 头文件
-│   ├── core/                 # 命令系统、推荐引擎、知识追踪
-│   ├── database/             # 数据库访问层
-│   ├── models/               # 数据模型 (User, Text)
-│   └── utils/                # 工具类 (Logger, PathUtils)
-├── src/                      # C++ 源文件
-├── tests/                    # 单元测试 (Catch2)
-├── scripts/
-│   └── init_data.py          # 数据初始化脚本
-├── third_party/              # 第三方库
-│   ├── spdlog/               # 高性能日志库
-│   ├── sqlite3/              # 嵌入式数据库
-│   ├── catch2/               # 测试框架
-│   └── tabulate-1.5/         # 表格格式化库
-├── processed_classical/      # 处理后的古文数据（白名单包含）
-│   ├── textbook_annotated/   # 语文教材带注释版
-│   ├── anthology/            # 古文观止原文
-│   └── features.json         # 10维特征汇总
-├── .github/                  # GitHub Actions 工作流
-├── CMakeLists.txt            # 构建配置
-├── LICENSE                   # MIT 许可证
-├── requirements-ci.txt       # CI 环境依赖
-└── README.md                 # 项目说明
+├── gui/                       # Qt Quick GUI
+│   ├── qml/                   # QML 页面 (5页面 + Theme + Sidebar + MainWindow)
+│   ├── viewmodel/             # C++ ViewModel (AppViewModel, 数据模型)
+│   └── main_gui.cpp           # 入口
+├── core/                      # 推荐引擎、知识追踪
+├── database/                  # SQLite 仓库层 (5个 Repository)
+├── models/                    # User (10维能力)、Text (10维难度)
+├── utils/                     # Logger、PathUtils、FeatureExtractor
+├── tests/                     # Catch2 单元测试
+├── scripts/                   # Python 预处理与实验
+│   └── init_data.py           # 数据初始化脚本
+├── third_party/               # 第三方库 (spdlog, sqlite3, catch2)
+├── data/                      # classical.db 等运行时数据
+├── processed_classical/       # 处理后的古文数据
+├── design-spec.md             # GUI 设计规范与组件定义
+├── CMakeLists.txt             # 构建配置
+├── LICENSE                    # MIT 许可证
+└── README.md                  # 项目说明
 ```
-
-> 注：部分数据文件、模型、实验脚本等文件暂未未包含在仓库中
 
 ## 开发指南
 
@@ -201,12 +172,15 @@ chinese_classical_rec_sys/
 - **命名约定**：类名 PascalCase，方法名 camelCase
 - **文件格式**：头文件 `.h`，源文件 `.cpp`
 - **注释风格**：Doxygen 风格
+- **QML**：所有颜色/字体/间距从 `Theme.qml` Token 取值
 
-### 添加新命令
+### 提交规范
 
-1. 在 `include/core/` 创建命令类，继承 `Command` 基类
-2. 在 `src/core/` 实现命令逻辑
-3. 在 `CommandRegistry` 中注册命令
+格式：`type(scope): 中文描述`
+
+- `feat` 新功能 · `fix` 修 bug · `refactor` 重构 · `chore` 杂项 · `test` 测试
+- scope 小写英文，如 `gui` `core` `db`
+- 描述用中文，简明扼要
 
 ### 日志系统
 
@@ -219,7 +193,7 @@ LOG_WARN("警告: {}", warning);
 LOG_ERROR("错误: {}", error);
 ```
 
-日志输出位置：`build/logs/app.log`
+日志输出位置：`logs/app.log`，默认 INFO 级别，可通过设置页 ComboBox 调整。
 
 ### 测试覆盖
 
@@ -227,6 +201,11 @@ LOG_ERROR("错误: {}", error);
 |------|----------|
 | RecommendationEngine | gaussian、calculateLearningGain、calculateDynamicLearningRate |
 | KnowledgeTracker | calculateForgettingFactor（幂律遗忘） |
+
+## 参考文档
+
+- `design-spec.md` — GUI 设计系统与组件规范（颜色、字体、间距、组件定义、验收标准）
+- `scripts/experiments/e*_*/README.md` — 各实验说明
 
 ## 许可证
 
