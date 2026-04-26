@@ -164,7 +164,7 @@ Page {
 
                     // ── Axis labels ──
                     var labelRadius = radius + 16
-                    ctx.font = (Theme.sizeSmall - 1) + "px " + Theme.fontUI
+                    ctx.font = (Theme.sizeSmall - 1) + "px '" + Theme.fontUI + "'"
                     ctx.textAlign = "center"
                     ctx.textBaseline = "middle"
                     for (var r = 0; r < n; r++) {
