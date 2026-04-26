@@ -97,10 +97,7 @@ Page {
             Flickable {
                 id: flick
                 anchors {
-                    left: parent.left
-                    right: parent.right
-                    top: parent.top
-                    bottom: fishTail.top
+                    fill: parent
                     margins: Theme.cardPadding
                 }
                 clip: true
@@ -121,31 +118,6 @@ Page {
 
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
-                }
-            }
-
-            // Fish-tail page number
-            Row {
-                id: fishTail
-                anchors {
-                    bottom: parent.bottom
-                    horizontalCenter: parent.horizontalCenter
-                    bottomMargin: Theme.baseUnit
-                }
-                spacing: 4
-
-                property int virtualPage: Math.floor(flick.contentY / Math.max(flick.height, 1)) + 1
-
-                Text {
-                    text: "\u1A2F"
-                    font.pixelSize: Theme.sizeCaption
-                    color: Theme.border
-                }
-                Text {
-                    text: fishTail.virtualPage
-                    font.family: Theme.fontBody
-                    font.pixelSize: Theme.sizeCaption
-                    color: Theme.border
                 }
             }
 
