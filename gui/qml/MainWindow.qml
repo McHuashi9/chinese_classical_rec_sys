@@ -65,6 +65,76 @@ ApplicationWindow {
             Layout.fillHeight: true
             initialItem: libraryPage
 
+            // ── Transitions: sidebar nav → horizontal slide ──
+            replaceEnter: Transition {
+                NumberAnimation {
+                    property: "x"
+                    from: contentStack.width * 0.3
+                    to: 0
+                    duration: 200
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation {
+                    property: "opacity"
+                    from: 0.0
+                    to: 1.0
+                    duration: 200
+                }
+            }
+            replaceExit: Transition {
+                NumberAnimation {
+                    property: "x"
+                    from: 0
+                    to: -contentStack.width * 0.2
+                    duration: 200
+                    easing.type: Easing.InCubic
+                }
+                NumberAnimation {
+                    property: "opacity"
+                    from: 1.0
+                    to: 0.0
+                    duration: 200
+                }
+            }
+
+            // ── Transitions: push/pop → crossfade ──
+            pushEnter: Transition {
+                NumberAnimation {
+                    property: "opacity"
+                    from: 0.0
+                    to: 1.0
+                    duration: 200
+                    easing.type: Easing.OutCubic
+                }
+            }
+            pushExit: Transition {
+                NumberAnimation {
+                    property: "opacity"
+                    from: 1.0
+                    to: 0.0
+                    duration: 200
+                    easing.type: Easing.OutCubic
+                }
+            }
+            popEnter: Transition {
+                NumberAnimation {
+                    property: "opacity"
+                    from: 0.0
+                    to: 1.0
+                    duration: 200
+                    easing.type: Easing.OutCubic
+                }
+            }
+            popExit: Transition {
+                NumberAnimation {
+                    property: "opacity"
+                    from: 1.0
+                    to: 0.0
+                    duration: 200
+                    easing.type: Easing.OutCubic
+                }
+            }
+
             function openText(textId) {
                 var props = {"textId": textId}
                 push(readPage.createObject(contentStack, props))
