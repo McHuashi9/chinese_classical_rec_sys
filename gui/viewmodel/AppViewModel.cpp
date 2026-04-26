@@ -146,8 +146,10 @@ bool AppViewModel::recordReading(int textId, double readTime)
     if (!m_initialized)
         return false;
 
+    LOG_INFO("阅读记录: textId={}, readTime={:.0f}s", textId, readTime);
+
     if (readTime < Config::MIN_READ_TIME) {
-        LOG_DEBUG("阅读时长 {}s 不足 {}s，不触发知识追踪", readTime, Config::MIN_READ_TIME);
+        LOG_INFO("阅读时长 {}s 不足 {}s，跳过记录", readTime, Config::MIN_READ_TIME);
         return false;
     }
 
