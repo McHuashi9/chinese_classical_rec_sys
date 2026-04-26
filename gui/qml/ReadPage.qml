@@ -39,10 +39,11 @@ Page {
 
     ColumnLayout {
         anchors {
-            fill: parent
+            left: parent.left
+            right: parent.right
+            top: parent.top
             margins: Theme.baseUnit * 3
         }
-        anchors.centerIn: undefined
         width: Math.min(parent.width, 900)
 
         // Back button
@@ -120,10 +121,11 @@ Page {
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
                 }
-            } // Flickable
-            } // Rectangle
+            }
 
-            // ── Timer ──
+        }
+
+        // ── Timer ──
         Text {
             Layout.alignment: Qt.AlignHCenter
             text: fmtTime(elapsedSeconds)

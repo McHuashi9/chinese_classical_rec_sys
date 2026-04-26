@@ -82,10 +82,16 @@ Page {
                 }
 
                 // Primary button
+                property bool buttonEnabled: topKSpin.value > 0 && topKSpin.value <= 50
+
                 Rectangle {
                     Layout.preferredWidth: btnText.implicitWidth + 24
                     Layout.preferredHeight: 36
-                    color: btnMouse.pressed ? Theme.vermilionHover : Theme.vermilion
+                    color: {
+                        if (!parent.buttonEnabled) return Theme.border
+                        if (btnMouse.pressed) return Theme.vermilionHover
+                        return Theme.vermilion
+                    }
                     scale: btnMouse.pressed ? 0.98 : 1.0
 
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -97,13 +103,14 @@ Page {
                         text: "生成推荐"
                         font.family: Theme.fontUI
                         font.pixelSize: Theme.sizeCaption
-                        color: "#FFFFFF"
+                        color: parent.parent.buttonEnabled ? "#FFFFFF" : Theme.inkSecondary
                     }
 
                     MouseArea {
                         id: btnMouse
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
+                        enabled: parent.parent.buttonEnabled
+                        cursorShape: parent.parent.buttonEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: refresh()
                     }
                 }

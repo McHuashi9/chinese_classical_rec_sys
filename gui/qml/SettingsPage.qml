@@ -99,10 +99,14 @@ Page {
                                 height: 32
 
                                 readonly property bool selected: !Theme.darkMode
-                                color: selected ? Theme.vermilion : "transparent"
+                                readonly property bool hovered: lightMouse.containsMouse
+                                color: selected ? Theme.vermilion
+                                       : (hovered ? Theme.borderLight : "transparent")
                                 border.color: Theme.border
                                 border.width: 1
                                 radius: 0
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
 
                                 Text {
                                     anchors.centerIn: parent
@@ -113,6 +117,7 @@ Page {
                                 }
 
                                 MouseArea {
+                                    id: lightMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
@@ -129,10 +134,14 @@ Page {
                                 height: 32
 
                                 readonly property bool selected: Theme.darkMode
-                                color: selected ? Theme.vermilion : "transparent"
+                                readonly property bool hovered: darkMouse.containsMouse
+                                color: selected ? Theme.vermilion
+                                       : (hovered ? Theme.borderLight : "transparent")
                                 border.color: Theme.border
                                 border.width: 1
                                 radius: 0
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
 
                                 Text {
                                     anchors.centerIn: parent
@@ -143,6 +152,7 @@ Page {
                                 }
 
                                 MouseArea {
+                                    id: darkMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
