@@ -9,6 +9,7 @@
 #include "database/LearningIncrementRepository.h"
 #include "utils/Logger.h"
 
+#include <QSettings>
 #include <ctime>
 
 AppViewModel::AppViewModel(QObject *parent)
@@ -56,9 +57,14 @@ bool AppViewModel::initialize(const QString &dbPath)
         m_initialized = true;
         emit initializedChanged();
 
+        // 恢复主题偏好
+        QSettings settings;
+        m_darkMode = settings.value("theme/darkMode", false).toBool();
+
         emit userNameChanged();
         emit abilityChanged();
         emit statsChanged();
+        emit darkModeChanged();
 
         return true;
     } catch (const std::exception &e) {
@@ -240,6 +246,8 @@ void AppViewModel::setDarkMode(bool mode)
 {
     if (m_darkMode != mode) {
         m_darkMode = mode;
+        QSettings settings;
+        settings.setValue("theme/darkMode", mode);
         emit darkModeChanged();
     }
 }

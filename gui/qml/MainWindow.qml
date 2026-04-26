@@ -9,6 +9,8 @@ ApplicationWindow {
     minimumHeight: 768
     visible: true
 
+    Component.onCompleted: Theme.darkMode = appViewModel.darkMode
+
     FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf" }
     FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf" }
     FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf" }
