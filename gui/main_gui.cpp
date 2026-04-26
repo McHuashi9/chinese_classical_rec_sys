@@ -3,10 +3,14 @@
 #include <QQmlContext>
 #include <QFontDatabase>
 #include <QDir>
+#include "utils/Logger.h"
+#include "utils/PathUtils.h"
 #include "viewmodel/AppViewModel.h"
 
 int main(int argc, char *argv[])
 {
+    Logger::getInstance().init(PathUtils::getLogsDir().string());
+
     QGuiApplication app(argc, argv);
     app.setOrganizationName("ClassicalReader");
     app.setApplicationName("ClassicalReader");

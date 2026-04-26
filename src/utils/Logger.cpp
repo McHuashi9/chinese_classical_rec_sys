@@ -4,6 +4,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <filesystem>
+#include <chrono>
 
 Logger& Logger::getInstance() {
     static Logger instance;
@@ -46,6 +47,7 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         
         // 启用调试宏
         spdlog::flush_on(spdlog::level::warn);
+        spdlog::flush_every(std::chrono::seconds(3));
         
         initialized_ = true;
         return true;

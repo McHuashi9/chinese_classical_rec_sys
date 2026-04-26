@@ -51,7 +51,7 @@ bool AppViewModel::initialize(const QString &dbPath)
         }
 
         m_allTexts = m_textRepo->getAllTexts();
-        fprintf(stderr, "[AppViewModel] 已加载 %zu 篇古文\n", m_allTexts.size());
+        LOG_INFO("已加载 {} 篇古文", m_allTexts.size());
         m_textListModel->setTexts(m_allTexts);
         m_libraryProxy->setSourceModel(m_textListModel);
 
