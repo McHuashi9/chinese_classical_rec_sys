@@ -20,6 +20,8 @@ AppViewModel::AppViewModel(QObject *parent)
     , m_initialized(false)
     , m_darkMode(false)
     , m_logLevel("INFO")
+    , m_currentPage(-1)
+    , m_readingTextId(-1)
 {
 }
 
@@ -264,4 +266,118 @@ void AppViewModel::setLogLevel(const QString &level)
         Logger::getInstance().setLevel(level.toLower().toStdString());
         emit logLevelChanged();
     }
+}
+
+void AppViewModel::loadTextForReading(int textId, int availWidth, int availHeight)
+{
+    if (availWidth <= 0 || availHeight <= 0)
+        return;
+
+    // fetch full text content
+    QVariantMap detail = getTextDetail(textId);
+    if (detail.isEmpty())
+        return;
+
+    m_fullContent = detail["content"].toString();
+    if (m_fullContent.isEmpty())
+        return;
+
+    m_readingTextId = textId;
+
+    QFont font("Source Han Serif SC");
+    font.setPixelSize(18);
+
+    constexpr double kLineHeight = 1.8;
+    constexpr int kFramePadding = 16;
+    const int innerW = availWidth - 2 * kFramePadding;
+    const int innerH = availHeight - 2 * kFramePadding;
+
+    m_pages = Paginator::paginate(m_fullContent, font, kLineHeight, innerW, innerH);
+
+    if (m_pages.empty()) {
+        m_currentPage = -1;
+        m_readingTextId = -1;
+        emit readingStateChanged();
+        return;
+    }
+
+    m_currentPage = 0;
+    emit readingStateChanged();
+}
+
+void AppViewModel::nextPage()
+{
+    if (m_currentPage < 0 || m_pages.empty())
+        return;
+
+    int nxt = m_currentPage + 1;
+    if (nxt >= static_cast<int>(m_pages.size()))
+        return;
+
+    m_currentPage = nxt;
+    emit readingStateChanged();
+}
+
+void AppViewModel::prevPage()
+{
+    if (m_currentPage <= 0)
+        return;
+
+    m_currentPage--;
+    emit readingStateChanged();
+}
+
+void AppViewModel::recalcPagination(int newWidth, int newHeight)
+{
+    if (m_readingTextId < 0 || m_fullContent.isEmpty())
+        return;
+
+    const int oldCharPos = (m_currentPage >= 0 && m_currentPage < static_cast<int>(m_pages.size()))
+        ? m_pages[m_currentPage].charStart
+        : 0;
+
+    QFont font("Source Han Serif SC");
+    font.setPixelSize(18);
+
+    constexpr double kLineHeight = 1.8;
+    constexpr int kFramePadding = 16;
+    const int innerW = newWidth - 2 * kFramePadding;
+    const int innerH = newHeight - 2 * kFramePadding;
+
+    m_pages = Paginator::paginate(m_fullContent, font, kLineHeight, innerW, innerH);
+
+    if (m_pages.empty()) {
+        m_currentPage = -1;
+        emit readingStateChanged();
+        return;
+    }
+
+    m_currentPage = Paginator::findPageForCharPos(m_pages, oldCharPos);
+    emit readingStateChanged();
+}
+
+int AppViewModel::currentPage() const
+{
+    return m_currentPage;
+}
+
+int AppViewModel::totalPages() const
+{
+    return static_cast<int>(m_pages.size());
+}
+
+QString AppViewModel::currentPageText() const
+{
+    if (m_currentPage < 0 || m_currentPage >= static_cast<int>(m_pages.size()))
+        return QString();
+
+    return m_pages[m_currentPage].text;
+}
+
+QString AppViewModel::currentPageNumberLabel() const
+{
+    if (m_currentPage < 0 || m_pages.empty())
+        return QString();
+
+    return QString::number(m_currentPage + 1) + " / " + QString::number(m_pages.size());
 }

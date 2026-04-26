@@ -19,6 +19,7 @@ class KnowledgeTracker;
 
 #include "TextListModel.h"
 class RecommendationModel;
+#include "viewmodel/Paginator.h"
 
 class TextFilterProxyModel : public QSortFilterProxyModel {
     Q_OBJECT
@@ -59,6 +60,12 @@ class AppViewModel : public QObject {
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
     Q_PROPERTY(QString logLevel READ logLevel NOTIFY logLevelChanged)
 
+    // ── Paginated reading state ──
+    Q_PROPERTY(int currentPage READ currentPage NOTIFY readingStateChanged)
+    Q_PROPERTY(int totalPages READ totalPages NOTIFY readingStateChanged)
+    Q_PROPERTY(QString currentPageText READ currentPageText NOTIFY readingStateChanged)
+    Q_PROPERTY(QString currentPageNumberLabel READ currentPageNumberLabel NOTIFY readingStateChanged)
+
 public:
     explicit AppViewModel(QObject *parent = nullptr);
     ~AppViewModel() override;
@@ -77,6 +84,12 @@ public:
 
     Q_INVOKABLE void setLogLevel(const QString &level);
 
+    // ── Paginated reading ──
+    Q_INVOKABLE void loadTextForReading(int textId, int availWidth, int availHeight);
+    Q_INVOKABLE void nextPage();
+    Q_INVOKABLE void prevPage();
+    Q_INVOKABLE void recalcPagination(int newWidth, int newHeight);
+
     QString userName() const;
     double averageAbility() const;
     int totalReadCount() const;
@@ -88,6 +101,11 @@ public:
     void setDarkMode(bool mode);
     QString logLevel() const;
 
+    int currentPage() const;
+    int totalPages() const;
+    QString currentPageText() const;
+    QString currentPageNumberLabel() const;
+
 signals:
     void userNameChanged();
     void abilityChanged();
@@ -96,6 +114,7 @@ signals:
     void darkModeChanged();
     void logLevelChanged();
     void errorOccurred(const QString &message);
+    void readingStateChanged();
 
 private:
     // core components
@@ -120,4 +139,10 @@ private:
     bool m_initialized;
     bool m_darkMode;
     QString m_logLevel;
+
+    // paginated reading state
+    std::vector<Page> m_pages;
+    int m_currentPage;
+    int m_readingTextId;
+    QString m_fullContent;
 };

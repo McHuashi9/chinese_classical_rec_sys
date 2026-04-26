@@ -37,6 +37,24 @@ Page {
             appViewModel.recordReading(textId, elapsedSeconds)
     }
 
+    // ── trigger pagination after first layout ──
+    property bool pagesLoaded: false
+
+    // ── debounced repagination on resize ──
+    Timer {
+        id: resizeTimer
+        interval: 150
+        repeat: false
+        onTriggered: {
+            if (pagesLoaded)
+                appViewModel.recalcPagination(frame.width, frame.height)
+        }
+    }
+
+    // ── Keyboard navigation ──
+    Keys.onLeftPressed: appViewModel.prevPage()
+    Keys.onRightPressed: appViewModel.nextPage()
+
     ColumnLayout {
         anchors {
             fill: parent
@@ -83,6 +101,7 @@ Page {
 
         // Reading frame
         Rectangle {
+            id: frame
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.topMargin: Theme.baseUnit * 2
@@ -94,42 +113,104 @@ Page {
             }
             radius: 4
 
-            Flickable {
-                id: flick
+            onHeightChanged: {
+                if (height > 0 && width > 0 && !pagesLoaded) {
+                    pagesLoaded = true
+                    appViewModel.loadTextForReading(textId, width, height)
+                }
+                if (pagesLoaded)
+                    resizeTimer.restart()
+            }
+            onWidthChanged: { if (pagesLoaded) resizeTimer.restart() }
+
+            Text {
+                id: contentText
                 anchors {
                     fill: parent
                     margins: Theme.cardPadding
                 }
+                text: appViewModel.currentPageText
+                font.family: Theme.fontBody
+                font.pixelSize: 18
+                lineHeight: 1.8
+                color: Theme.ink
+                wrapMode: Text.NoWrap
+                textFormat: Text.PlainText
                 clip: true
-                contentWidth: width
-                contentHeight: contentText.implicitHeight
-
-                Text {
-                    id: contentText
-                    width: flick.width
-                    text: detail.content || ""
-                    font.family: Theme.fontBody
-                    font.pixelSize: 18
-                    lineHeight: 1.8
-                    color: Theme.ink
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.PlainText
-                }
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
             }
-
         }
 
-        // ── Timer ──
+        // ── Navigation + Timer ──
+        RowLayout {
+            Layout.fillWidth: true
+
+            // ◀ 上一页
+            ItemDelegate {
+                id: prevBtn
+                Layout.preferredWidth: 80
+                enabled: appViewModel.currentPage > 0
+                opacity: enabled ? 1.0 : 0.4
+
+                contentItem: Text {
+                    text: "◀ 上一页"
+                    font.family: Theme.fontUI
+                    font.pixelSize: Theme.sizeCaption
+                    color: parent.hovered && parent.enabled ? Theme.vermilionHover : Theme.inkSecondary
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                background: Rectangle {
+                    color: prevBtn.hovered && prevBtn.enabled ? Theme.borderLight : "transparent"
+                    radius: 4
+                }
+
+                onClicked: { if (enabled) appViewModel.prevPage() }
+            }
+
+            // Timer
+            Text {
+                Layout.fillWidth: true
+                text: fmtTime(elapsedSeconds)
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.sizeBody
+                color: Theme.inkSecondary
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            // 下一页 ▶
+            ItemDelegate {
+                id: nextBtn
+                Layout.preferredWidth: 80
+                enabled: appViewModel.currentPage < appViewModel.totalPages - 1
+                opacity: enabled ? 1.0 : 0.4
+
+                contentItem: Text {
+                    text: "下一页 ▶"
+                    font.family: Theme.fontUI
+                    font.pixelSize: Theme.sizeCaption
+                    color: parent.hovered && parent.enabled ? Theme.vermilionHover : Theme.inkSecondary
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                background: Rectangle {
+                    color: nextBtn.hovered && nextBtn.enabled ? Theme.borderLight : "transparent"
+                    radius: 4
+                }
+
+                onClicked: { if (enabled) appViewModel.nextPage() }
+            }
+        }
+
+        // Page number
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: fmtTime(elapsedSeconds)
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeBody
-            color: Theme.inkSecondary
+            text: appViewModel.currentPageNumberLabel
+            font.family: Theme.fontBody
+            font.pixelSize: Theme.sizeCaption
+            color: Theme.border
+            visible: appViewModel.currentPage >= 0
         }
     }
 }
