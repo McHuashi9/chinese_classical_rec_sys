@@ -146,6 +146,46 @@ Page {
                 spacing: Theme.listSpacing
                 model: appViewModel.recommendationModel
 
+                populate: Transition {
+                    SequentialAnimation {
+                        PauseAnimation { duration: Math.min(ViewTransition.index, 30) * 30 }
+                        ParallelAnimation {
+                            NumberAnimation {
+                                property: "y"
+                                from: ViewTransition.item.y - 20
+                                duration: 150
+                                easing.type: Easing.OutQuad
+                            }
+                            NumberAnimation {
+                                property: "opacity"
+                                from: 0
+                                to: 1
+                                duration: 150
+                            }
+                        }
+                    }
+                }
+
+                add: Transition {
+                    SequentialAnimation {
+                        PauseAnimation { duration: Math.min(ViewTransition.index, 20) * 30 }
+                        ParallelAnimation {
+                            NumberAnimation {
+                                property: "y"
+                                from: ViewTransition.item.y - 12
+                                duration: 150
+                                easing.type: Easing.OutQuad
+                            }
+                            NumberAnimation {
+                                property: "opacity"
+                                from: 0
+                                to: 1
+                                duration: 150
+                            }
+                        }
+                    }
+                }
+
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
                 }
