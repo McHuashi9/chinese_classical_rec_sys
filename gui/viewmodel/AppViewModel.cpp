@@ -270,6 +270,7 @@ void AppViewModel::setLogLevel(const QString &level)
     if (m_logLevel != level) {
         m_logLevel = level;
         Logger::getInstance().setLevel(level.toLower().toStdString());
+        LOG_INFO("日志级别已切换为: {}", level.toStdString());
         emit logLevelChanged();
     }
 }

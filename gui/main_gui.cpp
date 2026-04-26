@@ -10,6 +10,7 @@
 int main(int argc, char *argv[])
 {
     Logger::getInstance().init(PathUtils::getLogsDir().string());
+    LOG_INFO("日志系统已初始化，输出目录: {}", PathUtils::getLogsDir().string());
 
     QGuiApplication app(argc, argv);
     app.setOrganizationName("ClassicalReader");
