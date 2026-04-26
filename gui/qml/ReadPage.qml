@@ -11,6 +11,7 @@ Page {
 
     readonly property var detail: appViewModel.getTextDetail(textId)
     property int elapsedSeconds: 0
+    property bool readingRecorded: false
 
     function fmtTime(secs) {
         var m = Math.floor(secs / 60)
@@ -19,8 +20,10 @@ Page {
     }
 
     function recordAndPop() {
-        if (elapsedSeconds >= 30)
+        if (elapsedSeconds >= 30) {
             appViewModel.recordReading(textId, elapsedSeconds)
+            readingRecorded = true
+        }
         root.StackView.view.pop()
     }
 
@@ -33,7 +36,7 @@ Page {
     }
 
     Component.onDestruction: {
-        if (elapsedSeconds >= 30)
+        if (!readingRecorded && elapsedSeconds >= 30)
             appViewModel.recordReading(textId, elapsedSeconds)
     }
 
