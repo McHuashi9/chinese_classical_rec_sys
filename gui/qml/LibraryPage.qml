@@ -7,8 +7,6 @@ Page {
     id: root
     background: Rectangle { color: Theme.paper }
 
-    signal openText(int textId)
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.baseUnit * 3
@@ -166,7 +164,7 @@ Page {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.openText(model.textId)
+                            onClicked: root.StackView.view.openText(model.textId)
                         }
                     }
                 }

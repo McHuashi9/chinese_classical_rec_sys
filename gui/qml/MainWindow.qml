@@ -18,15 +18,6 @@ ApplicationWindow {
     FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf" }
     FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf" }
 
-    Connections {
-        target: contentStack.currentItem
-        function onOpenText(textId) {
-            var props = {"textId": textId};
-            var page = readPage.createObject(contentStack, props);
-            contentStack.push(page);
-        }
-    }
-
     Component {
         id: libraryPage
         LibraryPage {}
@@ -73,6 +64,11 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             initialItem: libraryPage
+
+            function openText(textId) {
+                var props = {"textId": textId}
+                push(readPage.createObject(contentStack, props))
+            }
         }
     }
 }

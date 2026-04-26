@@ -7,8 +7,6 @@ Page {
     id: root
     background: Rectangle { color: Theme.paper }
 
-    signal openText(int textId)
-
     function refresh() {
         appViewModel.getRecommendations(topKSpin.value)
     }
@@ -23,12 +21,10 @@ Page {
 
         // ── Centered content, max 900px ──
         ColumnLayout {
-            anchors {
-                horizontalCenter: parent.horizontalCenter
-                top: parent.top
-                bottom: parent.bottom
-            }
-            width: Math.min(parent.width, 900)
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.alignment: Qt.AlignHCenter
+            Layout.maximumWidth: 900
             spacing: Theme.baseUnit * 2
 
             // ── Header ──
@@ -217,7 +213,7 @@ Page {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.openText(model.textId)
+                        onClicked: root.StackView.view.openText(model.textId)
                     }
                 }
             }

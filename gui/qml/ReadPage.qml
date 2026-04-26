@@ -116,14 +116,14 @@ Page {
                     wrapMode: Text.WordWrap
                     textFormat: Text.PlainText
                 }
-            }
 
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
-        }
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
+            } // Flickable
+            } // Rectangle
 
-        // Timer
+            // ── Timer ──
         Text {
             Layout.alignment: Qt.AlignHCenter
             text: fmtTime(elapsedSeconds)
