@@ -2,6 +2,7 @@
 #include "TextListModel.h"
 #include "RecommendationModel.h"
 #include "core/KnowledgeTracker.h"
+#include "core/Config.h"
 #include "database/DatabaseManager.h"
 #include "database/UserRepository.h"
 #include "database/TextRepository.h"
@@ -144,6 +145,11 @@ bool AppViewModel::recordReading(int textId, double readTime)
 {
     if (!m_initialized)
         return false;
+
+    if (readTime < Config::MIN_READ_TIME) {
+        LOG_DEBUG("阅读时长 {}s 不足 {}s，不触发知识追踪", readTime, Config::MIN_READ_TIME);
+        return false;
+    }
 
     Text targetText;
     bool found = false;

@@ -141,7 +141,7 @@ void KnowledgeTracker::applyForgettingEffect(User& user, time_t currentTime) con
         user.setAbility(j, currentAbility);
     }
     
-    LOG_INFO("遗忘效应应用完成: 平均能力={:.3f}", user.getAverageAbility());
+    LOG_DEBUG("遗忘效应应用完成: 平均能力={:.3f}", user.getAverageAbility());
 }
 
 int KnowledgeTracker::pruneOldIncrements(User& user, time_t currentTime) const {
