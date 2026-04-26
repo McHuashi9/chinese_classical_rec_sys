@@ -7,6 +7,7 @@
 #include "database/TextRepository.h"
 #include "database/ReadingHistoryRepository.h"
 #include "database/LearningIncrementRepository.h"
+#include "utils/Logger.h"
 
 #include <ctime>
 
@@ -16,6 +17,8 @@ AppViewModel::AppViewModel(QObject *parent)
     , m_recommendationModel(new RecommendationModel(this))
     , m_libraryProxy(new TextFilterProxyModel(this))
     , m_initialized(false)
+    , m_darkMode(false)
+    , m_logLevel("INFO")
 {
 }
 
@@ -226,4 +229,31 @@ QObject* AppViewModel::recommendationModel()
 bool AppViewModel::initialized() const
 {
     return m_initialized;
+}
+
+bool AppViewModel::darkMode() const
+{
+    return m_darkMode;
+}
+
+void AppViewModel::setDarkMode(bool mode)
+{
+    if (m_darkMode != mode) {
+        m_darkMode = mode;
+        emit darkModeChanged();
+    }
+}
+
+QString AppViewModel::logLevel() const
+{
+    return m_logLevel;
+}
+
+void AppViewModel::setLogLevel(const QString &level)
+{
+    if (m_logLevel != level) {
+        m_logLevel = level;
+        Logger::getInstance().setLevel(level.toLower().toStdString());
+        emit logLevelChanged();
+    }
 }

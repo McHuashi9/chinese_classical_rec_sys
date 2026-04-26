@@ -56,6 +56,8 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QObject* recommendationModel READ recommendationModel CONSTANT)
     Q_PROPERTY(QObject* libraryProxyModel READ libraryProxyModel CONSTANT)
     Q_PROPERTY(bool initialized READ initialized NOTIFY initializedChanged)
+    Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
+    Q_PROPERTY(QString logLevel READ logLevel NOTIFY logLevelChanged)
 
 public:
     explicit AppViewModel(QObject *parent = nullptr);
@@ -73,6 +75,8 @@ public:
 
     Q_INVOKABLE void setLibraryFilter(const QString &filter);
 
+    Q_INVOKABLE void setLogLevel(const QString &level);
+
     QString userName() const;
     double averageAbility() const;
     int totalReadCount() const;
@@ -80,12 +84,17 @@ public:
     QObject* recommendationModel();
     QObject* libraryProxyModel();
     bool initialized() const;
+    bool darkMode() const;
+    void setDarkMode(bool mode);
+    QString logLevel() const;
 
 signals:
     void userNameChanged();
     void abilityChanged();
     void statsChanged();
     void initializedChanged();
+    void darkModeChanged();
+    void logLevelChanged();
     void errorOccurred(const QString &message);
 
 private:
@@ -109,4 +118,6 @@ private:
     TextFilterProxyModel *m_libraryProxy;
 
     bool m_initialized;
+    bool m_darkMode;
+    QString m_logLevel;
 };
