@@ -64,6 +64,10 @@ bool AppViewModel::initialize(const QString &dbPath)
         QSettings settings;
         m_darkMode = settings.value("theme/darkMode", false).toBool();
 
+        // 恢复日志级别
+        m_logLevel = settings.value("app/logLevel", "INFO").toString();
+        Logger::getInstance().setLevel(m_logLevel.toLower().toStdString());
+
         emit userNameChanged();
         emit abilityChanged();
         emit statsChanged();
@@ -279,6 +283,8 @@ void AppViewModel::setLogLevel(const QString &level)
     if (m_logLevel != level) {
         m_logLevel = level;
         Logger::getInstance().setLevel(level.toLower().toStdString());
+        QSettings settings;
+        settings.setValue("app/logLevel", level);
         LOG_INFO("日志级别已切换为: {}", level.toStdString());
         emit logLevelChanged();
     }

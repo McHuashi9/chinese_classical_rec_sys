@@ -222,6 +222,11 @@ Page {
                             model: ["INFO", "DEBUG", "WARNING", "ERROR"]
                             currentIndex: 0
 
+                            Component.onCompleted: {
+                                var idx = model.indexOf(appViewModel.logLevel)
+                                if (idx >= 0) currentIndex = idx
+                            }
+
                             font.family: Theme.fontUI
                             font.pixelSize: Theme.sizeBody
 
