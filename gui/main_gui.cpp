@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QFontDatabase>
+#include <QQuickStyle>
 #include "utils/Logger.h"
 #include "utils/PathUtils.h"
 #include "viewmodel/AppViewModel.h"
@@ -15,20 +16,29 @@ int main(int argc, char *argv[])
     app.setOrganizationName("ClassicalReader");
     app.setApplicationName("ClassicalReader");
 
-    const QString fontsPath = QString::fromStdString(PathUtils::getFontsDir().string()) + "/";
+    QQuickStyle::setStyle("Fusion");
 
-    QFontDatabase::addApplicationFont(fontsPath + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf");
-    QFontDatabase::addApplicationFont(fontsPath + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf");
-    QFontDatabase::addApplicationFont(fontsPath + "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf");
-    QFontDatabase::addApplicationFont(fontsPath + "LXGWWenKai-Regular/LXGWWenKai-Light.ttf");
-    QFontDatabase::addApplicationFont(fontsPath + "LXGWWenKai-Regular/LXGWWenKai-Medium.ttf");
-    QFontDatabase::addApplicationFont(fontsPath + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf");
-    QFontDatabase::addApplicationFont(fontsPath + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf");
-    QFontDatabase::addApplicationFont(fontsPath + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf");
+    const QString fontsPath = QString::fromStdWString(PathUtils::getFontsDir().wstring()) + u'/';
+
+    auto loadFont = [&](const QString &relPath) {
+        int id = QFontDatabase::addApplicationFont(fontsPath + relPath);
+        if (id < 0) {
+            LOG_WARN("字体加载失败: {}", (fontsPath + relPath).toStdString());
+        }
+    };
+
+    loadFont("HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf");
+    loadFont("HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf");
+    loadFont("LXGWWenKai-Regular/LXGWWenKai-Regular.ttf");
+    loadFont("LXGWWenKai-Regular/LXGWWenKai-Light.ttf");
+    loadFont("LXGWWenKai-Regular/LXGWWenKai-Medium.ttf");
+    loadFont("SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf");
+    loadFont("SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf");
+    loadFont("SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf");
 
     AppViewModel viewModel;
 
-    const QString dbPath = QString::fromStdString(PathUtils::getDbPath().string());
+    const QString dbPath = QString::fromStdWString(PathUtils::getDbPath().wstring());
     viewModel.initialize(dbPath);
 
     QQmlApplicationEngine engine;

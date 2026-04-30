@@ -11,15 +11,6 @@ ApplicationWindow {
 
     Component.onCompleted: Theme.darkMode = appViewModel.darkMode
 
-    FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf" }
-    FontLoader { source: "file://" + fontDir + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf" }
-    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf" }
-    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Light.ttf" }
-    FontLoader { source: "file://" + fontDir + "LXGWWenKai-Regular/LXGWWenKai-Medium.ttf" }
-    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf" }
-    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf" }
-    FontLoader { source: "file://" + fontDir + "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf" }
-
     Component {
         id: libraryPage
         LibraryPage {}
