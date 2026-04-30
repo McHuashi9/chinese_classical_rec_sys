@@ -44,6 +44,18 @@ jobs:
           Icon=chinese_classical_rec_sys
           Categories=Education;Literature;
           DEOF
+          # 生成最小图标文件（linuxdeployqt 有自定义 .desktop 后不自动生成）
+          python3 -c "
+          import struct,zlib
+          w,h=256,256
+          def chunk(t,d):
+              c=t+d;return struct.pack('>I',len(d))+c+struct.pack('>I',zlib.crc32(c)&0xffffffff)
+          raw=b''
+          for y in range(h):
+              raw+=b'\x00'+bytes([0x66,0xcc,0xff])*(w)
+          png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
+          open('build/chinese_classical_rec_sys.png','wb').write(png)
+          "
           ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
           cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/chinese_classical_rec_sys package/
