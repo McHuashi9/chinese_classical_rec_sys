@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(chinese_classical_rec_sys)
+project(chinese_classical_rec_sys VERSION 0.1.0)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -91,6 +91,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/viewmodel/Paginator.cpp
     gui/qml.qrc
 )
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/gui

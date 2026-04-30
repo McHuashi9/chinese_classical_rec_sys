@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import "qrc:/qml"
 
 ApplicationWindow {
-    title: "古典文学阅读推荐"
+    title: "古典文学阅读推荐 v" + appViewModel.appVersion
     minimumWidth: 1024
     minimumHeight: 768
     visible: true

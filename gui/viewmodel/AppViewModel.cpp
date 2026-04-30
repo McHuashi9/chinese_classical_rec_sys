@@ -289,6 +289,11 @@ QString AppViewModel::logLevel() const
     return m_logLevel;
 }
 
+QString AppViewModel::appVersion() const
+{
+    return QStringLiteral(APP_VERSION);
+}
+
 void AppViewModel::setLogLevel(const QString &level)
 {
     if (m_logLevel != level) {

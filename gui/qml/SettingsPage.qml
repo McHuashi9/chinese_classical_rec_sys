@@ -307,6 +307,64 @@ Page {
                 }
             }
 
+            // ── Card: About ──
+            Rectangle {
+                id: aboutCard
+                Layout.fillWidth: true
+                implicitHeight: aboutColumn.implicitHeight + Theme.cardPadding * 1.5
+                color: "transparent"
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 1
+                    anchors.leftMargin: 1
+                    color: Theme.shadow
+                    radius: 4
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: Theme.card
+                    border.color: Theme.border
+                    border.width: 1
+                    radius: 4
+
+                    ColumnLayout {
+                        id: aboutColumn
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            top: parent.top
+                            leftMargin: Theme.cardPadding
+                            rightMargin: Theme.cardPadding
+                            topMargin: Theme.cardPadding * 0.75
+                        }
+                        spacing: Theme.baseUnit * 0.5
+
+                        Text {
+                            text: "关于"
+                            font.family: Theme.fontTitle
+                            font.pixelSize: Theme.sizeH2
+                            color: Theme.ink
+                        }
+
+                        Text {
+                            text: "古典文学阅读推荐系统"
+                            font.family: Theme.fontUI
+                            font.pixelSize: Theme.sizeBody
+                            color: Theme.inkSecondary
+                        }
+
+                        Text {
+                            text: "版本 " + appViewModel.appVersion
+                            font.family: Theme.fontUI
+                            font.pixelSize: Theme.sizeCaption
+                            color: Theme.inkSecondary
+                        }
+                    }
+                }
+            }
+
             Item { Layout.fillHeight: true }
         }
     }

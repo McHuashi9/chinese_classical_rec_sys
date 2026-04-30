@@ -31,6 +31,7 @@ class AppViewModel : public QObject {
     Q_PROPERTY(bool initialized READ initialized NOTIFY initializedChanged)
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
     Q_PROPERTY(QString logLevel READ logLevel NOTIFY logLevelChanged)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 
     // ── Paginated reading state ──
     Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
@@ -72,6 +73,7 @@ public:
     bool darkMode() const;
     void setDarkMode(bool mode);
     QString logLevel() const;
+    QString appVersion() const;
 
     int currentPage() const;
     int totalPages() const;
