@@ -82,11 +82,14 @@ QVariantList AppViewModel::getRecommendations(int topK)
 {
     QVariantList result;
 
-    if (!m_initialized)
+    if (!m_initialized) {
+        emit errorOccurred("系统未初始化");
         return result;
+    }
 
     time_t now = time(nullptr);
     m_tracker->applyForgettingEffect(m_user, now);
+    m_tracker->pruneOldIncrements(m_user, now);
 
     auto recs = m_engine.recommend(m_user, m_allTexts, topK);
 
@@ -123,7 +126,7 @@ QVariantList AppViewModel::getRecommendations(int topK)
     return result;
 }
 
-QVariantMap AppViewModel::getTextDetail(int textId) const
+QVariantMap AppViewModel::getTextDetail(int textId)
 {
     QVariantMap detail;
 
@@ -138,13 +141,16 @@ QVariantMap AppViewModel::getTextDetail(int textId) const
         }
     }
 
+    emit errorOccurred("未找到该篇目");
     return detail;
 }
 
 bool AppViewModel::recordReading(int textId, double readTime)
 {
-    if (!m_initialized)
+    if (!m_initialized) {
+        emit errorOccurred("系统未初始化");
         return false;
+    }
 
     LOG_INFO("阅读记录: textId={}, readTime={:.0f}s", textId, readTime);
 
@@ -171,6 +177,7 @@ bool AppViewModel::recordReading(int textId, double readTime)
     time_t now = time(nullptr);
 
     m_tracker->applyForgettingEffect(m_user, now);
+    m_tracker->pruneOldIncrements(m_user, now);
     m_tracker->applyReadEffect(m_user, targetText, readTime, now);
 
     m_userRepo->saveUser(m_user);
@@ -279,17 +286,21 @@ void AppViewModel::setLogLevel(const QString &level)
 
 void AppViewModel::loadTextForReading(int textId, int availWidth, int availHeight)
 {
-    if (availWidth <= 0 || availHeight <= 0)
+    if (availWidth <= 0 || availHeight <= 0) {
+        emit errorOccurred("页面尺寸无效");
         return;
+    }
 
     // fetch full text content
     QVariantMap detail = getTextDetail(textId);
     if (detail.isEmpty())
-        return;
+        return;  // getTextDetail 已 emit errorOccurred
 
     m_fullContent = detail["content"].toString();
-    if (m_fullContent.isEmpty())
+    if (m_fullContent.isEmpty()) {
+        emit errorOccurred("篇目内容为空");
         return;
+    }
 
     m_readingTextId = textId;
 
@@ -307,12 +318,14 @@ void AppViewModel::loadTextForReading(int textId, int availWidth, int availHeigh
     if (m_pages.empty()) {
         m_currentPage = -1;
         m_readingTextId = -1;
-        emit readingStateChanged();
+        emit currentPageChanged();
+        emit pageLayoutChanged();
         return;
     }
 
     m_currentPage = 0;
-    emit readingStateChanged();
+    emit currentPageChanged();
+    emit pageLayoutChanged();
 }
 
 void AppViewModel::nextPage()
@@ -325,7 +338,7 @@ void AppViewModel::nextPage()
         return;
 
     m_currentPage = nxt;
-    emit readingStateChanged();
+    emit currentPageChanged();
 }
 
 void AppViewModel::prevPage()
@@ -334,7 +347,7 @@ void AppViewModel::prevPage()
         return;
 
     m_currentPage--;
-    emit readingStateChanged();
+    emit currentPageChanged();
 }
 
 void AppViewModel::recalcPagination(int newWidth, int newHeight)
@@ -359,12 +372,14 @@ void AppViewModel::recalcPagination(int newWidth, int newHeight)
 
     if (m_pages.empty()) {
         m_currentPage = -1;
-        emit readingStateChanged();
+        emit currentPageChanged();
+        emit pageLayoutChanged();
         return;
     }
 
     m_currentPage = Paginator::findPageForCharPos(m_pages, oldCharPos);
-    emit readingStateChanged();
+    emit currentPageChanged();
+    emit pageLayoutChanged();
 }
 
 int AppViewModel::currentPage() const

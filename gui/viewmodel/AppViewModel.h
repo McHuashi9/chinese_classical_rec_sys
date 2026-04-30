@@ -61,10 +61,10 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QString logLevel READ logLevel NOTIFY logLevelChanged)
 
     // ── Paginated reading state ──
-    Q_PROPERTY(int currentPage READ currentPage NOTIFY readingStateChanged)
-    Q_PROPERTY(int totalPages READ totalPages NOTIFY readingStateChanged)
-    Q_PROPERTY(QString currentPageText READ currentPageText NOTIFY readingStateChanged)
-    Q_PROPERTY(QString currentPageNumberLabel READ currentPageNumberLabel NOTIFY readingStateChanged)
+    Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
+    Q_PROPERTY(int totalPages READ totalPages NOTIFY pageLayoutChanged)
+    Q_PROPERTY(QString currentPageText READ currentPageText NOTIFY currentPageChanged)
+    Q_PROPERTY(QString currentPageNumberLabel READ currentPageNumberLabel NOTIFY currentPageChanged)
 
 public:
     explicit AppViewModel(QObject *parent = nullptr);
@@ -74,7 +74,7 @@ public:
 
     Q_INVOKABLE QVariantList getRecommendations(int topK = 10);
 
-    Q_INVOKABLE QVariantMap getTextDetail(int textId) const;
+    Q_INVOKABLE QVariantMap getTextDetail(int textId);
 
     Q_INVOKABLE bool recordReading(int textId, double readTime);
 
@@ -114,7 +114,8 @@ signals:
     void darkModeChanged();
     void logLevelChanged();
     void errorOccurred(const QString &message);
-    void readingStateChanged();
+    void currentPageChanged();
+    void pageLayoutChanged();
 
 private:
     // core components
