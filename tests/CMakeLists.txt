@@ -8,6 +8,9 @@ set(TEST_SOURCES
     test_main.cpp
     test_math_functions.cpp
     test_table_formatter.cpp
+    test_repository.cpp
+    test_engine.cpp
+    test_tracker.cpp
 )
 
 # Catch2 编译源
@@ -29,7 +32,5 @@ if(WIN32)
     target_link_libraries(run_tests PRIVATE shell32)
 endif()
 
-# 添加到 CTest（暂时绕过 Windows 平台路径问题）
-if(NOT WIN32)
-    add_test(NAME MathFunctionsTests COMMAND run_tests)
-endif()
+# 注册到 CTest
+add_test(NAME AllTests COMMAND run_tests)

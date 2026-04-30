@@ -1,5 +1,4 @@
 name: Release
-
 on:
   push:
     tags:
@@ -28,6 +27,21 @@ jobs:
         with:
           cmake-version: '3.28'
 
+      - name: Install Qt 6 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-declarative-dev libgl1-mesa-dev
+
+      - name: Install Qt 6 (Windows)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.6.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
@@ -55,9 +69,16 @@ jobs:
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          # 创建带版本号的顶层目录
+          # 复制资源到构建目录
+          cp -r gui/fonts build/fonts/ 2>/dev/null || true
+          cp -r data build/data/
+          # 使用 linuxdeployqt 打包
+          wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
+          ./linuxdeployqt-continuous-x86_64.AppImage build/${{ matrix.artifact_name }} -appimage -qmake=/usr/lib/qt6/bin/qmake
+          # 创建发布包
           mkdir -p ${{ matrix.asset_name }}/data
-          cp build/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
+          cp build/chinese_classical_rec_sys*.AppImage ${{ matrix.asset_name }}/ 2>/dev/null || cp build/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
           cp build/data/classical.db ${{ matrix.asset_name }}/data/
           cp LICENSE ${{ matrix.asset_name }}/
           tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
@@ -66,11 +87,11 @@ jobs:
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
-          # 创建带版本号的顶层目录
           mkdir ${{ matrix.asset_name }}\data
           copy build\Release\${{ matrix.artifact_name }} ${{ matrix.asset_name }}\
           copy build\data\classical.db ${{ matrix.asset_name }}\data\
           copy LICENSE ${{ matrix.asset_name }}\
+          windeployqt ${{ matrix.asset_name }}\${{ matrix.artifact_name }} --qmldir gui\
           Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.asset_name }}.zip
           echo "ASSET_PATH=${{ matrix.asset_name }}.zip" >> $env:GITHUB_ENV
 

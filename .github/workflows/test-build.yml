@@ -1,21 +1,66 @@
-name: Test Windows Build
-
+name: Test Build
 on:
   workflow_dispatch:
 
 jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.28'
+      - name: Install Qt 6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-declarative-dev libgl1-mesa-dev
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package with linuxdeployqt
+        run: |
+          # 安装 linuxdeployqt
+          wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
+          # 复制资源到构建目录
+          cp -r gui/fonts build/fonts/
+          cp -r data build/data/
+          # 运行 linuxdeployqt 打包
+          ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
+          mkdir -p package/data
+          cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/chinese_classical_rec_sys package/
+          cp build/data/classical.db package/data/ 2>/dev/null || true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-linux
+          path: package/
+
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.28'
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.6.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release
       - name: Run tests
-        run: ctest --test-dir build -C Release
+        run: ctest --test-dir build -C Release --output-on-failure
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -24,11 +69,12 @@ jobs:
         run: pip install -r requirements-ci.txt
       - name: Generate database
         run: python scripts/init_data.py
-      - name: Package
+      - name: Package with windeployqt
         run: |
           mkdir package\data
           copy build\Release\chinese_classical_rec_sys.exe package\
           copy build\data\classical.db package\data\
+          windeployqt package\chinese_classical_rec_sys.exe --qmldir gui\
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

@@ -107,6 +107,56 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
 endif()
 
+# =============================================================================
+# 安装规则
+# =============================================================================
+include(GNUInstallDirs)
+
+# 主程序安装
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# 静态库安装（供外部链接使用）
+install(TARGETS chinese_classical_lib
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+# SQLite3 静态库安装
+install(TARGETS sqlite3_static
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+# 头文件安装
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
+)
+
+# 运行时资源安装
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/data
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/gui/fonts/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/fonts
+)
+
+# QML 资源安装（存在则安装）
+if(EXISTS ${CMAKE_SOURCE_DIR}/gui/qml)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/gui/qml/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/qml
+    )
+endif()
+
+# RPATH 处理：Linux 上设置相对 RPATH 使可执行文件可找到依赖库
+if(UNIX AND NOT APPLE)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+        BUILD_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+    )
+endif()
+
+# =============================================================================
 # 单元测试
+# =============================================================================
 enable_testing()
 add_subdirectory(tests)

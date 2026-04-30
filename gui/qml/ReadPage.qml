@@ -31,7 +31,7 @@ Page {
         id: readTimer
         interval: 1000
         repeat: true
-        running: StackView.view && StackView.view.currentItem === root
+        running: root.StackView.view && root.StackView.view.currentItem === root
         onTriggered: elapsedSeconds++
     }
 
