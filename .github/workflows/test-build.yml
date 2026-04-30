@@ -34,6 +34,15 @@ jobs:
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
           cp -r gui/fonts build/fonts/
+          # 创建 .desktop 文件（linuxdeployqt 内部 appimagetool 要求 Categories 字段）
+          cat > build/chinese_classical_rec_sys.desktop << 'DEOF'
+          [Desktop Entry]
+          Type=Application
+          Name=古文推荐
+          Comment=中国古文推荐系统
+          Exec=chinese_classical_rec_sys
+          Categories=Education;Literature;
+          DEOF
           ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
           cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/chinese_classical_rec_sys package/

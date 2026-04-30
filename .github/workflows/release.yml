@@ -71,6 +71,15 @@ jobs:
         run: |
           # 复制资源到构建目录
           cp -r gui/fonts build/fonts/ 2>/dev/null || true
+          # 创建 .desktop 文件（linuxdeployqt 内部 appimagetool 要求 Categories 字段）
+          cat > build/${{ matrix.artifact_name }}.desktop << 'DEOF'
+          [Desktop Entry]
+          Type=Application
+          Name=古文推荐
+          Comment=中国古文推荐系统
+          Exec=${{ matrix.artifact_name }}
+          Categories=Education;Literature;
+          DEOF
           # 使用 linuxdeployqt 打包
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
