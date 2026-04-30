@@ -115,7 +115,7 @@ jobs:
           copy LICENSE ${{ matrix.asset_name }}\
           windeployqt ${{ matrix.asset_name }}\${{ matrix.artifact_name }} --qmldir gui\ --qmlimport Qt\qml
           move ${{ matrix.asset_name }}\plugins ${{ matrix.asset_name }}\Qt\plugins
-          if exist ${{ matrix.asset_name }}\translations (move ${{ matrix.asset_name }}\translations ${{ matrix.asset_name }}\Qt\translations)
+          if (Test-Path ${{ matrix.asset_name }}\translations) { move ${{ matrix.asset_name }}\translations ${{ matrix.asset_name }}\Qt\translations }
           echo [Paths] > ${{ matrix.asset_name }}\qt.conf
           echo Prefix = Qt >> ${{ matrix.asset_name }}\qt.conf
           Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.asset_name }}.zip
