@@ -166,7 +166,7 @@ def parse_text_file(file_path: str) -> dict | None:
             return None
         
         title = lines[0].strip()
-        author = lines[1].strip()
+        author = lines[2].strip() if len(lines) > 2 else ""
         original_text = extract_original_text(content)
         
         return {

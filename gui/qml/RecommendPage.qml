@@ -13,6 +13,13 @@ Page {
 
     Component.onCompleted: refresh()
 
+    Connections {
+        target: appViewModel
+        function onAbilityChanged() {
+            refresh()
+        }
+    }
+
     ColumnLayout {
         anchors {
             fill: parent

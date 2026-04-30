@@ -44,10 +44,17 @@ bool AppViewModel::initialize(const QString &dbPath)
         m_historyRepo = std::make_unique<ReadingHistoryRepository>(m_dbMgr.get());
         m_incrementRepo = std::make_unique<LearningIncrementRepository>(m_dbMgr.get());
 
-        if (!m_userRepo->getUser(m_user)) {
+        if (!m_userRepo->getUser(m_user) || m_user.getAverageAbility() < 0.001) {
+            LOG_INFO("初始化: getUser={}, avgAbility={:.4f}",
+                     m_userRepo->getUser(m_user) ? "true" : "false",
+                     m_user.getAverageAbility());
             m_user.initializeDefault();
             m_user.setName("佚名");
             m_userRepo->saveUser(m_user);
+            LOG_INFO("用户能力已初始化为默认值 0.3, avg={:.4f}", m_user.getAverageAbility());
+        } else {
+            LOG_INFO("用户加载成功: avgAbility={:.4f}, name={}",
+                     m_user.getAverageAbility(), m_user.getName());
         }
 
         m_allTexts = m_textRepo->getAllTexts();
@@ -59,6 +66,7 @@ bool AppViewModel::initialize(const QString &dbPath)
 
         m_initialized = true;
         emit initializedChanged();
+        emit abilityChanged();
 
         // 恢复主题偏好
         QSettings settings;
@@ -212,9 +220,12 @@ QVariantMap AppViewModel::getAbilityBreakdown() const
     };
 
     for (int i = 0; i < 10; ++i) {
-        map[QString::fromLatin1(kDimNames[i])] = m_user.getAbility(i);
+        double val = m_user.getAbility(i);
+        map[QString::fromLatin1(kDimNames[i])] = val;
+        LOG_DEBUG("能力维[{}] {} = {:.4f}", i, kDimNames[i], val);
     }
 
+    LOG_DEBUG("getAbilityBreakdown: avg={:.4f}", m_user.getAverageAbility());
     return map;
 }
 

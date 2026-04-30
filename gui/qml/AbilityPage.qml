@@ -24,6 +24,9 @@ Page {
 
     function loadBreakdown() {
         var newBreakdown = appViewModel.getAbilityBreakdown()
+        console.log("AbilityPage.loadBreakdown: avg=", appViewModel.averageAbility,
+                    "keys=", Object.keys(newBreakdown).length,
+                    "firstVal=", newBreakdown["avg_sentence_length"])
         for (var i = 0; i < dimKeys.length; i++) {
             animPrevValues[i] = animValues[i]
         }
@@ -43,10 +46,12 @@ Page {
             var elapsed = Date.now() - startTime
             var rawT = Math.min(1.0, elapsed / 500)
             animT = 1 - Math.pow(1 - rawT, 3)
+            var newVals = []
             for (var i = 0; i < root.dimKeys.length; i++) {
                 var target = root.breakdown[root.dimKeys[i]] || 0
-                root.animValues[i] = root.animPrevValues[i] + (target - root.animPrevValues[i]) * animT
+                newVals[i] = root.animPrevValues[i] + (target - root.animPrevValues[i]) * animT
             }
+            root.animValues = newVals
             chart.requestPaint()
             if (rawT >= 1.0) {
                 stop()
