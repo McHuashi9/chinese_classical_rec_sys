@@ -8,20 +8,6 @@
 KnowledgeTracker::KnowledgeTracker(LearningIncrementRepository* incrementRepo)
     : incrementRepo(incrementRepo) {}
 
-double KnowledgeTracker::gaussian(double x) const {
-    return std::exp(-x * x / (2.0 * Config::SIGMA * Config::SIGMA));
-}
-
-double KnowledgeTracker::calculateDynamicLearningRate(double avgAbility) const {
-    // 公式13: η(t) = η · (1 - ū(t))^γ
-    return Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
-}
-
-double KnowledgeTracker::calculateLearningGain(double d_j, double u_j) const {
-    // 公式14: g_j = exp(-(d̂_j - u_j - δ*)² / 2σ²)
-    return gaussian(d_j - u_j - Config::DELTA_STAR);
-}
-
 double KnowledgeTracker::calculateForgettingFactor(double deltaDays) const {
     // 公式18: ψ(Δt) = (1 + Δt/τ)^(-c)
     if (deltaDays <= 0) {

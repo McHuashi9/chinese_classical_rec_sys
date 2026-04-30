@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <cmath>
+
 /**
  * @brief 算法参数配置
  * 
@@ -27,5 +29,29 @@ struct Config {
     // 最小阅读时间阈值（秒）
     static constexpr int MIN_READ_TIME = 30;
 };
+
+/**
+ * @brief 高斯函数（公式19）
+ *        exp(-x² / 2σ²)
+ */
+inline double gaussian(double x) {
+    return std::exp(-x * x / (2.0 * Config::SIGMA * Config::SIGMA));
+}
+
+/**
+ * @brief 动态学习率（公式13）
+ *        η(t) = η · (1 - ū(t))^γ
+ */
+inline double calculateDynamicLearningRate(double avgAbility) {
+    return Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
+}
+
+/**
+ * @brief 学习增益（公式14）
+ *        g_j = exp(-(d̂_j - u_j - δ*)² / 2σ²)
+ */
+inline double calculateLearningGain(double d_j, double u_j) {
+    return gaussian(d_j - u_j - Config::DELTA_STAR);
+}
 
 #endif

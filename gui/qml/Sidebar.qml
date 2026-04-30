@@ -60,7 +60,7 @@ Rectangle {
                     text: navColumn.labels[index]
                     font.family: Theme.fontTitle
                     font.pixelSize: Theme.sizeH2
-                    font.bold: root.currentIndex === index
+                    font.weight: root.currentIndex === index ? Font.Medium : Font.Normal
                     color: Theme.ink
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 16

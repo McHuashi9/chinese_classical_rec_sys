@@ -57,6 +57,8 @@ target_include_directories(sqlite3_static PUBLIC
 
 # 核心逻辑静态库（排除 main.cpp，避免重复编译）
 file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)?\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
 add_library(chinese_classical_lib STATIC ${LIB_SOURCES})
 
@@ -83,6 +85,7 @@ file(COPY ${CMAKE_SOURCE_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
 qt_add_executable(${PROJECT_NAME}
     gui/main_gui.cpp
     gui/viewmodel/AppViewModel.cpp
+    gui/viewmodel/TextFilterProxyModel.cpp
     gui/viewmodel/TextListModel.cpp
     gui/viewmodel/RecommendationModel.cpp
     gui/viewmodel/Paginator.cpp

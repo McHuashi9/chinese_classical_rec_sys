@@ -2,7 +2,6 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QFontDatabase>
-#include <QDir>
 #include "utils/Logger.h"
 #include "utils/PathUtils.h"
 #include "viewmodel/AppViewModel.h"
@@ -16,7 +15,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName("ClassicalReader");
     app.setApplicationName("ClassicalReader");
 
-    const QString fontsPath = QCoreApplication::applicationDirPath() + "/fonts/";
+    const QString fontsPath = QString::fromStdString(PathUtils::getFontsDir().string()) + "/";
 
     QFontDatabase::addApplicationFont(fontsPath + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf");
     QFontDatabase::addApplicationFont(fontsPath + "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf");
@@ -29,7 +28,7 @@ int main(int argc, char *argv[])
 
     AppViewModel viewModel;
 
-    const QString dbPath = QCoreApplication::applicationDirPath() + "/data/classical.db";
+    const QString dbPath = QString::fromStdString(PathUtils::getDbPath().string());
     viewModel.initialize(dbPath);
 
     QQmlApplicationEngine engine;

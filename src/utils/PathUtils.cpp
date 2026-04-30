@@ -48,6 +48,10 @@ std::filesystem::path getLogsDir() {
     return getExeDir() / "logs";
 }
 
+std::filesystem::path getFontsDir() {
+    return getExeDir() / "fonts";
+}
+
 std::filesystem::path getHistoryFilePath() {
 #ifdef _WIN32
     // Windows: 优先使用 %APPDATA%，回退到 %USERPROFILE%

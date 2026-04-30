@@ -73,24 +73,12 @@ public:
     int pruneOldIncrements(User& user, time_t currentTime) const;
     
     /**
-     * @brief 计算动态学习率 η(t)
-     */
-    double calculateDynamicLearningRate(double avgAbility) const;
-    
-    /**
-     * @brief 计算学习增益 g_j
-     */
-    double calculateLearningGain(double d_j, double u_j) const;
-    
-    /**
      * @brief 计算遗忘因子 ψ(Δt)
      */
     double calculateForgettingFactor(double deltaDays) const;
     
 private:
     LearningIncrementRepository* incrementRepo;
-    
-    double gaussian(double x) const;
 };
 
 #endif

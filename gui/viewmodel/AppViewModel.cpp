@@ -34,7 +34,7 @@ bool AppViewModel::initialize(const QString &dbPath)
         m_dbMgr = std::make_unique<DatabaseManager>();
         if (!m_dbMgr->open(dbPath.toStdString())) {
             const QString err = QString::fromStdString("无法打开数据库: " + m_dbMgr->getLastError());
-            fprintf(stderr, "[AppViewModel] %s\n", qPrintable(err));
+            LOG_ERROR("[AppViewModel] {}", err.toStdString());
             emit errorOccurred(err);
             return false;
         }
@@ -72,7 +72,7 @@ bool AppViewModel::initialize(const QString &dbPath)
         return true;
     } catch (const std::exception &e) {
         const QString err = QString::fromStdString(std::string("初始化失败: ") + e.what());
-        fprintf(stderr, "[AppViewModel] %s\n", qPrintable(err));
+        LOG_ERROR("[AppViewModel] {}", err.toStdString());
         emit errorOccurred(err);
         return false;
     }

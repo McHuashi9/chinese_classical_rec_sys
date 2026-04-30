@@ -22,10 +22,6 @@ static constexpr double WEIGHTS[10] = {
 
 RecommendationEngine::RecommendationEngine() {}
 
-double RecommendationEngine::gaussian(double x) const {
-    return std::exp(-x * x / (2.0 * Config::SIGMA * Config::SIGMA));
-}
-
 double RecommendationEngine::calculateDifficultyGap(const User& user, const Text& text) const {
     // 公式20: δ = Σ_{j=1}^{10} w'_j · (d̂_j - u_j)
     // 由于 CRITIC 权重已归一化（∑ w_j = 1），w'_j = w_j
@@ -45,16 +41,6 @@ double RecommendationEngine::calculateProbability(const User& user, const Text& 
     // 公式19: P_diff = exp(-(δ - δ*)² / 2σ²)
     double delta = calculateDifficultyGap(user, text);
     return gaussian(delta - Config::DELTA_STAR);
-}
-
-double RecommendationEngine::calculateLearningGain(double d_j, double u_j) const {
-    // 公式14: g_j = exp(-(d̂_j - u_j - δ*)² / 2σ²)
-    return gaussian(d_j - u_j - Config::DELTA_STAR);
-}
-
-double RecommendationEngine::calculateDynamicLearningRate(double avgAbility) const {
-    // 公式13: η(t) = η · (1 - ū(t))^γ
-    return Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
 }
 
 std::vector<std::pair<int, double>> RecommendationEngine::recommend(

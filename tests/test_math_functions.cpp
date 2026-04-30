@@ -1,5 +1,4 @@
 #include <catch_amalgamated.hpp>
-#include "core/RecommendationEngine.h"
 #include "core/KnowledgeTracker.h"
 #include "core/Config.h"
 #include <cmath>
@@ -22,23 +21,14 @@ constexpr double EPSILON = 1e-4;
 // =============================================================================
 
 TEST_CASE("calculateLearningGain - 在理想难度差距处达到峰值", "[math]") {
-    RecommendationEngine engine;
-    KnowledgeTracker tracker;
-    
-    // 当 d_j - u_j = δ* 时，学习增益应为 1.0（高斯峰值）
     double d_j = 0.5;
     double u_j = d_j - Config::DELTA_STAR;  // u_j = 0.5 - 0.13 = 0.37
     
-    double gain = engine.calculateLearningGain(d_j, u_j);
-    REQUIRE(std::abs(gain - 1.0) < EPSILON);
-    
-    gain = tracker.calculateLearningGain(d_j, u_j);
+    double gain = calculateLearningGain(d_j, u_j);
     REQUIRE(std::abs(gain - 1.0) < EPSILON);
 }
 
 TEST_CASE("calculateLearningGain - 高斯函数对称性", "[math]") {
-    RecommendationEngine engine;
-    
     double u_j = 0.3;
     double d_j_peak = u_j + Config::DELTA_STAR;  // 峰值点
     
@@ -46,47 +36,39 @@ TEST_CASE("calculateLearningGain - 高斯函数对称性", "[math]") {
     double d_j_plus = d_j_peak + Config::SIGMA;   // 偏移 +σ
     double d_j_minus = d_j_peak - Config::SIGMA;  // 偏移 -σ
     
-    double gain_plus = engine.calculateLearningGain(d_j_plus, u_j);
-    double gain_minus = engine.calculateLearningGain(d_j_minus, u_j);
+    double gain_plus = calculateLearningGain(d_j_plus, u_j);
+    double gain_minus = calculateLearningGain(d_j_minus, u_j);
     
     REQUIRE(std::abs(gain_plus - gain_minus) < EPSILON);
 }
 
 TEST_CASE("calculateLearningGain - 距离峰值越远增益越小", "[math]") {
-    RecommendationEngine engine;
-    
     double u_j = 0.3;
     double d_j_peak = u_j + Config::DELTA_STAR;
     
-    double gain_peak = engine.calculateLearningGain(d_j_peak, u_j);
-    double gain_offset_1 = engine.calculateLearningGain(d_j_peak + 0.1, u_j);
-    double gain_offset_2 = engine.calculateLearningGain(d_j_peak + 0.2, u_j);
+    double gain_peak = calculateLearningGain(d_j_peak, u_j);
+    double gain_offset_1 = calculateLearningGain(d_j_peak + 0.1, u_j);
+    double gain_offset_2 = calculateLearningGain(d_j_peak + 0.2, u_j);
     
     REQUIRE(gain_peak > gain_offset_1);
     REQUIRE(gain_offset_1 > gain_offset_2);
 }
 
 TEST_CASE("calculateLearningGain - 在 σ 处衰减到约 0.6065", "[math]") {
-    RecommendationEngine engine;
-    
-    // 高斯函数在 x=σ 处：exp(-1/2) ≈ 0.6065
     double u_j = 0.3;
     double d_j = u_j + Config::DELTA_STAR + Config::SIGMA;
     
-    double gain = engine.calculateLearningGain(d_j, u_j);
+    double gain = calculateLearningGain(d_j, u_j);
     double expected = std::exp(-0.5);  // ≈ 0.6065
     
     REQUIRE(std::abs(gain - expected) < EPSILON);
 }
 
 TEST_CASE("calculateLearningGain - 在 2σ 处衰减到约 0.1353", "[math]") {
-    RecommendationEngine engine;
-    
-    // 高斯函数在 x=2σ 处：exp(-2) ≈ 0.1353
     double u_j = 0.3;
     double d_j = u_j + Config::DELTA_STAR + 2 * Config::SIGMA;
     
-    double gain = engine.calculateLearningGain(d_j, u_j);
+    double gain = calculateLearningGain(d_j, u_j);
     double expected = std::exp(-2.0);  // ≈ 0.1353
     
     REQUIRE(std::abs(gain - expected) < EPSILON);
@@ -97,25 +79,17 @@ TEST_CASE("calculateLearningGain - 在 2σ 处衰减到约 0.1353", "[math]") {
 // =============================================================================
 
 TEST_CASE("calculateDynamicLearningRate - 能力为 0 时学习率最大", "[math]") {
-    RecommendationEngine engine;
-    KnowledgeTracker tracker;
-    
     // η(t) = η · (1 - ū)^γ
     // 当 avgAbility = 0 时：η · 1^γ = η = 0.08
-    double rate = engine.calculateDynamicLearningRate(0.0);
-    REQUIRE(std::abs(rate - Config::ETA) < EPSILON);
-    
-    rate = tracker.calculateDynamicLearningRate(0.0);
+    double rate = calculateDynamicLearningRate(0.0);
     REQUIRE(std::abs(rate - Config::ETA) < EPSILON);
 }
 
 TEST_CASE("calculateDynamicLearningRate - 能力越高学习率越低", "[math]") {
-    RecommendationEngine engine;
-    
-    double rate_0 = engine.calculateDynamicLearningRate(0.0);
-    double rate_25 = engine.calculateDynamicLearningRate(0.25);
-    double rate_50 = engine.calculateDynamicLearningRate(0.5);
-    double rate_75 = engine.calculateDynamicLearningRate(0.75);
+    double rate_0 = calculateDynamicLearningRate(0.0);
+    double rate_25 = calculateDynamicLearningRate(0.25);
+    double rate_50 = calculateDynamicLearningRate(0.5);
+    double rate_75 = calculateDynamicLearningRate(0.75);
     
     REQUIRE(rate_0 > rate_25);
     REQUIRE(rate_25 > rate_50);
@@ -123,33 +97,22 @@ TEST_CASE("calculateDynamicLearningRate - 能力越高学习率越低", "[math]"
 }
 
 TEST_CASE("calculateDynamicLearningRate - 幂律衰减验证", "[math]") {
-    RecommendationEngine engine;
-    
-    // η(t) = η · (1 - ū)^γ
-    // 验证幂律计算
     double avgAbility = 0.5;
     double expected = Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
-    double rate = engine.calculateDynamicLearningRate(avgAbility);
+    double rate = calculateDynamicLearningRate(avgAbility);
     
     REQUIRE(std::abs(rate - expected) < EPSILON);
 }
 
 TEST_CASE("calculateDynamicLearningRate - 具体数值验证", "[math]") {
-    RecommendationEngine engine;
-    
-    // avgAbility = 0.5, γ = 1.5
-    // rate = 0.08 * 0.5^1.5 = 0.08 * 0.3536 ≈ 0.0283
-    double rate = engine.calculateDynamicLearningRate(0.5);
+    double rate = calculateDynamicLearningRate(0.5);
     double expected = 0.08 * std::pow(0.5, 1.5);
     
     REQUIRE(std::abs(rate - expected) < EPSILON);
 }
 
 TEST_CASE("calculateDynamicLearningRate - 高能力用户学习率接近 0", "[math]") {
-    RecommendationEngine engine;
-    
-    // avgAbility = 0.9 时，学习率应很低
-    double rate = engine.calculateDynamicLearningRate(0.9);
+    double rate = calculateDynamicLearningRate(0.9);
     double expected = 0.08 * std::pow(0.1, 1.5);  // ≈ 0.00253
     
     REQUIRE(std::abs(rate - expected) < EPSILON);
@@ -248,20 +211,16 @@ TEST_CASE("calculateForgettingFactor - 长期遗忘趋于 0", "[math]") {
 // 两个类的一致性测试
 // =============================================================================
 
-TEST_CASE("数学函数 - RecommendationEngine 和 KnowledgeTracker 结果一致", "[math]") {
-    RecommendationEngine engine;
-    KnowledgeTracker tracker;
-    
-    // 两个类实现了相同的数学函数，应返回相同结果
+TEST_CASE("数学函数 - 自由函数结果一致", "[math]") {
     double d_j = 0.6;
     double u_j = 0.4;
     
-    double gain_engine = engine.calculateLearningGain(d_j, u_j);
-    double gain_tracker = tracker.calculateLearningGain(d_j, u_j);
-    REQUIRE(std::abs(gain_engine - gain_tracker) < EPSILON);
+    double gain = calculateLearningGain(d_j, u_j);
+    REQUIRE(gain > 0.0);
+    REQUIRE(gain < 1.0);
     
     double avg = 0.5;
-    double rate_engine = engine.calculateDynamicLearningRate(avg);
-    double rate_tracker = tracker.calculateDynamicLearningRate(avg);
-    REQUIRE(std::abs(rate_engine - rate_tracker) < EPSILON);
+    double rate = calculateDynamicLearningRate(avg);
+    double expected = Config::ETA * std::pow(1.0 - avg, Config::GAMMA);
+    REQUIRE(std::abs(rate - expected) < EPSILON);
 }

@@ -45,28 +45,7 @@ public:
         int topK = 10
     ) const;
     
-    /**
-     * @brief 计算学习增益 g_j（式10）
-     * @param d_j 文章第j维难度
-     * @param u_j 用户第j维能力
-     * @return 学习增益 g_j
-     */
-    double calculateLearningGain(double d_j, double u_j) const;
-    
-    /**
-     * @brief 计算动态学习率 η(t)（式9）
-     * @param avgAbility 用户平均能力
-     * @return 动态学习率 η(t)
-     */
-    double calculateDynamicLearningRate(double avgAbility) const;
-    
-private:
-    /**
-     * @brief 高斯函数
-     * @param x 输入值
-     * @return exp(-x² / 2σ²)
-     */
-    double gaussian(double x) const;
+
 };
 
 #endif

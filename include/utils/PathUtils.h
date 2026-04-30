@@ -30,6 +30,12 @@ std::filesystem::path getDbPath();
 std::filesystem::path getLogsDir();
 
 /**
+ * @brief 获取字体目录路径
+ * @return fonts 目录的绝对路径
+ */
+std::filesystem::path getFontsDir();
+
+/**
  * @brief 获取命令历史文件路径（跨平台）
  * - Windows: %APPDATA%/chinese_classical_rec_sys/history.txt
  * - Linux/macOS: ~/.chinese_classical_history
