@@ -60,8 +60,11 @@ Page {
 
     ColumnLayout {
         anchors {
-            fill: parent
-            margins: Theme.baseUnit * 3
+            horizontalCenter: parent.horizontalCenter
+            top: parent.top
+            bottom: parent.bottom
+            topMargin: Theme.baseUnit * 3
+            bottomMargin: Theme.baseUnit * 3
         }
         width: Math.min(parent.width, 900)
 
@@ -135,7 +138,7 @@ Page {
                 }
                 text: appViewModel.currentPageText
                 font.family: Theme.fontBody
-                font.pixelSize: 18
+                font.pixelSize: Theme.sizeBodyReading
                 lineHeight: 1.8
                 color: Theme.ink
                 wrapMode: Text.NoWrap

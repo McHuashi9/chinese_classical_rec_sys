@@ -118,7 +118,7 @@ Page {
             Canvas {
                 id: chart
                 Layout.fillWidth: true
-                Layout.preferredHeight: width * 0.7
+                implicitHeight: width * 0.7
                 Layout.maximumWidth: 500
                 Layout.maximumHeight: 350
                 Layout.alignment: Qt.AlignHCenter

@@ -293,8 +293,9 @@ void AppViewModel::loadTextForReading(int textId, int availWidth, int availHeigh
 
     m_readingTextId = textId;
 
+    constexpr int kReadingFontSize = 18;
     QFont font("Source Han Serif SC");
-    font.setPixelSize(18);
+    font.setPixelSize(kReadingFontSize);
 
     constexpr double kLineHeight = 1.8;
     constexpr int kFramePadding = 16;
@@ -345,8 +346,9 @@ void AppViewModel::recalcPagination(int newWidth, int newHeight)
         ? m_pages[m_currentPage].charStart
         : 0;
 
+    constexpr int kReadingFontSize = 18;
     QFont font("Source Han Serif SC");
-    font.setPixelSize(18);
+    font.setPixelSize(kReadingFontSize);
 
     constexpr double kLineHeight = 1.8;
     constexpr int kFramePadding = 16;

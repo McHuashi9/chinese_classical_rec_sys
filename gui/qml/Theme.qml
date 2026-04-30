@@ -28,6 +28,7 @@ QtObject {
     readonly property int sizeH1: 24
     readonly property int sizeH2: 20
     readonly property int sizeBody: 16
+    readonly property int sizeBodyReading: 18
     readonly property int sizeCaption: 14
     readonly property int sizeSmall: 12
 
