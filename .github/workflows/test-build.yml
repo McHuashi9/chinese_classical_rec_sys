@@ -11,6 +11,14 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.28'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Generate database
+        run: python scripts/init_data.py
       - name: Install Qt 6
         run: |
           sudo apt-get update
@@ -23,13 +31,10 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Package with linuxdeployqt
         run: |
-          # 安装 linuxdeployqt
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
-          # 复制资源到构建目录
           cp -r gui/fonts build/fonts/
           cp -r data build/data/
-          # 运行 linuxdeployqt 打包
           ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
           cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/chinese_classical_rec_sys package/
@@ -48,6 +53,14 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.28'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Generate database
+        run: python scripts/init_data.py
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
         with:
@@ -61,14 +74,6 @@ jobs:
         run: cmake --build build --config Release
       - name: Run tests
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: pip install -r requirements-ci.txt
-      - name: Generate database
-        run: python scripts/init_data.py
       - name: Package with windeployqt
         run: |
           mkdir package\data

@@ -78,8 +78,12 @@ if(WIN32)
 endif()
 
 # 复制运行时资源到构建目录
-file(COPY ${CMAKE_SOURCE_DIR}/gui/fonts/ DESTINATION ${CMAKE_BINARY_DIR}/fonts/)
-file(COPY ${CMAKE_SOURCE_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
+if(EXISTS ${CMAKE_SOURCE_DIR}/gui/fonts/)
+    file(COPY ${CMAKE_SOURCE_DIR}/gui/fonts/ DESTINATION ${CMAKE_BINARY_DIR}/fonts/)
+endif()
+if(EXISTS ${CMAKE_SOURCE_DIR}/data/)
+    file(COPY ${CMAKE_SOURCE_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
+endif()
 
 # 主程序（GUI）
 qt_add_executable(${PROJECT_NAME}
