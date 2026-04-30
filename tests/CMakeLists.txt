@@ -19,18 +19,18 @@ set(CATCH2_SOURCES
 )
 
 # 创建测试可执行文件
-add_executable(run_tests
+add_executable(test_runner
     ${TEST_SOURCES}
     ${CATCH2_SOURCES}
 )
 
 # 链接核心逻辑静态库
-target_link_libraries(run_tests PRIVATE chinese_classical_lib)
+target_link_libraries(test_runner PRIVATE chinese_classical_lib)
 
 # Windows 平台额外链接
 if(WIN32)
-    target_link_libraries(run_tests PRIVATE shell32)
+    target_link_libraries(test_runner PRIVATE shell32)
 endif()
 
 # 注册到 CTest
-add_test(NAME AllTests COMMAND run_tests)
+add_test(NAME AllTests COMMAND test_runner)

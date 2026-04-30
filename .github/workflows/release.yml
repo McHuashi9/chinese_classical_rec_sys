@@ -49,7 +49,7 @@ jobs:
         run: cmake --build build --config Release --target chinese_classical_rec_sys
 
       - name: Build tests with verbose output
-        run: cmake --build build --config Release --target run_tests --verbose
+        run: cmake --build build --config Release --target test_runner --verbose
         continue-on-error: true
 
       - name: Run tests

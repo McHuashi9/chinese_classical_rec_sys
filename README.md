@@ -91,8 +91,8 @@ python scripts/init_data.py
 ### 运行测试
 
 ```bash
-cd build && cmake .. -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64 && make run_tests
-./tests/run_tests
+cd build && cmake .. -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64 && make test_runner
+./tests/test_runner
 ```
 
 ## 算法原理
