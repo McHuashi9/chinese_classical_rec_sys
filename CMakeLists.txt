@@ -134,18 +134,18 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
 )
 
-# 运行时资源安装
+# 运行时资源安装（安装到 bindir 以匹配 PathUtils::getExeDir() 相对路径解析）
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/data
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/data
 )
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/gui/fonts/
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/fonts
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/fonts
 )
 
 # QML 资源安装（存在则安装）
 if(EXISTS ${CMAKE_SOURCE_DIR}/gui/qml)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/gui/qml/
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/qml
+        DESTINATION ${CMAKE_INSTALL_BINDIR}/qml
     )
 endif()
 
