@@ -14,7 +14,6 @@
 !/README.md
 !/LICENSE
 !/.github/
-!/design-spec.md
 !/requirements-ci.txt
 !/scripts/
 !/scripts/init_data.py
