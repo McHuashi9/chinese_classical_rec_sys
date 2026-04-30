@@ -108,16 +108,17 @@ jobs:
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
+          mkdir ${{ matrix.asset_name }}\Qt\qml
           mkdir ${{ matrix.asset_name }}\data
-          mkdir ${{ matrix.asset_name }}\Qt
           copy build\Release\${{ matrix.artifact_name }} ${{ matrix.asset_name }}\
           copy build\data\classical.db ${{ matrix.asset_name }}\data\
           copy LICENSE ${{ matrix.asset_name }}\
-          windeployqt ${{ matrix.asset_name }}\${{ matrix.artifact_name }} --qmldir gui\ --qmlimport Qt\qml
-          move ${{ matrix.asset_name }}\plugins ${{ matrix.asset_name }}\Qt\plugins
-          if (Test-Path ${{ matrix.asset_name }}\translations) { move ${{ matrix.asset_name }}\translations ${{ matrix.asset_name }}\Qt\translations }
-          echo [Paths] > ${{ matrix.asset_name }}\qt.conf
-          echo Prefix = Qt >> ${{ matrix.asset_name }}\qt.conf
+          windeployqt ${{ matrix.asset_name }}\${{ matrix.artifact_name }} --qmldir gui\
+          Get-ChildItem ${{ matrix.asset_name }} -Directory | Where-Object { $_.Name -match '^Qt' -and $_.Name -ne 'Qt' } | Move-Item -Destination ${{ matrix.asset_name }}\Qt\qml\
+          if (Test-Path ${{ matrix.asset_name }}\plugins) { Move-Item ${{ matrix.asset_name }}\plugins ${{ matrix.asset_name }}\Qt\plugins }
+          if (Test-Path ${{ matrix.asset_name }}\translations) { Move-Item ${{ matrix.asset_name }}\translations ${{ matrix.asset_name }}\Qt\translations }
+          echo '[Paths]' > ${{ matrix.asset_name }}\qt.conf
+          echo 'Prefix = Qt' >> ${{ matrix.asset_name }}\qt.conf
           Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.asset_name }}.zip
           echo "ASSET_PATH=${{ matrix.asset_name }}.zip" >> $env:GITHUB_ENV
 
