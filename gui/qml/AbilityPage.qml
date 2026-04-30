@@ -18,14 +18,45 @@ Page {
     ]
 
     property var breakdown: ({})
+    property var animPrevValues: new Array(10).fill(0)
+    property var animValues: new Array(10).fill(0)
+    property real animT: 1.0
 
     function loadBreakdown() {
-        breakdown = appViewModel.getAbilityBreakdown()
-        chart.requestPaint()
+        var newBreakdown = appViewModel.getAbilityBreakdown()
+        for (var i = 0; i < dimKeys.length; i++) {
+            animPrevValues[i] = animValues[i]
+        }
+        breakdown = newBreakdown
+        animT = 0
+        animTimer.start()
+    }
+
+    Timer {
+        id: animTimer
+        interval: 16
+        repeat: true
+        property real startTime: 0
+
+        onTriggered: {
+            if (startTime === 0) startTime = Date.now()
+            var elapsed = Date.now() - startTime
+            var rawT = Math.min(1.0, elapsed / 500)
+            animT = 1 - Math.pow(1 - rawT, 3)
+            for (var i = 0; i < root.dimKeys.length; i++) {
+                var target = root.breakdown[root.dimKeys[i]] || 0
+                root.animValues[i] = root.animPrevValues[i] + (target - root.animPrevValues[i]) * animT
+            }
+            chart.requestPaint()
+            if (rawT >= 1.0) {
+                stop()
+                startTime = 0
+            }
+        }
     }
 
     function abilityAt(idx) {
-        return breakdown[dimKeys[idx]] || 0
+        return animValues[idx]
     }
 
     Component.onCompleted: loadBreakdown()
@@ -144,7 +175,7 @@ Page {
                         else ctx.lineTo(dx, dy)
                     }
                     ctx.closePath()
-                    ctx.fillStyle = "rgba(179, 58, 58, 0.15)"
+                    ctx.fillStyle = "rgba(" + Math.round(Theme.vermilion.r * 255) + ", " + Math.round(Theme.vermilion.g * 255) + ", " + Math.round(Theme.vermilion.b * 255) + ", 0.15)"
                     ctx.fill()
                     ctx.strokeStyle = Theme.vermilion
                     ctx.lineWidth = 2
@@ -196,7 +227,7 @@ Page {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 10
                         radius: 2
-                        color: Qt.rgba(179/255, 58/255, 58/255, 0.12)
+                        color: Qt.rgba(Theme.vermilion.r, Theme.vermilion.g, Theme.vermilion.b, 0.12)
 
                         Rectangle {
                             anchors {

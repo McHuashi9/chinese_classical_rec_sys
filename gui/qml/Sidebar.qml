@@ -20,6 +20,7 @@ Rectangle {
     }
 
     ColumnLayout {
+        id: navColumn
         anchors.fill: parent
         spacing: 0
 
@@ -33,47 +34,39 @@ Rectangle {
         Repeater {
             model: 4
 
-            Item {
+            ItemDelegate {
+                id: navItem
                 Layout.fillWidth: true
                 Layout.preferredHeight: 48
+                hoverEnabled: true
 
-                Rectangle {
-                    anchors {
-                        left: parent.left
-                        top: parent.top
-                        bottom: parent.bottom
-                    }
-                    width: 3
-                    color: Theme.vermilion
-                    visible: mouseArea.containsMouse || root.currentIndex === index
-                }
-
-                Rectangle {
-                    anchors.fill: parent
-                    color: (mouseArea.containsMouse || root.currentIndex === index)
+                background: Rectangle {
+                    color: (navItem.hovered || root.currentIndex === index)
                            ? Theme.card : "transparent"
+
+                    Rectangle {
+                        anchors {
+                            left: parent.left
+                            top: parent.top
+                            bottom: parent.bottom
+                        }
+                        width: 3
+                        color: Theme.vermilion
+                        visible: navItem.hovered || root.currentIndex === index
+                    }
                 }
 
-                Text {
-                    anchors {
-                        left: parent.left
-                        leftMargin: 16
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: parent.parent.labels[index]
+                contentItem: Text {
+                    text: navColumn.labels[index]
                     font.family: Theme.fontTitle
                     font.pixelSize: Theme.sizeH2
                     font.bold: root.currentIndex === index
                     color: Theme.ink
+                    verticalAlignment: Text.AlignVCenter
+                    leftPadding: 16
                 }
 
-                MouseArea {
-                    id: mouseArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.clicked(index)
-                }
+                onClicked: root.clicked(index)
             }
         }
 

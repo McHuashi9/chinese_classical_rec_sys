@@ -71,7 +71,14 @@ Page {
                         leftPadding: Theme.baseUnit
                         rightPadding: Theme.baseUnit
 
-                        onDisplayTextChanged: appViewModel.setLibraryFilter(displayText)
+                        Timer {
+                            id: searchTimer
+                            interval: 150
+                            repeat: false
+                            onTriggered: appViewModel.setLibraryFilter(searchField.displayText)
+                        }
+
+                        onDisplayTextChanged: searchTimer.restart()
                     }
                 }
 
@@ -138,14 +145,16 @@ Page {
                             anchors.fill: parent
                             anchors.topMargin: 1
                             anchors.leftMargin: 1
-                            color: Qt.rgba(44/255, 36/255, 22/255, mouseArea.containsMouse ? 0.12 : 0.08)
+                            color: mouseArea.containsMouse
+                                ? Qt.rgba(0, 0, 0, Theme.darkMode ? 0.35 : 0.12)
+                                : Theme.shadow
                             radius: 4
                         }
 
                         // Card
                         Rectangle {
                             anchors.fill: parent
-                            color: mouseArea.containsMouse ? Theme.card : Theme.card
+                            color: Theme.card
                             border.color: Theme.border
                             border.width: 1
                             radius: 4

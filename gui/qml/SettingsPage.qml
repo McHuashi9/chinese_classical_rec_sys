@@ -51,7 +51,7 @@ Page {
                     anchors.fill: parent
                     anchors.topMargin: 1
                     anchors.leftMargin: 1
-                    color: Qt.rgba(44/255, 36/255, 22/255, 0.08)
+                    color: Theme.shadow
                     radius: 4
                 }
 
@@ -172,12 +172,13 @@ Page {
                 id: loggingCard
                 Layout.fillWidth: true
                 implicitHeight: loggingRow.implicitHeight + Theme.cardPadding * 2
+                color: "transparent"
 
                 Rectangle {
                     anchors.fill: parent
                     anchors.topMargin: 1
                     anchors.leftMargin: 1
-                    color: Qt.rgba(44/255, 36/255, 22/255, 0.08)
+                    color: Theme.shadow
                     radius: 4
                 }
 
@@ -267,7 +268,7 @@ Page {
                                     elide: Text.ElideRight
                                 }
                                 background: Rectangle {
-                                    color: highlighted ? Qt.rgba(179/255, 58/255, 58/255, 0.08) : "transparent"
+                                    color: highlighted ? Qt.rgba(Theme.vermilion.r, Theme.vermilion.g, Theme.vermilion.b, 0.08) : "transparent"
                                 }
                                 highlighted: logLevelCombo.highlightedIndex === index
                             }

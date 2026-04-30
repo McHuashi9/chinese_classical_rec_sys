@@ -12,10 +12,11 @@ QtObject {
     readonly property color inkSecondary: darkMode ? "#9A9278" : "#5A5245"
     readonly property color vermilion: darkMode ? "#C75B5B" : "#B33A3A"
     readonly property color vermilionHover: darkMode ? "#A84848" : "#932E2E"
-    readonly property color stoneGreen: darkMode ? "#5B7B4A" : "#5B7B4A"
+    readonly property color stoneGreen: darkMode ? "#4A6B3A" : "#5B7B4A"
     readonly property color border: darkMode ? "#5A5245" : "#C2B28F"
     readonly property color borderLight: darkMode ? "#4A4235" : "#D4C9A8"
     readonly property color overlay: darkMode ? Qt.rgba(0, 0, 0, 0.80) : Qt.rgba(28/255, 24/255, 18/255, 0.80)
+    readonly property color shadow: darkMode ? Qt.rgba(0, 0, 0, 0.20) : Qt.rgba(44/255, 36/255, 22/255, 0.08)
 
     // ── Font Families ──
     readonly property string fontTitle: "LXGW WenKai"

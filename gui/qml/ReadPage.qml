@@ -71,6 +71,7 @@ Page {
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeCaption
             color: mouse.containsMouse ? Theme.vermilionHover : Theme.vermilion
+            font.underline: mouse.containsMouse
 
             MouseArea {
                 id: mouse
