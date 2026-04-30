@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             artifact_name: chinese_classical_rec_sys
             asset_name: chinese_classical_rec_sys-${{ github.ref_name }}-linux
           - os: windows-latest
