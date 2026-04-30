@@ -41,6 +41,7 @@ jobs:
           Name=古文推荐
           Comment=中国古文推荐系统
           Exec=chinese_classical_rec_sys
+          Icon=chinese_classical_rec_sys
           Categories=Education;Literature;
           DEOF
           ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake

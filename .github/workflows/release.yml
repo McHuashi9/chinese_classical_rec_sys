@@ -78,6 +78,7 @@ jobs:
           Name=古文推荐
           Comment=中国古文推荐系统
           Exec=${{ matrix.artifact_name }}
+          Icon=${{ matrix.artifact_name }}
           Categories=Education;Literature;
           DEOF
           # 使用 linuxdeployqt 打包
