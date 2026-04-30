@@ -98,9 +98,14 @@ jobs:
       - name: Package with windeployqt
         run: |
           mkdir package\data
+          mkdir package\Qt
           copy build\Release\chinese_classical_rec_sys.exe package\
           copy build\data\classical.db package\data\
-          windeployqt package\chinese_classical_rec_sys.exe --qmldir gui\
+          windeployqt package\chinese_classical_rec_sys.exe --qmldir gui\ --qmlimport Qt\qml
+          move package\plugins package\Qt\plugins
+          if exist package\translations (move package\translations package\Qt\translations)
+          echo [Paths] > package\qt.conf
+          echo Prefix = Qt >> package\qt.conf
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
