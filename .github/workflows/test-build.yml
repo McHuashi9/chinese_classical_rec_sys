@@ -36,7 +36,22 @@ jobs:
           # 创建 AppDir 结构，使 fonts 被包含在 AppImage 内
           mkdir -p build/AppDir/usr/bin
           cp build/chinese_classical_rec_sys build/AppDir/usr/bin/
-          cp -r gui/fonts build/AppDir/usr/bin/fonts/
+          # 仅复制需要的 8 个字体文件
+          fonts_dir="build/AppDir/usr/bin/fonts"
+          fonts_list=(
+            "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf"
+            "HarmonyOS Sans 字体/HarmonyOS_SansSC/HarmonyOS_SansSC_Bold.ttf"
+            "LXGWWenKai-Regular/LXGWWenKai-Regular.ttf"
+            "LXGWWenKai-Regular/LXGWWenKai-Light.ttf"
+            "LXGWWenKai-Regular/LXGWWenKai-Medium.ttf"
+            "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf"
+            "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf"
+            "SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf"
+          )
+          for f in "${fonts_list[@]}"; do
+            mkdir -p "$(dirname "$fonts_dir/$f")"
+            cp "gui/fonts/$f" "$fonts_dir/$f"
+          done
           # 创建 .desktop 文件（linuxdeployqt 内部 appimagetool 要求 Categories 字段）
           cat > build/AppDir/chinese_classical_rec_sys.desktop << 'DEOF'
           [Desktop Entry]
@@ -103,7 +118,23 @@ jobs:
           mkdir package\data
           copy build\Release\chinese_classical_rec_sys.exe package\
           copy build\data\classical.db package\data\
-          if (Test-Path build\fonts) { Copy-Item -Recurse build\fonts package\fonts }
+          # 仅复制需要的 8 个字体文件
+          $f = "build\fonts"
+          $fonts = @(
+            "HarmonyOS Sans 字体\HarmonyOS_SansSC\HarmonyOS_SansSC_Regular.ttf",
+            "HarmonyOS Sans 字体\HarmonyOS_SansSC\HarmonyOS_SansSC_Bold.ttf",
+            "LXGWWenKai-Regular\LXGWWenKai-Regular.ttf",
+            "LXGWWenKai-Regular\LXGWWenKai-Light.ttf",
+            "LXGWWenKai-Regular\LXGWWenKai-Medium.ttf",
+            "SourceHanSerifSC\OTF\SimplifiedChinese\SourceHanSerifSC-Regular.otf",
+            "SourceHanSerifSC\OTF\SimplifiedChinese\SourceHanSerifSC-Light.otf",
+            "SourceHanSerifSC\OTF\SimplifiedChinese\SourceHanSerifSC-Bold.otf"
+          )
+          $fonts | ForEach-Object {
+            $dst = "package\fonts\$_"
+            New-Item -ItemType Directory -Force (Split-Path $dst -Parent) | Out-Null
+            Copy-Item "$f\$_" $dst -Force
+          }
           windeployqt package\chinese_classical_rec_sys.exe --qmldir gui\
           mkdir package\Qt\plugins
           if (Test-Path package\qml) { Move-Item package\qml package\Qt\qml }
