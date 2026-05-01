@@ -114,6 +114,7 @@ jobs:
           # 使用 linuxdeployqt 部署 Qt 库到 AppDir，然后打包 AppImage
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
           ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/${{ matrix.artifact_name }} -appimage -qmake=/usr/lib/qt6/bin/qmake
           # 创建发布包
           mkdir -p ${{ matrix.asset_name }}/data

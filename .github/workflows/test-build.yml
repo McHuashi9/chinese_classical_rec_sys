@@ -74,6 +74,7 @@ jobs:
           png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
           open('build/AppDir/chinese_classical_rec_sys.png','wb').write(png)
           "
+          export APPIMAGE_EXTRACT_AND_RUN=1
           ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
           cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/AppDir/usr/bin/chinese_classical_rec_sys package/
