@@ -37,7 +37,7 @@ std::filesystem::path getWritableRoot() {
 #else
     const char* appimage = std::getenv("APPIMAGE");
     if (appimage && appimage[0] != '\0') {
-        return std::filesystem::path(appimage).parent_path();
+        return std::filesystem::u8path(appimage).parent_path();
     }
     const char* home = std::getenv("HOME");
     if (home && home[0] != '\0') {
