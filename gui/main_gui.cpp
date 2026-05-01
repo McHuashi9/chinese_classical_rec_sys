@@ -36,6 +36,15 @@ int main(int argc, char *argv[])
     loadFont("SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Light.otf");
     loadFont("SourceHanSerifSC/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf");
 
+    // Log available font families for debugging
+    {
+        const auto families = QFontDatabase::families();
+        LOG_INFO("已注册字体族: {} 个", families.size());
+        for (const QString &fam : {"HarmonyOS Sans SC", "LXGW WenKai", "Source Han Serif SC"}) {
+            LOG_INFO("  {} → {}", fam.toStdString(), families.contains(fam) ? "可用" : "不可用");
+        }
+    }
+
     AppViewModel viewModel;
 
     const QString dbPath = QString::fromStdWString(PathUtils::getDbPath().wstring());

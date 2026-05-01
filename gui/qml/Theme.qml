@@ -22,6 +22,10 @@ QtObject {
     readonly property string fontTitle: "LXGW WenKai"
     readonly property string fontBody: "Source Han Serif SC"
     readonly property string fontUI: "HarmonyOS Sans SC"
+    // CSS font-family strings with fallbacks for Canvas / CJK rendering
+    readonly property string fontUICSS: "'HarmonyOS Sans SC', 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', sans-serif"
+    readonly property string fontBodyCSS: "'Source Han Serif SC', 'SimSun', 'Noto Serif CJK SC', serif"
+    readonly property string fontTitleCSS: "'LXGW WenKai', 'KaiTi', 'STKaiti', serif"
 
     // ── Type Scale (4px modulus) ──
     readonly property int sizeDisplay: 36
