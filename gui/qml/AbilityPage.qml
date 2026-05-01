@@ -24,9 +24,6 @@ Page {
 
     function loadBreakdown() {
         var newBreakdown = appViewModel.getAbilityBreakdown()
-        console.log("AbilityPage.loadBreakdown: avg=", appViewModel.averageAbility,
-                    "keys=", Object.keys(newBreakdown).length,
-                    "firstVal=", newBreakdown["avg_sentence_length"])
         for (var i = 0; i < dimKeys.length; i++) {
             animPrevValues[i] = animValues[i]
         }
