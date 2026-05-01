@@ -9,7 +9,7 @@
  * @brief 日志系统封装类（单例模式）
  * 
  * 基于 spdlog 实现文件日志输出，支持 DEBUG/INFO/WARN/ERROR 四个级别。
- * 日志输出到 logs/app.log 文件。
+ * 日志输出到 <可写根>/logs/app.log 文件。
  */
 class Logger {
 public:

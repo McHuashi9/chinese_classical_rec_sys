@@ -17,17 +17,15 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
     }
     
     try {
-        // 确保日志目录存在
-        std::filesystem::path logPath = std::filesystem::current_path() / logDir;
-        if (!std::filesystem::exists(logPath)) {
-            std::filesystem::create_directories(logPath);
+        std::filesystem::path logDirPath(logDir);
+        if (!std::filesystem::exists(logDirPath)) {
+            std::filesystem::create_directories(logDirPath);
         }
         
 #ifdef _WIN32
-        // Windows 平台使用宽字符文件路径（配合 SPDLOG_WCHAR_FILENAMES）
-        std::wstring logFilePath = (logPath / logFileName).wstring();
+        std::wstring logFilePath = (logDirPath / logFileName).wstring();
 #else
-        std::string logFilePath = (logPath / logFileName).string();
+        std::string logFilePath = (logDirPath / logFileName).string();
 #endif
         
         // 创建文件日志 sink

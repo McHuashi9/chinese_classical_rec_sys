@@ -3,6 +3,7 @@
 #include <QQmlContext>
 #include <QFontDatabase>
 #include <QQuickStyle>
+#include <filesystem>
 #include "utils/Logger.h"
 #include "utils/PathUtils.h"
 #include "viewmodel/AppViewModel.h"
@@ -17,6 +18,15 @@ int main(int argc, char *argv[])
     app.setApplicationName("ClassicalReader");
 
     QQuickStyle::setStyle("Fusion");
+
+    // 首次启动时从捆绑目录复制数据库到可写目录
+    auto writableDb = PathUtils::getDbPath();
+    auto bundledDb = PathUtils::getBundledDbPath();
+    if (!std::filesystem::exists(writableDb) && std::filesystem::exists(bundledDb)) {
+        std::filesystem::create_directories(writableDb.parent_path());
+        std::filesystem::copy_file(bundledDb, writableDb);
+        LOG_INFO("数据库已复制: {} → {}", bundledDb.string(), writableDb.string());
+    }
 
     const QString fontsPath = QString::fromStdWString(PathUtils::getFontsDir().wstring()) + u'/';
 
@@ -47,7 +57,7 @@ int main(int argc, char *argv[])
 
     AppViewModel viewModel;
 
-    const QString dbPath = QString::fromStdWString(PathUtils::getDbPath().wstring());
+    const QString dbPath = QString::fromStdWString(writableDb.wstring());
     viewModel.initialize(dbPath);
 
     QQmlApplicationEngine engine;

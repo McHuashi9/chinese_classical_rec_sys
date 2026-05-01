@@ -73,6 +73,8 @@ jobs:
           mkdir -p build/AppDir/usr/bin
           mkdir -p build/AppDir/usr/share
           cp build/${{ matrix.artifact_name }} build/AppDir/usr/bin/
+          # 复制 data 目录（只读模板，首次启动时复制到可写位置）
+          cp -r build/data build/AppDir/usr/bin/data
           # 仅复制需要的 8 个字体文件
           fonts_dir="build/AppDir/usr/bin/fonts"
           fonts_list=(
