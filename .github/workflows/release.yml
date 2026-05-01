@@ -69,10 +69,13 @@ jobs:
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          # 复制资源到构建目录
-          cp -r gui/fonts build/fonts/ 2>/dev/null || true
-          # 创建 .desktop 文件（linuxdeployqt 内部 appimagetool 要求 Categories 字段）
-          cat > build/${{ matrix.artifact_name }}.desktop << 'DEOF'
+          # 创建 AppDir 结构
+          mkdir -p build/AppDir/usr/bin
+          mkdir -p build/AppDir/usr/share
+          cp build/${{ matrix.artifact_name }} build/AppDir/usr/bin/
+          cp -r gui/fonts build/AppDir/usr/bin/fonts/ 2>/dev/null || true
+          # 创建 .desktop 文件（AppDir 根目录）
+          cat > build/AppDir/${{ matrix.artifact_name }}.desktop << 'DEOF'
           [Desktop Entry]
           Type=Application
           Name=古文推荐
@@ -81,7 +84,7 @@ jobs:
           Icon=${{ matrix.artifact_name }}
           Categories=Education;Literature;
           DEOF
-          # 生成最小图标文件（linuxdeployqt 有自定义 .desktop 后不自动生成）
+          # 生成最小图标文件
           python3 -c "
           import struct,zlib
           w,h=256,256
@@ -91,15 +94,15 @@ jobs:
           for y in range(h):
               raw+=b'\x00'+bytes([0x66,0xcc,0xff])*(w)
           png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
-          open('build/${{ matrix.artifact_name }}.png','wb').write(png)
+          open('build/AppDir/${{ matrix.artifact_name }}.png','wb').write(png)
           "
-          # 使用 linuxdeployqt 打包
+          # 使用 linuxdeployqt 部署 Qt 库到 AppDir，然后打包 AppImage
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
-          ./linuxdeployqt-continuous-x86_64.AppImage build/${{ matrix.artifact_name }} -appimage -qmake=/usr/lib/qt6/bin/qmake
+          ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/${{ matrix.artifact_name }} -appimage -qmake=/usr/lib/qt6/bin/qmake
           # 创建发布包
           mkdir -p ${{ matrix.asset_name }}/data
-          cp build/chinese_classical_rec_sys*.AppImage ${{ matrix.asset_name }}/ 2>/dev/null || cp build/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
+          cp build/chinese_classical_rec_sys*.AppImage ${{ matrix.asset_name }}/ 2>/dev/null || cp build/AppDir/usr/bin/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
           cp build/data/classical.db ${{ matrix.asset_name }}/data/
           cp LICENSE ${{ matrix.asset_name }}/
           tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
@@ -112,6 +115,7 @@ jobs:
           copy build\Release\${{ matrix.artifact_name }} ${{ matrix.asset_name }}\
           copy build\data\classical.db ${{ matrix.asset_name }}\data\
           copy LICENSE ${{ matrix.asset_name }}\
+          if (Test-Path build\fonts) { Copy-Item -Recurse build\fonts ${{ matrix.asset_name }}\fonts }
           windeployqt ${{ matrix.asset_name }}\${{ matrix.artifact_name }} --qmldir gui\
           mkdir ${{ matrix.asset_name }}\Qt\plugins
           if (Test-Path ${{ matrix.asset_name }}\qml) { Move-Item ${{ matrix.asset_name }}\qml ${{ matrix.asset_name }}\Qt\qml }

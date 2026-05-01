@@ -33,9 +33,12 @@ jobs:
         run: |
           wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
-          cp -r gui/fonts build/fonts/
+          # 创建 AppDir 结构，使 fonts 被包含在 AppImage 内
+          mkdir -p build/AppDir/usr/bin
+          cp build/chinese_classical_rec_sys build/AppDir/usr/bin/
+          cp -r gui/fonts build/AppDir/usr/bin/fonts/
           # 创建 .desktop 文件（linuxdeployqt 内部 appimagetool 要求 Categories 字段）
-          cat > build/chinese_classical_rec_sys.desktop << 'DEOF'
+          cat > build/AppDir/chinese_classical_rec_sys.desktop << 'DEOF'
           [Desktop Entry]
           Type=Application
           Name=古文推荐
@@ -54,11 +57,11 @@ jobs:
           for y in range(h):
               raw+=b'\x00'+bytes([0x66,0xcc,0xff])*(w)
           png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
-          open('build/chinese_classical_rec_sys.png','wb').write(png)
+          open('build/AppDir/chinese_classical_rec_sys.png','wb').write(png)
           "
-          ./linuxdeployqt-continuous-x86_64.AppImage build/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
+          ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
-          cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/chinese_classical_rec_sys package/
+          cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/AppDir/usr/bin/chinese_classical_rec_sys package/
           cp build/data/classical.db package/data/ 2>/dev/null || true
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -100,6 +103,7 @@ jobs:
           mkdir package\data
           copy build\Release\chinese_classical_rec_sys.exe package\
           copy build\data\classical.db package\data\
+          if (Test-Path build\fonts) { Copy-Item -Recurse build\fonts package\fonts }
           windeployqt package\chinese_classical_rec_sys.exe --qmldir gui\
           mkdir package\Qt\plugins
           if (Test-Path package\qml) { Move-Item package\qml package\Qt\qml }
