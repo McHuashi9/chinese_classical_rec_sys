@@ -118,7 +118,7 @@ jobs:
           ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/${{ matrix.artifact_name }} -appimage -qmake=/usr/lib/qt6/bin/qmake
           # 创建发布包
           mkdir -p ${{ matrix.asset_name }}/data
-          cp build/chinese_classical_rec_sys*.AppImage ${{ matrix.asset_name }}/ 2>/dev/null || cp build/AppDir/usr/bin/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
+          cp build/古文推荐*.AppImage ${{ matrix.asset_name }}/ 2>/dev/null || cp build/AppDir/usr/bin/${{ matrix.artifact_name }} ${{ matrix.asset_name }}/
           cp build/data/classical.db ${{ matrix.asset_name }}/data/
           cp LICENSE ${{ matrix.asset_name }}/
           tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}

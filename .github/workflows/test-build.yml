@@ -77,7 +77,7 @@ jobs:
           export APPIMAGE_EXTRACT_AND_RUN=1
           ./linuxdeployqt-continuous-x86_64.AppImage build/AppDir/usr/bin/chinese_classical_rec_sys -appimage -qmake=/usr/lib/qt6/bin/qmake
           mkdir -p package/data
-          cp build/chinese_classical_rec_sys*.AppImage package/ || cp build/AppDir/usr/bin/chinese_classical_rec_sys package/
+          cp build/古文推荐*.AppImage package/ || cp build/AppDir/usr/bin/chinese_classical_rec_sys package/
           cp build/data/classical.db package/data/ 2>/dev/null || true
       - name: Upload artifact
         uses: actions/upload-artifact@v4
