@@ -193,7 +193,7 @@ LOG_WARN("警告: {}", warning);
 LOG_ERROR("错误: {}", error);
 ```
 
-日志输出位置：`logs/app.log`，默认 INFO 级别，可通过设置页 ComboBox 调整。
+日志输出位置：`~/.local/share/chinese_classical_rec_sys/logs/app.log`（Linux）或 `%APPDATA%/chinese_classical_rec_sys/logs/app.log`（Windows），默认 INFO 级别，可通过设置页 ComboBox 调整。
 
 ### 测试覆盖
 
