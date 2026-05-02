@@ -56,6 +56,10 @@ class _ReadPageState extends State<ReadPage> {
       return const Center(child: Text('请从文库选择一篇古文'));
     }
 
+    if (pages.isEmpty) {
+      _needsPaginate = true;
+    }
+
     return Focus(
       focusNode: _focusNode,
       autofocus: true,

@@ -26,7 +26,7 @@ static struct {
     std::unique_ptr<KnowledgeTracker> tracker;
     std::unique_ptr<User> user;
     std::unique_ptr<std::vector<Text>> texts;
-    std::unique_ptr<std::unordered_map<int, Text>> textIndex;
+    std::unique_ptr<std::unordered_map<int, size_t>> textIndex;
     bool initialized = false;
 } g_state;
 
@@ -55,9 +55,6 @@ static void c_to_user(const UserData* src, User& dst)
 extern "C" int db_open(const char* db_path)
 {
     // 关闭旧连接
-    if (g_state.db) {
-        g_state.db->close();
-    }
     g_state = {};
 
     g_state.db = std::make_unique<DatabaseManager>();
@@ -76,10 +73,10 @@ extern "C" int db_open(const char* db_path)
     g_state.user = std::make_unique<User>();
     g_state.texts = std::make_unique<std::vector<Text>>(g_state.textRepo->getAllTexts());
 
-    // 构建 O(1) 文本索引 (修复 #8 getTextDetail O(n) 扫描)
-    g_state.textIndex = std::make_unique<std::unordered_map<int, Text>>();
-    for (const auto& t : *g_state.texts) {
-        (*g_state.textIndex)[t.getId()] = t;
+    // 构建 O(1) 文本索引 (id → vector 下标)
+    g_state.textIndex = std::make_unique<std::unordered_map<int, size_t>>();
+    for (size_t i = 0; i < g_state.texts->size(); i++) {
+        (*g_state.textIndex)[(*g_state.texts)[i].getId()] = i;
     }
 
     g_state.tracker = std::make_unique<KnowledgeTracker>(g_state.incrementRepo.get());
@@ -170,7 +167,7 @@ extern "C" int text_get_detail(int id, TextDetail* out)
         return BRIDGE_ERR_TEXT;
     }
 
-    const auto& text = it->second;
+    const auto& text = (*g_state.texts)[it->second];
     out->id = text.getId();
     std::strncpy(out->title, text.getTitle().c_str(), 255);
     out->title[255] = '\0';
@@ -220,7 +217,7 @@ extern "C" int tracker_apply_read(const UserData* user, int text_id,
     User cpp_user;
     c_to_user(user, cpp_user);
 
-    g_state.tracker->applyReadEffect(cpp_user, it->second, read_time,
+    g_state.tracker->applyReadEffect(cpp_user, (*g_state.texts)[it->second], read_time,
                                      static_cast<time_t>(timestamp));
     user_to_c(cpp_user, out_user);
 

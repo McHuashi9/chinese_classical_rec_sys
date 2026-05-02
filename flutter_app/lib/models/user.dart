@@ -46,6 +46,6 @@ class User {
   }
 
   void dispose() {
-    if (_ownsMemory) malloc.free(ptr);
+    if (_ownsMemory) calloc.free(ptr);
   }
 }

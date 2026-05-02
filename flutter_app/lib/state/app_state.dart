@@ -74,7 +74,7 @@ class AppState extends ChangeNotifier {
       final libPath = _resolveLibPath();
       _bridge = NativeBridge(libPath);
 
-      final cPath = dbPath.toNativeUtf8();
+      final cPath = dbPath.toNativeUtf8(allocator: calloc);
       final rc = _bridge!.dbOpen(cPath);
       calloc.free(cPath);
 

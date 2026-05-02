@@ -208,5 +208,6 @@ class _RadarChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RadarChartPainter old) => true;
+  bool shouldRepaint(covariant _RadarChartPainter old) =>
+      old.progress != progress || old.values != values || old.labels != labels;
 }

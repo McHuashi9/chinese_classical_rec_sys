@@ -67,5 +67,9 @@ String readCString(Array<Uint8> arr, int maxLen) {
     if (b == 0) break;
     bytes.add(b);
   }
-  return utf8.decode(bytes);
+  try {
+    return utf8.decode(bytes, allowMalformed: true);
+  } catch (_) {
+    return String.fromCharCodes(bytes);
+  }
 }
