@@ -102,7 +102,7 @@ class SettingsPage extends StatelessWidget {
             ),
             const Spacer(),
             SizedBox(
-              width: 140,
+              width: 150,
               child: DropdownButtonFormField<String>(
                 initialValue: logLevel,
                 items: ['INFO', 'DEBUG', 'WARNING', 'ERROR']

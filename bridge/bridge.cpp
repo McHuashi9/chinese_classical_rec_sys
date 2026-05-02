@@ -13,6 +13,7 @@
 #include <cstring>
 #include <memory>
 #include <vector>
+#include <unordered_map>
 #include <algorithm>
 
 static struct {
@@ -25,6 +26,7 @@ static struct {
     std::unique_ptr<KnowledgeTracker> tracker;
     std::unique_ptr<User> user;
     std::unique_ptr<std::vector<Text>> texts;
+    std::unique_ptr<std::unordered_map<int, Text>> textIndex;
     bool initialized = false;
 } g_state;
 
@@ -76,6 +78,12 @@ extern "C" int db_open(const char* db_path)
     g_state.engine = std::make_unique<RecommendationEngine>();
     g_state.user = std::make_unique<User>();
     g_state.texts = std::make_unique<std::vector<Text>>(g_state.textRepo->getAllTexts());
+
+    // 构建 O(1) 文本索引 (修复 #8 getTextDetail O(n) 扫描)
+    g_state.textIndex = std::make_unique<std::unordered_map<int, Text>>();
+    for (const auto& t : *g_state.texts) {
+        (*g_state.textIndex)[t.getId()] = t;
+    }
 
     g_state.tracker = std::make_unique<KnowledgeTracker>(g_state.incrementRepo.get());
 
@@ -162,11 +170,12 @@ extern "C" int text_get_detail(int id, TextDetail* out)
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
 
-    Text text;
-    if (!g_state.textRepo->getTextById(id, text)) {
+    auto it = g_state.textIndex->find(id);
+    if (it == g_state.textIndex->end()) {
         return BRIDGE_ERR_TEXT;
     }
 
+    const auto& text = it->second;
     out->id = text.getId();
     std::strncpy(out->title, text.getTitle().c_str(), 255);
     out->title[255] = '\0';
@@ -208,13 +217,13 @@ extern "C" int tracker_apply_read(const UserData* user, int text_id,
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
-    Text text;
-    if (!g_state.textRepo->getTextById(text_id, text)) return BRIDGE_ERR_TEXT;
+    auto it = g_state.textIndex->find(text_id);
+    if (it == g_state.textIndex->end()) return BRIDGE_ERR_TEXT;
 
     User cpp_user;
     c_to_user(user, cpp_user);
 
-    g_state.tracker->applyReadEffect(cpp_user, text, read_time,
+    g_state.tracker->applyReadEffect(cpp_user, it->second, read_time,
                                      static_cast<time_t>(timestamp));
     user_to_c(cpp_user, out_user);
 

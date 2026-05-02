@@ -46,7 +46,7 @@ class AppState extends ChangeNotifier {
   User? get user => _user;
   String get userName => _user?.name ?? '佚名';
   double get averageAbility => _user?.averageAbility ?? 0.3;
-  List<ChineseText> get texts => _engine.texts;
+  List<ChineseText> get texts => _initialized ? _engine.texts : [];
   List<RecommendResult> get recommendations => _recommendations;
   ChineseText? get readingText => _readingText;
   List<String> get pages => _pages;

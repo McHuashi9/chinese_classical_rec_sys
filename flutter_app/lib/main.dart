@@ -55,6 +55,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   int _pageIndex = 0;
   int _prevPageIndex = 0;
   bool _transitioning = false;
+  AppState? _app;
 
   late final AnimationController _ctrl;
   late Animation<Offset> _slideOut;
@@ -74,9 +75,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final app = context.read<AppState>();
-      app.addListener(_onAppStateChanged);
-      _initApp(app);
+      _app = context.read<AppState>();
+      _app!.addListener(_onAppStateChanged);
+      _initApp(_app!);
     });
   }
 
@@ -88,7 +89,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   void _onAppStateChanged() {
-    final app = context.read<AppState>();
+    final app = _app;
+    if (app == null) return;
     if (app.error != null) {
       final errorMsg = app.error!;
       app.clearError();
@@ -128,12 +130,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   void _onDestinationSelected(int index) {
     if (index == _pageIndex) return;
-    context.read<AppState>().switchPage(index);
+    _app?.switchPage(index);
   }
 
   @override
   void dispose() {
-    context.read<AppState>().removeListener(_onAppStateChanged);
+    _app?.removeListener(_onAppStateChanged);
     _ctrl.dispose();
     super.dispose();
   }
