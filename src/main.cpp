@@ -32,7 +32,6 @@
 
 
 void initUser(UserRepository& userRepo, User& currentUser);
-std::string promptUserName();
 void displayUserAbilities(const User& user);
 
 #ifdef _WIN32
@@ -110,7 +109,7 @@ int main() {
     User currentUser;
     initUser(userRepo, currentUser);
     
-    nowide::cout << "\n欢迎，" << currentUser.getName() << "！\n";
+    nowide::cout << "\n欢迎！\n";
     nowide::cout << "输入 'help' 查看帮助，输入 'exit' 退出\n\n";
     
     // 创建知识追踪器（传入增量仓库）
@@ -222,40 +221,19 @@ void displayUserAbilities(const User& user) {
     nowide::cout << table << std::endl;
 }
 
-std::string promptUserName() {
-    nowide::cout << "初次使用，请输入你的名字：\n";
-    
-    while (true) {
-        nowide::cout << "> ";
-        std::string name;
-        std::getline(nowide::cin, name);
-        
-        if (!name.empty()) {
-            return name;
-        }
-        
-        nowide::cout << "名字不能为空，请重新输入：\n";
-    }
-}
-
-
-
 void initUser(UserRepository& userRepo, User& currentUser) {
     if (userRepo.getUser(currentUser)) {
-        nowide::cout << "欢迎回来，" << currentUser.getName() << "！\n";
+        nowide::cout << "欢迎回来！\n";
         displayUserAbilities(currentUser);
         return;
     }
-    
-    std::string name = promptUserName();
-    currentUser.setName(name);
     
     // 使用贝叶斯先验均值初始化能力值：u_j(0) = 0.3
     currentUser.initializeDefault();
     nowide::cout << "已使用默认能力值初始化（贝叶斯先验均值 0.3）\n";
     
     if (userRepo.saveUser(currentUser)) {
-        nowide::cout << "好的，" << name << "，已保存你的信息。\n";
+        nowide::cout << "已保存你的信息。\n";
         displayUserAbilities(currentUser);
     } else {
         nowide::cout << "保存失败。\n";

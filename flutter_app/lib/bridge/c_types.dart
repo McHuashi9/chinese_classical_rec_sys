@@ -2,11 +2,8 @@ import 'dart:convert';
 import 'dart:ffi';
 
 /// C UserData struct — matches bridge/c_types.h
-/// 10维能力向量 + 基础能力 + 姓名 + 最近阅读时间
+/// 10维能力向量 + 基础能力 + 最近阅读时间
 final class UserData extends Struct {
-  @Array(128)
-  external Array<Uint8> name;
-
   @Array(10)
   external Array<Double> abilities;
 

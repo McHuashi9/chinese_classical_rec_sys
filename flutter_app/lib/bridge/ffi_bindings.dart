@@ -21,7 +21,7 @@ final class NativeBridge {
   late final int Function(int id, Pointer<TextDetail> out) textGetDetail;
 
   // ─── 推荐 ────────────────────────────────────────────────────
-  late final void Function(
+  late final int Function(
     Pointer<UserData> user,
     int topK,
     Pointer<Int32> outIds,
@@ -85,8 +85,8 @@ final class NativeBridge {
         int Function(int, Pointer<TextDetail>)>('text_get_detail');
 
     recommend = _lib.lookupFunction<
-        Void Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>),
-        void Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>)>(
+        Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>),
+        int Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>)>(
             'recommend');
 
     trackerApplyRead = _lib.lookupFunction<

@@ -88,14 +88,12 @@ class _ReadPageState extends State<ReadPage> {
   ) {
     final bgColor = isDark ? AppTheme.darkCard : AppTheme.cardBg;
 
-    if (_needsPaginate && context.read<AppState>().readingText != null) {
-      _needsPaginate = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
-    }
-
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        if (constraints.biggest != _frameSize && constraints.biggest != Size.zero) {
+        final needsIt = (_needsPaginate && context.read<AppState>().readingText != null)
+            || (constraints.biggest != _frameSize && constraints.biggest != Size.zero);
+        if (needsIt) {
+          _needsPaginate = false;
           _frameSize = constraints.biggest;
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }

@@ -34,8 +34,6 @@ static struct {
 
 static void user_to_c(const User& src, UserData* dst)
 {
-    std::strncpy(dst->name, src.getName().c_str(), 127);
-    dst->name[127] = '\0';
     for (int i = 0; i < 10; i++) {
         dst->abilities[i] = src.getAbility(i);
         dst->base_abilities[i] = src.getBaseAbility(i);
@@ -45,7 +43,6 @@ static void user_to_c(const User& src, UserData* dst)
 
 static void c_to_user(const UserData* src, User& dst)
 {
-    dst.setName(std::string(src->name));
     for (int i = 0; i < 10; i++) {
         dst.setAbility(i, src->abilities[i]);
         dst.setBaseAbility(i, src->base_abilities[i]);
@@ -94,7 +91,6 @@ extern "C" int db_open(const char* db_path)
         }
     } else {
         g_state.user->initializeDefault();
-        g_state.user->setName("佚名");
     }
     g_state.tracker->applyForgettingEffect(*g_state.user, time(nullptr));
     g_state.userRepo->saveUser(*g_state.user);
@@ -134,7 +130,6 @@ extern "C" int user_init_default()
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     g_state.user->initializeDefault();
-    g_state.user->setName("佚名");
     if (g_state.userRepo->saveUser(*g_state.user)) {
         return BRIDGE_OK;
     }
@@ -193,10 +188,11 @@ extern "C" int text_get_detail(int id, TextDetail* out)
 
 // ─── recommend ─────────────────────────────────────────────────────────────────
 
-extern "C" void recommend(const UserData* user, int top_k,
+extern "C" int recommend(const UserData* user, int top_k,
                           int* out_ids, double* out_probs)
 {
-    if (!g_state.initialized || !user || !out_ids || !out_probs) return;
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!user || !out_ids || !out_probs) return BRIDGE_ERR_GENERIC;
 
     User cpp_user;
     c_to_user(user, cpp_user);
@@ -207,6 +203,7 @@ extern "C" void recommend(const UserData* user, int top_k,
         out_ids[i] = results[i].first;
         out_probs[i] = results[i].second;
     }
+    return BRIDGE_OK;
 }
 
 // ─── knowledge tracker ─────────────────────────────────────────────────────────

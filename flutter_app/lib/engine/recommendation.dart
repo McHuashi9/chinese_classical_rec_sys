@@ -62,13 +62,22 @@ class RecommendationEngine {
     final outIds = calloc<Int32>(validTopK);
     final outProbs = calloc<Double>(validTopK);
 
-    _bridge.recommend(user.ptr, validTopK, outIds, outProbs);
+    final rc = _bridge.recommend(user.ptr, validTopK, outIds, outProbs);
+    if (rc != BridgeError.ok) {
+      calloc.free(outIds);
+      calloc.free(outProbs);
+      return [];
+    }
 
     final results = <RecommendResult>[];
     for (int i = 0; i < validTopK; i++) {
       final textId = outIds[i];
       final prob = outProbs[i];
-      final text = _textCache.firstWhere((t) => t.id == textId);
+      final text = _textCache.cast<ChineseText?>().firstWhere(
+        (t) => t?.id == textId,
+        orElse: () => null,
+      );
+      if (text == null) continue;
       results.add(RecommendResult(text: text, probability: prob));
     }
 

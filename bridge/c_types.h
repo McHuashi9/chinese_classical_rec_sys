@@ -14,7 +14,6 @@ extern "C" {
  * dart:ffi 使用 @Packed(1) 确保与 C struct 字节对齐一致
  */
 typedef struct {
-    char name[128];              ///< 用户名 (UTF-8)
     double abilities[10];        ///< d1-d10 当前能力值 [0, 1]
     double base_abilities[10];   ///< d1-d10 基础能力值 (遗忘极慢)
     int64_t last_read_time;      ///< 最后阅读时间 (Unix 时间戳)

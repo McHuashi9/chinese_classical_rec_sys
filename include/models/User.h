@@ -8,7 +8,7 @@
 /**
  * @brief 用户模型类
  * 
- * 存储当前用户的信息，包括用户名和10维能力向量
+ * 存储当前用户的信息，包括10维能力向量
  * 论文Table 3定义的10维映射：
  * d1 = f1 (平均句长)
  * d2 = f3 (句子数)
@@ -24,10 +24,6 @@
 class User {
 public:
     User();
-    
-    void setName(const std::string& name);
-    std::string getName() const;
-    bool isEmpty() const;
     
     /**
      * @brief 统一接口：通过索引访问能力值 (0-9 对应 d1-d10)
@@ -81,7 +77,6 @@ public:
     double getBaseAbility(int index) const;
     
 private:
-    std::string name;
     std::array<double, 10> abilities;      // d1-d10 当前能力
     std::array<double, 10> baseAbilities;  // d1-d10 基础能力（遗忘极慢）
     time_t lastReadTime;                   // 最后阅读时间戳

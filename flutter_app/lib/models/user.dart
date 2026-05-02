@@ -12,18 +12,6 @@ class User {
   factory User.allocate(Allocator allocator) =>
       User(allocator<UserData>(), owns: true);
 
-  String get name => readCString(ptr.ref.name, 128);
-  set name(String value) {
-    final src = value.toNativeUtf8(allocator: malloc);
-    final u8 = src.cast<Uint8>();
-    final len = value.length < 127 ? value.length : 127;
-    for (var i = 0; i < len; i++) {
-      ptr.ref.name[i] = (u8 + i).value;
-    }
-    ptr.ref.name[len] = 0;
-    malloc.free(src);
-  }
-
   double getAbility(int index) => ptr.ref.abilities[index];
   void setAbility(int index, double value) {
     ptr.ref.abilities[index] = value;
