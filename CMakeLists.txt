@@ -47,26 +47,22 @@ target_include_directories(sqlite3_static PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/sqlite3
 )
 
-# 静态编译 replxx（命令行编辑库，支持历史记录、自动补全、UTF-8）
-set(BUILD_SHARED_LIBS OFF)
-set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/replxx)
-
-# 核心逻辑静态库（排除 main.cpp，避免重复编译）
+# ─── 核心逻辑静态库 ───────────────────────────────────────────────────────────
 file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
 add_library(chinese_classical_lib STATIC ${LIB_SOURCES})
 
 # 设置 PUBLIC 包含目录，使链接此库的目标自动获得头文件路径
 target_include_directories(chinese_classical_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/third_party/spdlog-1.17.0/include
-    ${CMAKE_SOURCE_DIR}/third_party/replxx/include
-    ${CMAKE_SOURCE_DIR}/third_party/tabulate-1.5
 )
 
-# 链接 SQLite3 和 replxx（PUBLIC 使依赖传递给链接此库的目标）
-target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static replxx::replxx)
+# 链接 SQLite3
+target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static)
 
 # Windows 平台链接 nowide（包含 cin/cout/cerr 全局对象定义）
 if(WIN32)
@@ -109,17 +105,6 @@ set_target_properties(sqlite3_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(chinese_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
-
-# ─── CLI 主程序 ─────────────────────────────────────────────────────────────────
-
-# 主程序
-add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE chinese_classical_lib)
-
-# Windows 平台额外链接
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
-endif()
 
 # ─── 测试 ───────────────────────────────────────────────────────────────────────
 
