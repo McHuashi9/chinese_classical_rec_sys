@@ -18,11 +18,11 @@ class AppTheme {
   static const Color borderLight = Color(0xFFD4C9A8);
   static const Color overlay = Color(0xCC1C1812);
 
-  static const Color _darkPaper = Color(0xFF1C1812);
-  static const Color _darkCard = Color(0xFF2A251D);
-  static const Color _darkInk = Color(0xFFD4C9A8);
-  static const Color _darkInkSecondary = Color(0xFF9A9278);
-  static const Color _darkVermilion = Color(0xFFC75B5B);
+  static const Color darkPaper = Color(0xFF1C1812);
+  static const Color darkCard = Color(0xFF2A251D);
+  static const Color darkInk = Color(0xFFD4C9A8);
+  static const Color darkInkSecondary = Color(0xFF9A9278);
+  static const Color darkVermilion = Color(0xFFC75B5B);
 
   // ─── 字体 ─────────────────────────────────────────────────────
 
@@ -79,13 +79,13 @@ class AppTheme {
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: _darkVermilion,
+      seedColor: darkVermilion,
       brightness: Brightness.dark,
-      surface: _darkPaper,
+      surface: darkPaper,
     ),
-    scaffoldBackgroundColor: _darkPaper,
+    scaffoldBackgroundColor: darkPaper,
     cardTheme: CardThemeData(
-      color: _darkCard,
+      color: darkCard,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4),
@@ -95,16 +95,16 @@ class AppTheme {
       clipBehavior: Clip.antiAlias,
     ),
     appBarTheme: const AppBarTheme(
-      backgroundColor: _darkPaper,
-      foregroundColor: _darkInk,
+      backgroundColor: darkPaper,
+      foregroundColor: darkInk,
     ),
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(fontSize: 36, fontFamily: fontTitle, color: _darkInk),
-      headlineMedium: TextStyle(fontSize: 24, fontFamily: fontTitle, color: _darkInk),
-      titleLarge: TextStyle(fontSize: 20, fontFamily: fontTitle, color: _darkInk),
-      bodyLarge: TextStyle(fontSize: 16, fontFamily: fontBody, color: _darkInk, height: 2.0),
-      bodyMedium: TextStyle(fontSize: 14, fontFamily: fontUI, color: _darkInkSecondary),
-      labelSmall: TextStyle(fontSize: 12, fontFamily: fontUI, color: _darkInkSecondary),
+      headlineLarge: TextStyle(fontSize: 36, fontFamily: fontTitle, color: darkInk),
+      headlineMedium: TextStyle(fontSize: 24, fontFamily: fontTitle, color: darkInk),
+      titleLarge: TextStyle(fontSize: 20, fontFamily: fontTitle, color: darkInk),
+      bodyLarge: TextStyle(fontSize: 16, fontFamily: fontBody, color: darkInk, height: 2.0),
+      bodyMedium: TextStyle(fontSize: 14, fontFamily: fontUI, color: darkInkSecondary),
+      labelSmall: TextStyle(fontSize: 12, fontFamily: fontUI, color: darkInkSecondary),
     ),
   );
 }

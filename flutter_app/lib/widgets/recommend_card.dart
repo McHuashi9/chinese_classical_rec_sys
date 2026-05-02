@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-/// 推荐结果卡片
 class RecommendCard extends StatelessWidget {
   final RecommendResult result;
 
@@ -15,16 +15,53 @@ class RecommendCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
-      child: ListTile(
-        title: Text(result.text.title, style: theme.textTheme.titleLarge),
-        subtitle: Text('${result.text.author} · ${result.text.dynasty}'),
-        trailing: Text('$prob%',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
-            )),
+      child: InkWell(
         onTap: () {
           context.read<AppState>().loadTextForReading(result.text.id);
         },
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.text.title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontFamily: AppTheme.fontTitle,
+                        color: theme.textTheme.titleLarge?.color ?? AppTheme.ink,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${result.text.author} · ${result.text.dynasty}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: AppTheme.fontBody,
+                        color: theme.textTheme.bodyMedium?.color ??
+                            AppTheme.inkSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '$prob%',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontFamily: AppTheme.fontUI,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.vermilion,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

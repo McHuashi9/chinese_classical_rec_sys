@@ -73,13 +73,15 @@ class _MainShellState extends State<MainShell> {
     if (app.error != null) {
       final errorMsg = app.error!;
       app.clearError();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMsg),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -127,7 +129,21 @@ class _MainShellState extends State<MainShell> {
             const VerticalDivider(width: 1),
             Expanded(
               child: app.initialized
-                  ? _pages[app.pageIndex]
+                  ? AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey(app.pageIndex),
+                        child: _pages[app.pageIndex],
+                      ),
+                    )
                   : const Center(child: CircularProgressIndicator()),
             ),
           ],
