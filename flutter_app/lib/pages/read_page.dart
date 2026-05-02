@@ -13,8 +13,6 @@ class ReadPage extends StatefulWidget {
 
 class _ReadPageState extends State<ReadPage> {
   final _focusNode = FocusNode();
-  final _prevHover = ValueNotifier(false);
-  final _nextHover = ValueNotifier(false);
   bool _needsPaginate = true;
   Size _frameSize = Size.zero;
   AppState? _app;
@@ -23,17 +21,11 @@ class _ReadPageState extends State<ReadPage> {
   void initState() {
     super.initState();
     _app = context.read<AppState>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _app?.startReadingTimer();
-    });
   }
 
   @override
   void dispose() {
-    _app?.stopReadingTimer();
     _focusNode.dispose();
-    _prevHover.dispose();
-    _nextHover.dispose();
     super.dispose();
   }
 
@@ -53,8 +45,12 @@ class _ReadPageState extends State<ReadPage> {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final text = app.readingText;
+    final text = context.select((AppState a) => a.readingText);
+    final isDark = context.select((AppState a) => a.darkMode);
+    final pages = context.select((AppState a) => a.pages);
+    final currentPage = context.select((AppState a) => a.currentPage);
+    final totalPages = context.select((AppState a) => a.totalPages);
+    final timer = context.select((AppState a) => a.formattedReadingTime);
 
     if (text == null) {
       return const Center(child: Text('请从文库选择一篇古文'));
@@ -75,20 +71,24 @@ class _ReadPageState extends State<ReadPage> {
             Text('${text.author} · ${text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 16),
-            Expanded(child: _buildReadingFrame(app)),
+            Expanded(child: _buildReadingFrame(context, isDark, pages, currentPage)),
             const SizedBox(height: 12),
-            _buildNavigationBar(app),
+            _buildNavigationBar(context, isDark, pages, currentPage, totalPages, timer),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReadingFrame(AppState app) {
-    final isDark = app.darkMode;
+  Widget _buildReadingFrame(
+    BuildContext context,
+    bool isDark,
+    List<String> pages,
+    int currentPage,
+  ) {
     final bgColor = isDark ? AppTheme.darkCard : AppTheme.cardBg;
 
-    if (_needsPaginate && app.readingText != null) {
+    if (_needsPaginate && context.read<AppState>().readingText != null) {
       _needsPaginate = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
     }
@@ -100,8 +100,7 @@ class _ReadPageState extends State<ReadPage> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }
 
-        final pages = app.pages;
-        final current = pages.isNotEmpty ? pages[app.currentPage] : '';
+        final current = pages.isNotEmpty ? pages[currentPage] : '';
         final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
 
         return Container(
@@ -150,93 +149,45 @@ class _ReadPageState extends State<ReadPage> {
     }
   }
 
-  Widget _buildNavigationBar(AppState app) {
-    final hasPrev = app.currentPage > 0;
-    final hasNext = app.currentPage < app.totalPages - 1;
-    final textColor =
-        app.darkMode ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
+  Widget _buildNavigationBar(
+    BuildContext context,
+    bool isDark,
+    List<String> pages,
+    int currentPage,
+    int totalPages,
+    String timer,
+  ) {
+    final hasPrev = currentPage > 0;
+    final hasNext = currentPage < totalPages - 1;
 
     return SizedBox(
       height: 36,
       child: Row(
         children: [
-          _buildNavButton(
-            label: '◀ 上一页',
-            enabled: hasPrev,
-            onTap: () => app.prevPage(),
-            textColor: textColor,
-            hoverNotifier: _prevHover,
+          TextButton(
+            onPressed: hasPrev
+                ? () => context.read<AppState>().prevPage()
+                : null,
+            child: const Text('◀ 上一页'),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Center(
-              child: Text(
-                app.formattedReadingTime,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontFamily: AppTheme.fontUI,
-                  color: textColor,
-                ),
-              ),
+          const Spacer(),
+          Text(
+            timer,
+            style: TextStyle(
+              fontSize: 16,
+              fontFamily: AppTheme.fontUI,
+              color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
             ),
           ),
-          const SizedBox(width: 16),
-          _buildNavButton(
-            label: '下一页 ▶',
-            enabled: hasNext,
-            onTap: () => app.nextPage(),
-            textColor: textColor,
-            hoverNotifier: _nextHover,
+          const Spacer(),
+          TextButton(
+            onPressed: hasNext
+                ? () => context.read<AppState>().nextPage()
+                : null,
+            child: const Text('下一页 ▶'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildNavButton({
-    required String label,
-    required bool enabled,
-    required VoidCallback onTap,
-    required Color textColor,
-    required ValueNotifier<bool> hoverNotifier,
-  }) {
-    return ValueListenableBuilder(
-      valueListenable: hoverNotifier,
-      builder: (_, hover, __) {
-        return GestureDetector(
-          onTap: enabled ? onTap : null,
-          child: MouseRegion(
-            onEnter: (_) => hoverNotifier.value = true,
-            onExit: (_) => hoverNotifier.value = false,
-            cursor:
-                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            child: Opacity(
-              opacity: enabled ? 1.0 : 0.4,
-              child: Container(
-                width: 80,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: hover && enabled
-                      ? AppTheme.borderLight
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontFamily: AppTheme.fontUI,
-                    color: hover && enabled
-                        ? AppTheme.vermilionHover
-                        : textColor,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

@@ -8,8 +8,8 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final isDark = app.darkMode;
+    final isDark = context.select((AppState a) => a.darkMode);
+    final logLevel = context.select((AppState a) => a.logLevel);
 
     return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -20,9 +20,9 @@ class SettingsPage extends StatelessWidget {
               const SizedBox(height: 16),
               const Divider(color: AppTheme.border, height: 1),
               const SizedBox(height: 24),
-              _buildAppearanceCard(isDark, app),
+              _buildAppearanceCard(context, isDark),
               const SizedBox(height: 16),
-              _buildLoggingCard(isDark, app),
+              _buildLoggingCard(context, isDark, logLevel),
               const SizedBox(height: 16),
               _buildAboutCard(isDark),
             ],
@@ -30,7 +30,8 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAppearanceCard(bool isDark, AppState app) {
+  Widget _buildAppearanceCard(BuildContext context, bool isDark) {
+    final app = context.read<AppState>();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -54,20 +55,21 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _SegmentedButton(
-                  label: '亮色',
-                  selected: !isDark,
-                  onTap: () => app.setDarkMode(false),
-                ),
-                _SegmentedButton(
-                  label: '暗色',
-                  selected: isDark,
-                  onTap: () => app.setDarkMode(true),
-                ),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment<String>(value: 'light', label: Text('亮色')),
+                ButtonSegment<String>(value: 'dark', label: Text('暗色')),
               ],
+              selected: {isDark ? 'dark' : 'light'},
+              onSelectionChanged: (Set<String> selection) {
+                app.setDarkMode(selection.first == 'dark');
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStateProperty.all(
+                  const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
+                ),
+              ),
             ),
           ],
         ),
@@ -75,7 +77,7 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildLoggingCard(bool isDark, AppState app) {
+  Widget _buildLoggingCard(BuildContext context, bool isDark, String logLevel) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -102,12 +104,12 @@ class SettingsPage extends StatelessWidget {
             SizedBox(
               width: 140,
               child: DropdownButtonFormField<String>(
-                initialValue: app.logLevel,
+                initialValue: logLevel,
                 items: ['INFO', 'DEBUG', 'WARNING', 'ERROR']
                     .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                     .toList(),
                 onChanged: (v) {
-                  if (v != null) app.setLogLevel(v);
+                  if (v != null) context.read<AppState>().setLogLevel(v);
                 },
               ),
             ),
@@ -151,62 +153,6 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SegmentedButton extends StatefulWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SegmentedButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  State<_SegmentedButton> createState() => _SegmentedButtonState();
-}
-
-class _SegmentedButtonState extends State<_SegmentedButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final bgColor = widget.selected
-        ? AppTheme.vermilion
-        : _hovered
-            ? AppTheme.borderLight
-            : Colors.transparent;
-    final fgColor = widget.selected ? Colors.white : AppTheme.ink;
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 56,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(color: AppTheme.border, width: 1),
-          ),
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              fontSize: 14,
-              fontFamily: AppTheme.fontUI,
-              color: fgColor,
-            ),
-          ),
         ),
       ),
     );

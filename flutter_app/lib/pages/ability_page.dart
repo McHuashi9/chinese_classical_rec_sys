@@ -22,8 +22,7 @@ class AbilityPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final user = app.user;
+    final user = context.select((AppState a) => a.user);
 
     return user != null
         ? _AbilityContent(abilities: _getAbilities(user))

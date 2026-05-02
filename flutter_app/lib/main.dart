@@ -27,7 +27,7 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: context.watch<AppState>().darkMode
+      themeMode: context.select((AppState a) => a.darkMode)
           ? ThemeMode.dark
           : ThemeMode.light,
       home: const MainShell(),
@@ -42,18 +42,37 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   static final _pages = <Widget>[
-    const LibraryPage(),
-    const RecommendPage(),
-    const ReadPage(),
-    const AbilityPage(),
-    const SettingsPage(),
+    const RepaintBoundary(child: LibraryPage()),
+    const RepaintBoundary(child: RecommendPage()),
+    const RepaintBoundary(child: ReadPage()),
+    const RepaintBoundary(child: AbilityPage()),
+    const RepaintBoundary(child: SettingsPage()),
   ];
+
+  bool _initialized = false;
+  int _pageIndex = 0;
+  int _prevPageIndex = 0;
+  bool _transitioning = false;
+
+  late final AnimationController _ctrl;
+  late Animation<Offset> _slideOut;
+  late Animation<Offset> _slideIn;
 
   @override
   void initState() {
     super.initState();
+    _ctrl = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    _ctrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() => _transitioning = false);
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final app = context.read<AppState>();
       app.addListener(_onAppStateChanged);
@@ -83,26 +102,52 @@ class _MainShellState extends State<MainShell> {
         );
       }
     }
+    if (!_initialized && app.initialized) {
+      setState(() => _initialized = true);
+    }
+    if (app.pageIndex != _pageIndex) {
+      _prevPageIndex = _pageIndex;
+      _pageIndex = app.pageIndex;
+      _startTransition();
+    }
+  }
+
+  void _startTransition() {
+    final d = (_pageIndex > _prevPageIndex ? 1.0 : -1.0);
+    _slideOut = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(-d * 0.08, 0),
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutQuart));
+    _slideIn = Tween<Offset>(
+      begin: Offset(d * 0.08, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutQuart));
+    _transitioning = true;
+    _ctrl.forward(from: 0.0);
+  }
+
+  void _onDestinationSelected(int index) {
+    if (index == _pageIndex) return;
+    context.read<AppState>().switchPage(index);
   }
 
   @override
   void dispose() {
     context.read<AppState>().removeListener(_onAppStateChanged);
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-
     return Scaffold(
       body: SafeArea(
         child: Row(
           children: [
             NavigationRail(
-              selectedIndex: app.pageIndex,
+              selectedIndex: _pageIndex,
               labelType: NavigationRailLabelType.all,
-              onDestinationSelected: app.switchPage,
+              onDestinationSelected: _onDestinationSelected,
               destinations: const [
                 NavigationRailDestination(
                   icon: Icon(Icons.library_books),
@@ -128,26 +173,30 @@ class _MainShellState extends State<MainShell> {
             ),
             const VerticalDivider(width: 1),
             Expanded(
-              child: app.initialized
-                  ? AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: child,
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey(app.pageIndex),
-                        child: _pages[app.pageIndex],
-                      ),
-                    )
+              child: _initialized
+                  ? _buildBody()
                   : const Center(child: CircularProgressIndicator()),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (!_transitioning) {
+      return IndexedStack(index: _pageIndex, children: _pages);
+    }
+    return ClipRect(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: SlideTransition(position: _slideOut, child: _pages[_prevPageIndex]),
+          ),
+          Positioned.fill(
+            child: SlideTransition(position: _slideIn, child: _pages[_pageIndex]),
+          ),
+        ],
       ),
     );
   }

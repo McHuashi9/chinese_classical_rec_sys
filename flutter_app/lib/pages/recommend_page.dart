@@ -49,9 +49,8 @@ class _RecommendPageState extends State<RecommendPage> {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final recs = app.recommendations;
-    final isDark = app.darkMode;
+    final recs = context.select((AppState a) => a.recommendations);
+    final isDark = context.select((AppState a) => a.darkMode);
 
     return Padding(
           padding: const EdgeInsets.all(24),
@@ -88,10 +87,7 @@ class _RecommendPageState extends State<RecommendPage> {
                       )
                     : ListView.builder(
                         itemCount: recs.length,
-                        itemBuilder: (ctx, i) => _AnimatedListItem(
-                          index: i,
-                          child: RecommendCard(result: recs[i]),
-                        ),
+                        itemBuilder: (ctx, i) => RecommendCard(result: recs[i]),
                       ),
               ),
             ],
@@ -101,6 +97,7 @@ class _RecommendPageState extends State<RecommendPage> {
 
   Widget _buildSpinBox(bool isDark) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text('篇数', style: TextStyle(
           fontSize: 14,
@@ -108,26 +105,21 @@ class _RecommendPageState extends State<RecommendPage> {
           color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
         )),
         const SizedBox(width: 8),
-        _SpinButton(
-          icon: Icons.remove,
-          onTap: _topK > 1
-              ? () => setState(() {
-                    _topK--;
-                    _refresh();
-                  })
+        IconButton(
+          icon: const Icon(Icons.remove, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: _topK > 1
+              ? () {
+                  _topK--;
+                  _refresh();
+                }
               : null,
         ),
-        Container(
-          width: 44,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: AppTheme.border, width: 1),
-            ),
-          ),
+        SizedBox(
+          width: 36,
           child: Text(
             '$_topK',
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
               fontFamily: AppTheme.fontUI,
@@ -135,13 +127,14 @@ class _RecommendPageState extends State<RecommendPage> {
             ),
           ),
         ),
-        _SpinButton(
-          icon: Icons.add,
-          onTap: _topK < 50
-              ? () => setState(() {
-                    _topK++;
-                    _refresh();
-                  })
+        IconButton(
+          icon: const Icon(Icons.add, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: _topK < 50
+              ? () {
+                  _topK++;
+                  _refresh();
+                }
               : null,
         ),
       ],
@@ -169,89 +162,6 @@ class _RecommendPageState extends State<RecommendPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SpinButton extends StatefulWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  const _SpinButton({required this.icon, this.onTap});
-
-  @override
-  State<_SpinButton> createState() => _SpinButtonState();
-}
-
-class _SpinButtonState extends State<_SpinButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onTap != null;
-    return GestureDetector(
-      onTap: enabled ? widget.onTap : null,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        child: Opacity(
-          opacity: enabled ? 1.0 : 0.3,
-          child: Container(
-            width: 28,
-            height: 32,
-            decoration: BoxDecoration(
-              color: _hovered && enabled
-                  ? AppTheme.borderLight
-                  : Colors.transparent,
-              border: Border.all(color: AppTheme.border, width: 1),
-            ),
-            alignment: Alignment.center,
-            child: Icon(widget.icon, size: 14, color: AppTheme.ink),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedListItem extends StatefulWidget {
-  final int index;
-  final Widget child;
-
-  const _AnimatedListItem({required this.index, required this.child});
-
-  @override
-  State<_AnimatedListItem> createState() => _AnimatedListItemState();
-}
-
-class _AnimatedListItemState extends State<_AnimatedListItem>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      duration: Duration(milliseconds: 200 + widget.index * 30),
-      vsync: this,
-    );
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
-    _ctrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: widget.child,
     );
   }
 }

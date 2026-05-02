@@ -33,14 +33,13 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final allTexts = app.texts;
+    final allTexts = context.select((AppState a) => a.texts);
+    final isDark = context.select((AppState a) => a.darkMode);
     final filtered = allTexts.where((t) {
       if (_filter.isEmpty) return true;
       return t.title.toLowerCase().contains(_filter) ||
           t.author.toLowerCase().contains(_filter);
     }).toList();
-    final isDark = app.darkMode;
 
     return Padding(
           padding: const EdgeInsets.all(24),
@@ -117,55 +116,11 @@ class _LibraryPageState extends State<LibraryPage> {
                       )
                     : ListView.builder(
                         itemCount: filtered.length,
-                        itemBuilder: (ctx, i) => _AnimatedListItem(
-                          index: i,
-                          child: LibraryCard(text: filtered[i]),
-                        ),
+                        itemBuilder: (ctx, i) => LibraryCard(text: filtered[i]),
                       ),
               ),
             ],
           ),
-    );
-  }
-}
-
-class _AnimatedListItem extends StatefulWidget {
-  final int index;
-  final Widget child;
-
-  const _AnimatedListItem({required this.index, required this.child});
-
-  @override
-  State<_AnimatedListItem> createState() => _AnimatedListItemState();
-}
-
-class _AnimatedListItemState extends State<_AnimatedListItem>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      duration: Duration(milliseconds: 200 + widget.index * 30),
-      vsync: this,
-    );
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
-    _ctrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: widget.child,
     );
   }
 }

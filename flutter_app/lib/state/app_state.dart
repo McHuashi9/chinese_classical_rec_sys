@@ -271,7 +271,14 @@ class AppState extends ChangeNotifier {
 
   void switchPage(int index) {
     if (_pageIndex != index) {
+      if (_pageIndex == 2 && index != 2) {
+        stopReadingTimer();
+      }
+      _previousPageIndex = _pageIndex;
       _pageIndex = index;
+      if (_pageIndex == 2 && _readingText != null) {
+        startReadingTimer();
+      }
       notifyListeners();
     }
   }
