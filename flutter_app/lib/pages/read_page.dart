@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 /// 阅读页面 — 等价于 QML ReadPage
 /// 乌丝栏背景用 RepeatingLinearGradient 替代 Canvas 节点
@@ -52,11 +53,7 @@ class ReadPage extends StatelessWidget {
               },
               child: Text(
                 text.content,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontFamily: 'SourceHanSerifSC',
-                  height: 2.0,
-                ),
+                style: AppTheme.bodyReading,
               ),
             ),
           ),

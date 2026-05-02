@@ -15,6 +15,7 @@ class AppState extends ChangeNotifier {
   late KnowledgeTracker _tracker;
 
   User? _user;
+  int _pageIndex = 0;
   bool _darkMode = false;
   String _logLevel = 'INFO';
   bool _initialized = false;
@@ -28,6 +29,7 @@ class AppState extends ChangeNotifier {
   // ─── getters ──────────────────────────────────────────────────
 
   bool get initialized => _initialized;
+  int get pageIndex => _pageIndex;
   bool get darkMode => _darkMode;
   String get logLevel => _logLevel;
   String? get error => _error;
@@ -123,7 +125,15 @@ class AppState extends ChangeNotifier {
   void loadTextForReading(int textId) {
     _readingText = _engine.getTextDetail(textId);
     _readingPage = 0;
+    _pageIndex = 2;
     notifyListeners();
+  }
+
+  void switchPage(int index) {
+    if (_pageIndex != index) {
+      _pageIndex = index;
+      notifyListeners();
+    }
   }
 
   void recordReading(int textId, double seconds) {

@@ -43,8 +43,6 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _pageIndex = 0;
-
   static final _pages = <Widget>[
     const LibraryPage(),
     const RecommendPage(),
@@ -66,6 +64,7 @@ class _MainShellState extends State<MainShell> {
   Future<void> _initApp(AppState app) async {
     const dbPath = '../data/classical.db';
     await app.initialize(dbPath);
+    if (!mounted) return;
     app.getRecommendations(10);
   }
 
@@ -99,11 +98,9 @@ class _MainShellState extends State<MainShell> {
         child: Row(
           children: [
             NavigationRail(
-              selectedIndex: _pageIndex,
+              selectedIndex: app.pageIndex,
               labelType: NavigationRailLabelType.all,
-              onDestinationSelected: (i) {
-                setState(() => _pageIndex = i);
-              },
+              onDestinationSelected: app.switchPage,
               destinations: const [
                 NavigationRailDestination(
                   icon: Icon(Icons.library_books),
@@ -130,7 +127,7 @@ class _MainShellState extends State<MainShell> {
             const VerticalDivider(width: 1),
             Expanded(
               child: app.initialized
-                  ? _pages[_pageIndex]
+                  ? _pages[app.pageIndex]
                   : const Center(child: CircularProgressIndicator()),
             ),
           ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/state/app_state.dart';
 
 /// 文库列表卡片组件
 class LibraryCard extends StatelessWidget {
@@ -10,14 +12,13 @@ class LibraryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
         title: Text(text.title,
             style: Theme.of(context).textTheme.titleLarge),
         subtitle: Text('${text.author} · ${text.dynasty}'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
-          // TODO: 加载阅读页
+          context.read<AppState>().loadTextForReading(text.id);
         },
       ),
     );

@@ -1,22 +1,42 @@
 import 'package:flutter/material.dart';
 
 /// 设计系统 Token → Flutter ThemeData
-/// 颜色/字体/间距复用 design-spec.md
+/// 颜色/字体/间距严格对齐 design-spec.md
 class AppTheme {
   AppTheme._();
 
-  // ─── 颜色 Token (design-spec.md) ──────────────────────────────
+  // ─── 颜色 Token ────────────────────────────────────────────────
 
-  static const Color inkBlack = Color(0xFF2C2C2C);
-  static const Color parchment = Color(0xFFF5F0E8);
-  static const Color silkWhite = Color(0xFFFAFAF5);
-  static const Color cinnabar = Color(0xFFC43A31);
-  static const Color celadon = Color(0xFF7BA38A);
-  static const Color warmGray = Color(0xFF8C8C7C);
-  static const Color accentGold = Color(0xFFD4A843);
+  static const Color paper = Color(0xFFF5F0E8);
+  static const Color cardBg = Color(0xFFFFFDF7);
+  static const Color ink = Color(0xFF2C2416);
+  static const Color inkSecondary = Color(0xFF5A5245);
+  static const Color vermilion = Color(0xFFB33A3A);
+  static const Color vermilionHover = Color(0xFF932E2E);
+  static const Color stoneGreen = Color(0xFF5B7B4A);
+  static const Color border = Color(0xFFC2B28F);
+  static const Color borderLight = Color(0xFFD4C9A8);
+  static const Color overlay = Color(0xCC1C1812);
 
-  static const String serifFont = 'SourceHanSerifSC';
-  static const String sansFont = 'HarmonyOSSansSC';
+  static const Color _darkPaper = Color(0xFF1C1812);
+  static const Color _darkCard = Color(0xFF2A251D);
+  static const Color _darkInk = Color(0xFFD4C9A8);
+  static const Color _darkInkSecondary = Color(0xFF9A9278);
+  static const Color _darkVermilion = Color(0xFFC75B5B);
+
+  // ─── 字体 ─────────────────────────────────────────────────────
+
+  static const String fontTitle = 'LXGWWenKai';
+  static const String fontBody = 'SourceHanSerifSC';
+  static const String fontUI = 'HarmonyOSSansSC';
+
+  // ─── 字号梯度 ─────────────────────────────────────────────────
+
+  static const TextStyle bodyReading = TextStyle(
+    fontSize: 18,
+    fontFamily: fontBody,
+    height: 1.8,
+  );
 
   // ─── Light Theme ──────────────────────────────────────────────
 
@@ -24,22 +44,32 @@ class AppTheme {
     useMaterial3: true,
     brightness: Brightness.light,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: cinnabar,
+      seedColor: vermilion,
       brightness: Brightness.light,
-      surface: parchment,
+      surface: paper,
     ),
-    scaffoldBackgroundColor: parchment,
+    scaffoldBackgroundColor: paper,
+    cardTheme: CardThemeData(
+      color: cardBg,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: const BorderSide(color: border, width: 1),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      clipBehavior: Clip.antiAlias,
+    ),
     appBarTheme: const AppBarTheme(
-      backgroundColor: parchment,
-      foregroundColor: inkBlack,
+      backgroundColor: paper,
+      foregroundColor: ink,
     ),
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(fontSize: 36, fontFamily: serifFont, color: inkBlack),
-      headlineMedium: TextStyle(fontSize: 24, fontFamily: serifFont, color: inkBlack),
-      titleLarge: TextStyle(fontSize: 20, fontFamily: sansFont, color: inkBlack),
-      bodyLarge: TextStyle(fontSize: 16, fontFamily: serifFont, color: inkBlack, height: 2.0),
-      bodyMedium: TextStyle(fontSize: 14, fontFamily: sansFont, color: warmGray),
-      labelSmall: TextStyle(fontSize: 12, fontFamily: sansFont, color: warmGray),
+      headlineLarge: TextStyle(fontSize: 36, fontFamily: fontTitle, color: ink),
+      headlineMedium: TextStyle(fontSize: 24, fontFamily: fontTitle, color: ink),
+      titleLarge: TextStyle(fontSize: 20, fontFamily: fontTitle, color: ink),
+      bodyLarge: TextStyle(fontSize: 16, fontFamily: fontBody, color: ink, height: 2.0),
+      bodyMedium: TextStyle(fontSize: 14, fontFamily: fontUI, color: inkSecondary),
+      labelSmall: TextStyle(fontSize: 12, fontFamily: fontUI, color: inkSecondary),
     ),
   );
 
@@ -49,30 +79,32 @@ class AppTheme {
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: cinnabar,
+      seedColor: _darkVermilion,
       brightness: Brightness.dark,
-      surface: const Color(0xFF1E1E1E),
+      surface: _darkPaper,
     ),
-    scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+    scaffoldBackgroundColor: _darkPaper,
+    cardTheme: CardThemeData(
+      color: _darkCard,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: const BorderSide(color: borderLight, width: 1),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      clipBehavior: Clip.antiAlias,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: _darkPaper,
+      foregroundColor: _darkInk,
+    ),
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(
-          fontSize: 36, fontFamily: serifFont,
-          color: Color(0xFFE0D8C8)),
-      headlineMedium: TextStyle(
-          fontSize: 24, fontFamily: serifFont,
-          color: Color(0xFFE0D8C8)),
-      titleLarge: TextStyle(
-          fontSize: 20, fontFamily: sansFont,
-          color: Color(0xFFE0D8C8)),
-      bodyLarge: TextStyle(
-          fontSize: 16, fontFamily: serifFont,
-          color: Color(0xFFD0C8B8), height: 2.0),
-      bodyMedium: TextStyle(
-          fontSize: 14, fontFamily: sansFont,
-          color: Color(0xFF909080)),
-      labelSmall: TextStyle(
-          fontSize: 12, fontFamily: sansFont,
-          color: Color(0xFF909080)),
+      headlineLarge: TextStyle(fontSize: 36, fontFamily: fontTitle, color: _darkInk),
+      headlineMedium: TextStyle(fontSize: 24, fontFamily: fontTitle, color: _darkInk),
+      titleLarge: TextStyle(fontSize: 20, fontFamily: fontTitle, color: _darkInk),
+      bodyLarge: TextStyle(fontSize: 16, fontFamily: fontBody, color: _darkInk, height: 2.0),
+      bodyMedium: TextStyle(fontSize: 14, fontFamily: fontUI, color: _darkInkSecondary),
+      labelSmall: TextStyle(fontSize: 12, fontFamily: fontUI, color: _darkInkSecondary),
     ),
   );
 }

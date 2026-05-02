@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/state/app_state.dart';
 
 /// 推荐结果卡片
 class RecommendCard extends StatelessWidget {
@@ -10,17 +12,18 @@ class RecommendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prob = (result.probability * 100).toStringAsFixed(1);
+    final theme = Theme.of(context);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
-        title: Text(result.text.title,
-            style: Theme.of(context).textTheme.titleLarge),
+        title: Text(result.text.title, style: theme.textTheme.titleLarge),
         subtitle: Text('${result.text.author} · ${result.text.dynasty}'),
         trailing: Text('$prob%',
-            style: Theme.of(context).textTheme.bodyMedium),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            )),
         onTap: () {
-          // TODO: 加载阅读页
+          context.read<AppState>().loadTextForReading(result.text.id);
         },
       ),
     );
