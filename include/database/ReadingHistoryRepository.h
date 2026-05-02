@@ -49,6 +49,19 @@ public:
      * @return 阅读次数
      */
     int getTotalReadCount();
+
+    /**
+     * @brief 标记文章已追踪（INSERT OR IGNORE）
+     * @param textId 文章ID
+     * @return true 成功，false 失败
+     */
+    bool markAsTracked(int textId);
+
+    /**
+     * @brief 获取已追踪的文章ID列表
+     * @return 文章ID列表
+     */
+    std::vector<int> getTrackedTextIds();
     
 private:
     DatabaseManager* db;

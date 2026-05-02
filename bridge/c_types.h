@@ -42,6 +42,16 @@ typedef struct {
 } TextDetail;
 
 /**
+ * @brief C ABI 阅读记录结构
+ */
+typedef struct {
+    int id;
+    int text_id;
+    double read_time;
+    int64_t timestamp;
+} ReadingRecordData;
+
+/**
  * @brief 错误码
  */
 #define BRIDGE_OK              0   ///< 成功

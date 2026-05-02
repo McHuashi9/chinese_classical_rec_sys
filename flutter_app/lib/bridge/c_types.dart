@@ -50,6 +50,21 @@ final class TextDetail extends Struct {
   external Array<Double> difficulties;
 }
 
+/// C ReadingRecordData struct — 阅读历史记录
+final class ReadingRecordData extends Struct {
+  @Int32()
+  external int id;
+
+  @Int32()
+  external int textId;
+
+  @Double()
+  external double readTime;
+
+  @Int64()
+  external int timestamp;
+}
+
 /// C 错误码
 abstract class BridgeError {
   static const int ok = 0;

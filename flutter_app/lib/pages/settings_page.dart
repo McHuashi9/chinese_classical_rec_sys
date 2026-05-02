@@ -105,7 +105,7 @@ class SettingsPage extends StatelessWidget {
               width: 150,
               child: DropdownButtonFormField<String>(
                 initialValue: logLevel,
-                items: ['INFO', 'DEBUG', 'WARNING', 'ERROR']
+                items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
                     .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                     .toList(),
                 onChanged: (v) {

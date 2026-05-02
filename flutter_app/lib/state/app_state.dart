@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,12 @@ import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+
+/// 单篇文章的阅读计时状态
+class _TextReadState {
+  int totalSeconds = 0;
+  bool effectApplied = false;
+}
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
@@ -34,7 +41,10 @@ class AppState extends ChangeNotifier {
   // 阅读计时器
   Timer? _readingTimer;
   int _elapsedSeconds = 0;
-  bool _readingRecorded = false;
+  int? _readingTextId;
+
+  // per-text 阅读状态
+  final Map<int, _TextReadState> _textReadStates = {};
 
   // ─── getters ──────────────────────────────────────────────────
 
@@ -53,6 +63,13 @@ class AppState extends ChangeNotifier {
   int get totalPages => _pages.isEmpty ? 0 : _pages.length;
   int get elapsedSeconds => _elapsedSeconds;
   bool get isReading => _readingText != null;
+
+  bool get hasUnrecordedReading {
+    if (_readingTextId == null) return false;
+    final state = _textReadStates[_readingTextId];
+    if (state == null) return false;
+    return !state.effectApplied;
+  }
 
   String get formattedReadingTime {
     final m = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -89,6 +106,7 @@ class AppState extends ChangeNotifier {
 
       _tracker = KnowledgeTracker(_bridge!);
       _loadUser();
+      _loadTextTrackedStates();
 
       _initialized = true;
       _error = null;
@@ -124,6 +142,22 @@ class AppState extends ChangeNotifier {
     _loadUser();
   }
 
+  void _loadTextTrackedStates() {
+    if (_bridge == null) return;
+    const maxIds = 2000;
+    final idsPtr = calloc<Int32>(maxIds);
+    final count = _bridge!.historyGetTrackedTextIds(idsPtr, maxIds);
+    for (int i = 0; i < count; i++) {
+      final textId = idsPtr[i];
+      _textReadStates[textId] = _TextReadState()
+        ..effectApplied = true;
+    }
+    calloc.free(idsPtr);
+    if (count > 0) {
+      debugPrint('[AppState] 启动回填: 已追踪 $count 篇文章');
+    }
+  }
+
   @override
   void dispose() {
     _readingTimer?.cancel();
@@ -148,13 +182,26 @@ class AppState extends ChangeNotifier {
   // ─── 阅读 ─────────────────────────────────────────────────────
 
   void loadTextForReading(int textId) {
+    if (_readingTextId != null) {
+      _textReadStates.putIfAbsent(_readingTextId!, () => _TextReadState());
+      _textReadStates[_readingTextId!]!.totalSeconds = _elapsedSeconds;
+    }
+
+    _readingTimer?.cancel();
+    _readingTimer = null;
+
     _readingText = _engine.getTextDetail(textId);
+    _readingTextId = textId;
     _currentPage = 0;
     _pages = [];
-    _elapsedSeconds = 0;
-    _readingRecorded = false;
+
+    _textReadStates.putIfAbsent(textId, () => _TextReadState());
+    _elapsedSeconds = _textReadStates[textId]!.totalSeconds;
+
     _previousPageIndex = _pageIndex;
     _pageIndex = 2;
+
+    startReadingTimer();
     notifyListeners();
   }
 
@@ -236,8 +283,10 @@ class AppState extends ChangeNotifier {
   void goHome() {
     stopReadingTimer();
     _readingText = null;
+    _readingTextId = null;
     _pages = [];
     _currentPage = 0;
+    _elapsedSeconds = 0;
     _pageIndex = _previousPageIndex.clamp(0, 4);
     notifyListeners();
   }
@@ -251,12 +300,22 @@ class AppState extends ChangeNotifier {
   }
 
   void stopReadingTimer() {
-    if (_readingTimer == null) return;
-    if (_user != null &&
+    _readingTimer?.cancel();
+    _readingTimer = null;
+
+    if (_readingTextId == null) return;
+
+    final state = _textReadStates[_readingTextId];
+    if (state != null) {
+      state.totalSeconds = _elapsedSeconds;
+    }
+
+    if (_elapsedSeconds >= 30 &&
+        _user != null &&
         _readingText != null &&
-        _elapsedSeconds >= 30 &&
-        !_readingRecorded) {
-      _readingRecorded = true;
+        state != null &&
+        !state.effectApplied) {
+      state.effectApplied = true;
       final updated =
           _tracker.applyRead(_user!, _readingText!.id, _elapsedSeconds.toDouble());
       if (updated != null) {
@@ -264,6 +323,26 @@ class AppState extends ChangeNotifier {
         _user = updated;
       }
     }
+  }
+
+  void pauseReadingTimer() {
+    _readingTimer?.cancel();
+    _readingTimer = null;
+  }
+
+  void resumeReadingTimer() {
+    if (_readingTimer != null) return;
+    _readingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _elapsedSeconds++;
+      notifyListeners();
+    });
+  }
+
+  void discardCurrentReading() {
+    if (_readingTextId != null) {
+      _textReadStates.remove(_readingTextId);
+    }
+    _elapsedSeconds = 0;
     _readingTimer?.cancel();
     _readingTimer = null;
   }
@@ -288,6 +367,8 @@ class AppState extends ChangeNotifier {
     if (updated != null) {
       _user!.dispose();
       _user = updated;
+      _textReadStates.putIfAbsent(textId, () => _TextReadState());
+      _textReadStates[textId]!.effectApplied = true;
       notifyListeners();
     }
   }
@@ -301,6 +382,10 @@ class AppState extends ChangeNotifier {
 
   void setLogLevel(String value) {
     _logLevel = value;
+    final cLevel = value.toLowerCase();
+    final ptr = cLevel.toNativeUtf8(allocator: calloc);
+    _bridge?.logSetLevel(ptr);
+    calloc.free(ptr);
     notifyListeners();
   }
 

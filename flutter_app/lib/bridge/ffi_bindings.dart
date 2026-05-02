@@ -49,6 +49,21 @@ final class NativeBridge {
     Pointer<UserData> outUser,
   ) trackerPrune;
 
+  // ─── 阅读历史 ────────────────────────────────────────────────
+  late final int Function(int textId, double readTime, int timestamp)
+      historyAddRecord;
+
+  late final int Function(int limit, Pointer<ReadingRecordData> out, int maxCount)
+      historyGetRecent;
+
+  late final int Function() historyGetTotalCount;
+
+  late final int Function(Pointer<Int32> out, int maxCount)
+      historyGetTrackedTextIds;
+
+  // ─── 日志 ────────────────────────────────────────────────────
+  late final void Function(Pointer<Utf8> level) logSetLevel;
+
   // ──────────────────────────────────────────────────────────────
 
   NativeBridge(String libPath) : _lib = DynamicLibrary.open(libPath) {
@@ -103,5 +118,25 @@ final class NativeBridge {
         Int32 Function(Pointer<UserData>, Int64, Pointer<UserData>),
         int Function(Pointer<UserData>, int, Pointer<UserData>)>(
             'tracker_prune');
+
+    historyAddRecord = _lib.lookupFunction<
+        Int32 Function(Int32, Double, Int64),
+        int Function(int, double, int)>('history_add_record');
+
+    historyGetRecent = _lib.lookupFunction<
+        Int32 Function(Int32, Pointer<ReadingRecordData>, Int32),
+        int Function(int, Pointer<ReadingRecordData>, int)>('history_get_recent');
+
+    historyGetTotalCount = _lib.lookupFunction<
+        Int32 Function(),
+        int Function()>('history_get_total_count');
+
+    historyGetTrackedTextIds = _lib.lookupFunction<
+        Int32 Function(Pointer<Int32>, Int32),
+        int Function(Pointer<Int32>, int)>('history_get_tracked_text_ids');
+
+    logSetLevel = _lib.lookupFunction<
+        Void Function(Pointer<Utf8>),
+        void Function(Pointer<Utf8>)>('log_set_level');
   }
 }

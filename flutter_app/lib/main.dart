@@ -1,3 +1,4 @@
+import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'state/app_state.dart';
@@ -60,6 +61,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   late final AnimationController _ctrl;
   late Animation<Offset> _slideOut;
   late Animation<Offset> _slideIn;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
@@ -73,6 +75,14 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         setState(() => _transitioning = false);
       }
     });
+
+    _lifecycleListener = AppLifecycleListener(
+      onExitRequested: _onExitRequested,
+      onPause: _onBackground,
+      onHide: _onBackground,
+      onResume: _onForeground,
+      onShow: _onForeground,
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _app = context.read<AppState>();
@@ -133,10 +143,53 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     _app?.switchPage(index);
   }
 
+  void _onBackground() => _app?.pauseReadingTimer();
+  void _onForeground() => _app?.resumeReadingTimer();
+
+  Future<AppExitResponse> _onExitRequested() async {
+    final app = _app;
+    if (app == null) return AppExitResponse.exit;
+
+    app.stopReadingTimer();
+
+    if (!app.hasUnrecordedReading) return AppExitResponse.exit;
+
+    final discard = await _showExitConfirmDialog(context);
+    if (discard) {
+      app.discardCurrentReading();
+    } else {
+      app.resumeReadingTimer();
+    }
+    return discard ? AppExitResponse.exit : AppExitResponse.cancel;
+  }
+
+  Future<bool> _showExitConfirmDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('放弃'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   void dispose() {
     _app?.removeListener(_onAppStateChanged);
     _ctrl.dispose();
+    _lifecycleListener.dispose();
     super.dispose();
   }
 

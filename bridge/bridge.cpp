@@ -54,6 +54,9 @@ static void c_to_user(const UserData* src, User& dst)
 
 extern "C" int db_open(const char* db_path)
 {
+    Logger::getInstance().init();
+    LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
+
     // 关闭旧连接
     g_state = {};
 
@@ -67,6 +70,7 @@ extern "C" int db_open(const char* db_path)
     g_state.userRepo = std::make_unique<UserRepository>(g_state.db.get());
     g_state.textRepo = std::make_unique<TextRepository>(g_state.db.get());
     g_state.historyRepo = std::make_unique<ReadingHistoryRepository>(g_state.db.get());
+    g_state.historyRepo->initTable();
     g_state.incrementRepo = std::make_unique<LearningIncrementRepository>(g_state.db.get());
 
     g_state.engine = std::make_unique<RecommendationEngine>();
@@ -221,6 +225,10 @@ extern "C" int tracker_apply_read(const UserData* user, int text_id,
                                      static_cast<time_t>(timestamp));
     user_to_c(cpp_user, out_user);
 
+    g_state.historyRepo->markAsTracked(text_id);
+    g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
+    LOG_INFO("bridge: text_id={} 阅读追踪完成, read_time={:.1f}s", text_id, read_time);
+
     // 持久化
     g_state.userRepo->saveUser(cpp_user);
     return BRIDGE_OK;
@@ -252,4 +260,59 @@ extern "C" int tracker_prune(const UserData* user, int64_t now, UserData* out_us
     // 持久化修剪后的状态
     g_state.userRepo->saveUser(cpp_user);
     return BRIDGE_OK;
+}
+
+// ─── history ──────────────────────────────────────────────────────────────────
+
+extern "C" int history_add_record(int text_id, double read_time, int64_t timestamp)
+{
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    bool ok = g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
+    if (ok) {
+        LOG_INFO("bridge: history_add_record text_id={} read_time={:.1f}s", text_id, read_time);
+    }
+    return ok ? BRIDGE_OK : BRIDGE_ERR_GENERIC;
+}
+
+extern "C" int history_get_recent(int limit, ReadingRecordData* out, int max_count)
+{
+    if (!g_state.initialized || !out) return BRIDGE_ERR_NOT_INIT;
+
+    auto records = g_state.historyRepo->getRecentRecords(limit);
+    int n = std::min(static_cast<int>(records.size()), max_count);
+
+    for (int i = 0; i < n; i++) {
+        out[i].id = records[i].id;
+        out[i].text_id = records[i].textId;
+        out[i].read_time = records[i].readTime;
+        out[i].timestamp = static_cast<int64_t>(records[i].timestamp);
+    }
+    return n;
+}
+
+extern "C" int history_get_total_count()
+{
+    if (!g_state.initialized) return 0;
+    return g_state.historyRepo->getTotalReadCount();
+}
+
+extern "C" int history_get_tracked_text_ids(int* out, int max_count)
+{
+    if (!g_state.initialized || !out) return 0;
+
+    auto ids = g_state.historyRepo->getTrackedTextIds();
+    int n = std::min(static_cast<int>(ids.size()), max_count);
+
+    for (int i = 0; i < n; i++) {
+        out[i] = ids[i];
+    }
+    return n;
+}
+
+// ─── logging ──────────────────────────────────────────────────────────────────
+
+extern "C" void log_set_level(const char* level)
+{
+    Logger::getInstance().setLevel(level);
+    LOG_INFO("bridge: 日志级别切换为 {}", level);
 }

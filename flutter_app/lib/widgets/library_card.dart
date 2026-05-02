@@ -9,14 +9,46 @@ class LibraryCard extends StatelessWidget {
 
   const LibraryCard({super.key, required this.text});
 
+  Future<bool> _showAbandonConfirmDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认切换'),
+        content: const Text('当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('放弃'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Card(
       child: InkWell(
-        onTap: () {
-          context.read<AppState>().loadTextForReading(text.id);
+        onTap: () async {
+          final app = context.read<AppState>();
+          if (app.hasUnrecordedReading && app.readingText?.id != text.id) {
+            app.pauseReadingTimer();
+            final discard = await _showAbandonConfirmDialog(context);
+            if (!discard) {
+              app.resumeReadingTimer();
+              return;
+            }
+            app.discardCurrentReading();
+          }
+          app.loadTextForReading(text.id);
         },
         borderRadius: BorderRadius.circular(4),
         child: Padding(
