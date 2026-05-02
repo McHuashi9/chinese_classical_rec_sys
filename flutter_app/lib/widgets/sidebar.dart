@@ -1,9 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:chinese_classical_rec_sys/pages/library_page.dart';
-import 'package:chinese_classical_rec_sys/pages/recommend_page.dart';
-import 'package:chinese_classical_rec_sys/pages/read_page.dart';
-import 'package:chinese_classical_rec_sys/pages/ability_page.dart';
-import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
 
 /// 侧边导航 — 等价于 QML Sidebar，使用 Material 3 NavigationRail
 class AppSidebar extends StatefulWidget {

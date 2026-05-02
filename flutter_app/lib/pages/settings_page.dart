@@ -21,9 +21,9 @@ class SettingsPage extends StatelessWidget {
           onChanged: app.setDarkMode,
         ),
         const Divider(),
-        ListTile(
-          title: const Text('版本'),
-          subtitle: const Text('v0.2.0'),
+        const ListTile(
+          title: Text('版本'),
+          subtitle: Text('v0.2.0'),
         ),
       ],
     );

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 
 /// C UserData struct — matches bridge/c_types.h
@@ -14,9 +15,6 @@ final class UserData extends Struct {
 
   @Int64()
   external int lastReadTime;
-
-  static UserData allocate(Allocator allocator) =>
-      allocator<UserData>();
 }
 
 /// C TextInfo struct — 列表展示用摘要
@@ -32,9 +30,6 @@ final class TextInfo extends Struct {
 
   @Array(64)
   external Array<Uint8> dynasty;
-
-  static TextInfo allocate(Allocator allocator) =>
-      allocator<TextInfo>();
 }
 
 /// C TextDetail struct — 含全文 + 难度向量
@@ -56,9 +51,6 @@ final class TextDetail extends Struct {
 
   @Array(10)
   external Array<Double> difficulties;
-
-  static TextDetail allocate(Allocator allocator) =>
-      allocator<TextDetail>();
 }
 
 /// C 错误码
@@ -68,4 +60,15 @@ abstract class BridgeError {
   static const int errNotInit = -2;
   static const int errUser = -3;
   static const int errText = -4;
+}
+
+/// 从 C 的 null-terminated Uint8 array 读取 Dart String
+String readCString(Array<Uint8> arr, int maxLen) {
+  final bytes = <int>[];
+  for (int i = 0; i < maxLen; i++) {
+    final b = arr[i];
+    if (b == 0) break;
+    bytes.add(b);
+  }
+  return utf8.decode(bytes);
 }

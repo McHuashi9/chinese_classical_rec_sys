@@ -29,7 +29,7 @@ flutter:
         - asset: assets/fonts/LXGWWenKai-Regular.ttf
     - family: HarmonyOSSansSC
       fonts:
-        - asset: assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+        - asset: assets/fonts/HarmonyOS_SansSC_Regular.ttf
 
   assets:
     - assets/data/classical.db

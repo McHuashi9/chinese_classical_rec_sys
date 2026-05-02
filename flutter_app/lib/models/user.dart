@@ -1,39 +1,41 @@
 import 'dart:ffi';
+import 'package:ffi/ffi.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 
 /// Dart 视图层 User 类 — 封装 [UserData] C struct 的读写
 class User {
-  final Pointer<UserData> _ptr;
+  final Pointer<UserData> ptr;
   final bool _ownsMemory;
 
-  User(this._ptr, {bool owns = false}) : _ownsMemory = owns;
+  User(this.ptr, {bool owns = false}) : _ownsMemory = owns;
 
   factory User.allocate(Allocator allocator) =>
-      User(UserData.allocate(allocator), owns: true);
+      User(allocator<UserData>(), owns: true);
 
-  String get name => _ptr.ref.name.cast<Utf8>().toDartString();
+  String get name => readCString(ptr.ref.name, 128);
   set name(String value) {
-    final bytes = value.toNativeUtf8(allocator: malloc);
-    final len = bytes.length < 127 ? bytes.length : 127;
+    final src = value.toNativeUtf8(allocator: malloc);
+    final u8 = src.cast<Uint8>();
+    final len = value.length < 127 ? value.length : 127;
     for (var i = 0; i < len; i++) {
-      _ptr.ref.name[i] = bytes[i];
+      ptr.ref.name[i] = (u8 + i).value;
     }
-    _ptr.ref.name[len] = 0;
-    malloc.free(bytes);
+    ptr.ref.name[len] = 0;
+    malloc.free(src);
   }
 
-  double getAbility(int index) => _ptr.ref.abilities[index];
+  double getAbility(int index) => ptr.ref.abilities[index];
   void setAbility(int index, double value) {
-    _ptr.ref.abilities[index] = value;
+    ptr.ref.abilities[index] = value;
   }
 
-  double getBaseAbility(int index) => _ptr.ref.baseAbilities[index];
+  double getBaseAbility(int index) => ptr.ref.baseAbilities[index];
   void setBaseAbility(int index, double value) {
-    _ptr.ref.baseAbilities[index] = value;
+    ptr.ref.baseAbilities[index] = value;
   }
 
-  int get lastReadTime => _ptr.ref.lastReadTime;
-  set lastReadTime(int value) => _ptr.ref.lastReadTime = value;
+  int get lastReadTime => ptr.ref.lastReadTime;
+  set lastReadTime(int value) => ptr.ref.lastReadTime = value;
 
   double get averageAbility {
     double sum = 0;
@@ -56,9 +58,6 @@ class User {
   }
 
   void dispose() {
-    if (_ownsMemory) malloc.free(_ptr);
+    if (_ownsMemory) malloc.free(ptr);
   }
 }
-
-// Add dart:ffi import for toNativeUtf8 / Utf8 extension
-import 'package:ffi/ffi.dart';

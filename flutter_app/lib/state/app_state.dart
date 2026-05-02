@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
@@ -15,6 +16,7 @@ class AppState extends ChangeNotifier {
 
   User? _user;
   bool _darkMode = false;
+  String _logLevel = 'INFO';
   bool _initialized = false;
   String? _error;
 
@@ -22,12 +24,12 @@ class AppState extends ChangeNotifier {
   List<RecommendResult> _recommendations = [];
   ChineseText? _readingText;
   int _readingPage = 0;
-  int _totalPages = 1;
 
   // ─── getters ──────────────────────────────────────────────────
 
   bool get initialized => _initialized;
   bool get darkMode => _darkMode;
+  String get logLevel => _logLevel;
   String? get error => _error;
   User? get user => _user;
   String get userName => _user?.name ?? '佚名';
@@ -74,19 +76,19 @@ class AppState extends ChangeNotifier {
   }
 
   String _resolveLibPath() {
-    if (Platform.isLinux) return 'libchinese_core.so';
-    if (Platform.isMacOS) return 'libchinese_core.dylib';
-    if (Platform.isWindows) return 'chinese_core.dll';
-    return 'libchinese_core.so';
+    if (Platform.isLinux) return '../build/libchinese_core.so';
+    if (Platform.isMacOS) return '../build/libchinese_core.dylib';
+    if (Platform.isWindows) return '../build/chinese_core.dll';
+    return '../build/libchinese_core.so';
   }
 
   void _loadUser() {
-    final ptr = User.allocate(calloc);
-    final rc = _bridge!.userLoad(ptr._ptr);
+    final u = User.allocate(calloc);
+    final rc = _bridge!.userLoad(u.ptr);
     if (rc == BridgeError.ok) {
-      _user = ptr;
+      _user = u;
     } else {
-      ptr.dispose();
+      u.dispose();
       _initDefaultUser();
     }
   }
@@ -121,7 +123,6 @@ class AppState extends ChangeNotifier {
   void loadTextForReading(int textId) {
     _readingText = _engine.getTextDetail(textId);
     _readingPage = 0;
-    _totalPages = 1;
     notifyListeners();
   }
 
@@ -139,6 +140,11 @@ class AppState extends ChangeNotifier {
 
   void setDarkMode(bool value) {
     _darkMode = value;
+    notifyListeners();
+  }
+
+  void setLogLevel(String value) {
+    _logLevel = value;
     notifyListeners();
   }
 

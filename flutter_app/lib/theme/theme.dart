@@ -15,10 +15,7 @@ class AppTheme {
   static const Color warmGray = Color(0xFF8C8C7C);
   static const Color accentGold = Color(0xFFD4A843);
 
-  // ─── 字体 ─────────────────────────────────────────────────────
-
   static const String serifFont = 'SourceHanSerifSC';
-  static const String wenkaiFont = 'LXGWWenKai';
   static const String sansFont = 'HarmonyOSSansSC';
 
   // ─── Light Theme ──────────────────────────────────────────────
@@ -37,19 +34,12 @@ class AppTheme {
       foregroundColor: inkBlack,
     ),
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(
-          fontSize: 36, fontFamily: serifFont, color: inkBlack),
-      headlineMedium: TextStyle(
-          fontSize: 24, fontFamily: serifFont, color: inkBlack),
-      titleLarge: TextStyle(
-          fontSize: 20, fontFamily: sansFont, color: inkBlack),
-      bodyLarge: TextStyle(
-          fontSize: 16, fontFamily: serifFont, color: inkBlack,
-          height: 2.0),
-      bodyMedium: TextStyle(
-          fontSize: 14, fontFamily: sansFont, color: warmGray),
-      labelSmall: TextStyle(
-          fontSize: 12, fontFamily: sansFont, color: warmGray),
+      headlineLarge: TextStyle(fontSize: 36, fontFamily: serifFont, color: inkBlack),
+      headlineMedium: TextStyle(fontSize: 24, fontFamily: serifFont, color: inkBlack),
+      titleLarge: TextStyle(fontSize: 20, fontFamily: sansFont, color: inkBlack),
+      bodyLarge: TextStyle(fontSize: 16, fontFamily: serifFont, color: inkBlack, height: 2.0),
+      bodyMedium: TextStyle(fontSize: 14, fontFamily: sansFont, color: warmGray),
+      labelSmall: TextStyle(fontSize: 12, fontFamily: sansFont, color: warmGray),
     ),
   );
 

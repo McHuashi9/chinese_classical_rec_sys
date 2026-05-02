@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'package:ffi/ffi.dart';
 import 'c_types.dart';
 
 /// Dart FFI 函数表 — 绑定 libchinese_core.so 的所有 C 函数
@@ -16,13 +17,13 @@ final class NativeBridge {
 
   // ─── 文本 ────────────────────────────────────────────────────
   late final int Function() textGetCount;
-  late final void Function(Pointer<TextInfo> out, Int32 maxCount) textGetAll;
-  late final int Function(Int32 id, Pointer<TextDetail> out) textGetDetail;
+  late final void Function(Pointer<TextInfo> out, int maxCount) textGetAll;
+  late final int Function(int id, Pointer<TextDetail> out) textGetDetail;
 
   // ─── 推荐 ────────────────────────────────────────────────────
   late final void Function(
     Pointer<UserData> user,
-    Int32 topK,
+    int topK,
     Pointer<Int32> outIds,
     Pointer<Double> outProbs,
   ) recommend;
@@ -30,21 +31,21 @@ final class NativeBridge {
   // ─── 知识追踪 ────────────────────────────────────────────────
   late final int Function(
     Pointer<UserData> user,
-    Int32 textId,
-    Double readTime,
-    Int64 timestamp,
+    int textId,
+    double readTime,
+    int timestamp,
     Pointer<UserData> outUser,
   ) trackerApplyRead;
 
   late final int Function(
     Pointer<UserData> user,
-    Int64 now,
+    int now,
     Pointer<UserData> outUser,
   ) trackerApplyForgetting;
 
   late final int Function(
     Pointer<UserData> user,
-    Int64 now,
+    int now,
     Pointer<UserData> outUser,
   ) trackerPrune;
 

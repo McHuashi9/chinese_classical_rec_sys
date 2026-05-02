@@ -29,8 +29,8 @@ class _RadarChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = min(size.width, size.height) / 2 - 20;
-    final angleStep = 2 * pi / _n;
-    final startAngle = -pi / 2; // 从顶部开始
+    const angleStep = 2 * pi / _n;
+    const startAngle = -pi / 2; // 从顶部开始
 
     // 背景网格
     final gridPaint = Paint()

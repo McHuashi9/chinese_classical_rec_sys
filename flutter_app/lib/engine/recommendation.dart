@@ -22,12 +22,12 @@ class RecommendationEngine {
 
     _textCache.clear();
     for (int i = 0; i < count; i++) {
-      final info = infos.elementAt(i).ref;
+      final info = infos[i];
       _textCache.add(ChineseText.fromInfo(
         info.id,
-        info.title.cast<Utf8>().toDartString(),
-        info.author.cast<Utf8>().toDartString(),
-        info.dynasty.cast<Utf8>().toDartString(),
+        readCString(info.title, 256),
+        readCString(info.author, 128),
+        readCString(info.dynasty, 64),
       ));
     }
     calloc.free(infos);
@@ -35,19 +35,20 @@ class RecommendationEngine {
 
   /// 获取文本全文详情
   ChineseText? getTextDetail(int textId) {
-    final detail = TextDetail.allocate(calloc);
+    final detail = calloc<TextDetail>();
     final rc = _bridge.textGetDetail(textId, detail);
     if (rc != BridgeError.ok) {
       calloc.free(detail);
       return null;
     }
+    final d = detail.ref;
     final text = ChineseText.fromDetail(
-      detail.id,
-      detail.title.cast<Utf8>().toDartString(),
-      detail.author.cast<Utf8>().toDartString(),
-      detail.dynasty.cast<Utf8>().toDartString(),
-      detail.content.cast<Utf8>().toDartString(),
-      [for (int i = 0; i < 10; i++) detail.difficulties[i]],
+      d.id,
+      readCString(d.title, 256),
+      readCString(d.author, 128),
+      readCString(d.dynasty, 64),
+      readCString(d.content, 65536),
+      [for (int i = 0; i < 10; i++) d.difficulties[i]],
     );
     calloc.free(detail);
     return text;
@@ -61,7 +62,7 @@ class RecommendationEngine {
     final outIds = calloc<Int32>(validTopK);
     final outProbs = calloc<Double>(validTopK);
 
-    _bridge.recommend(user._ptr, validTopK, outIds, outProbs);
+    _bridge.recommend(user.ptr, validTopK, outIds, outProbs);
 
     final results = <RecommendResult>[];
     for (int i = 0; i < validTopK; i++) {

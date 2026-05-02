@@ -1,4 +1,4 @@
-import 'dart:ffi';
+import 'package:ffi/ffi.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -18,7 +18,7 @@ class KnowledgeTracker {
     final outUser = User.allocate(calloc);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final rc = _bridge.trackerApplyRead(
-        user._ptr, textId, readTime, now, outUser._ptr);
+        user.ptr, textId, readTime, now, outUser.ptr);
     if (rc != BridgeError.ok) {
       outUser.dispose();
       return null;
@@ -30,7 +30,7 @@ class KnowledgeTracker {
   User applyForgetting(User user) {
     final outUser = User.allocate(calloc);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    _bridge.trackerApplyForgetting(user._ptr, now, outUser._ptr);
+    _bridge.trackerApplyForgetting(user.ptr, now, outUser.ptr);
     return outUser;
   }
 
@@ -38,7 +38,7 @@ class KnowledgeTracker {
   User prune(User user) {
     final outUser = User.allocate(calloc);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    _bridge.trackerPrune(user._ptr, now, outUser._ptr);
+    _bridge.trackerPrune(user.ptr, now, outUser.ptr);
     return outUser;
   }
 }
