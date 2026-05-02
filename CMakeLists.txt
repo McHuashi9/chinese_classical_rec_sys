@@ -73,6 +73,45 @@ if(WIN32)
     target_link_libraries(chinese_classical_lib PUBLIC nowide_static)
 endif()
 
+# ─── Flutter FFI 共享库 (chinese_core_shared) ──────────────────────────────────
+
+file(GLOB_RECURSE CORE_SOURCES "src/*.cpp")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
+list(APPEND CORE_SOURCES "bridge/bridge.cpp")
+
+add_library(chinese_core SHARED ${CORE_SOURCES})
+target_include_directories(chinese_core PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/third_party/spdlog-1.17.0/include
+    ${CMAKE_SOURCE_DIR}/third_party/sqlite3
+    ${CMAKE_SOURCE_DIR}/bridge
+)
+if(WIN32)
+    target_include_directories(chinese_core PUBLIC
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/src
+    )
+    target_compile_definitions(chinese_core PRIVATE SPDLOG_WCHAR_FILENAMES)
+    target_link_libraries(chinese_core PRIVATE nowide_static)
+else()
+    target_include_directories(chinese_core PUBLIC
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
+    )
+endif()
+
+target_link_libraries(chinese_core PRIVATE sqlite3_static)
+
+# Linux: 确保 SQLite3 以 -fPIC 编译（共享库必需）
+set_target_properties(sqlite3_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(chinese_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# ─── CLI 主程序 ─────────────────────────────────────────────────────────────────
+
 # 主程序
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE chinese_classical_lib)
@@ -81,6 +120,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE chinese_classical_lib)
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
 endif()
+
+# ─── 测试 ───────────────────────────────────────────────────────────────────────
 
 # 单元测试
 enable_testing()

@@ -1,0 +1,35 @@
+name: chinese_classical_rec_sys
+description: 中国古文推荐系统 - Flutter Desktop 版
+publish_to: 'none'
+version: 0.2.0
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.1
+  ffi: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: SourceHanSerifSC
+      fonts:
+        - asset: assets/fonts/SourceHanSerifSC-Regular.otf
+    - family: LXGWWenKai
+      fonts:
+        - asset: assets/fonts/LXGWWenKai-Regular.ttf
+    - family: HarmonyOSSansSC
+      fonts:
+        - asset: assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+
+  assets:
+    - assets/data/classical.db
