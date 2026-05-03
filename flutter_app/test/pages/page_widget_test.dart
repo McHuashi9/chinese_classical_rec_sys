@@ -33,7 +33,7 @@ void main() {
       expect(find.text('外观'), findsOneWidget);
       expect(find.text('日志'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
-      expect(find.text('版本 v0.2.0'), findsOneWidget);
+      expect(find.text('版本 0.2.0'), findsOneWidget);
       app.dispose();
     });
 

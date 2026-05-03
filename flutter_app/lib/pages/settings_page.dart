@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _checking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -145,15 +153,90 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              '版本 v0.2.0',
+              '版本 ${AppState.currentVersion}',
               style: TextStyle(
                 fontSize: 14,
                 fontFamily: AppTheme.fontUI,
                 color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
               ),
             ),
+            const SizedBox(height: 12),
+            _buildCheckUpdateButton(context),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCheckUpdateButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _checking ? null : () => _checkForUpdates(context),
+        icon: _checking
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.system_update, size: 18),
+        label: Text(_checking ? '检查中...' : '检查更新'),
+      ),
+    );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    if (_checking) return;
+    setState(() => _checking = true);
+
+    final app = context.read<AppState>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final latest = await app.manualCheckForUpdates();
+
+      if (!mounted) return;
+
+      if (latest == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('网络不可用，请稍后重试')),
+        );
+      } else if (latest.toString() == AppState.currentVersion) {
+        messenger.showSnackBar(
+          // ignore: prefer_const_constructors
+          SnackBar(content: Text('已是最新版本 ${AppState.currentVersion}')),
+        );
+      } else {
+        // ignore: use_build_context_synchronously
+        await _showUpdateDialog(context, latest.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  Future<void> _showUpdateDialog(BuildContext context, String latestVersion) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('发现新版本 v$latestVersion'),
+        // ignore: prefer_const_constructors
+        content: Text('当前版本: ${AppState.currentVersion}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('稍后'),
+          ),
+          FilledButton(
+            onPressed: () {
+              launchUrl(Uri.parse(
+                'https://github.com/anomalyco/chinese_classical_rec_sys/releases/tag/v$latestVersion',
+              ));
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('前往下载'),
+          ),
+        ],
       ),
     );
   }

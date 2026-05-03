@@ -1,10 +1,15 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart' show getApplicationSupportDirectory;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'state/app_state.dart';
+import 'engine/update_checker.dart';
 import 'theme/theme.dart';
 import 'pages/library_page.dart';
 import 'pages/recommend_page.dart';
@@ -99,22 +104,118 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final libPath = _bundleLibPath();
     await app.initialize(dbPath, libPath: libPath);
     if (!mounted) return;
+    app.setDbPathAfterSync(dbPath);
     app.getRecommendations(10);
+
+    final prefs = await SharedPreferences.getInstance();
+    final dbDir = File(dbPath).parent.path;
+    app.initRemoteDbSync(prefs, dbDir);
+    await app.initUpdateChecker();
+    _postInit(app);
+  }
+
+  void _postInit(AppState app) {
+    unawaited(_silentCheckForUpdates(app));
+    unawaited(_silentRemoteDbSync(app));
+  }
+
+  Future<void> _silentCheckForUpdates(AppState app) async {
+    final latest = await app.silentCheckForUpdates();
+    if (latest != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('发现新版本 v$latest（当前 ${AppState.currentVersion}）'),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: '查看',
+            onPressed: () {
+              app.switchPage(4);
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _silentRemoteDbSync(AppState app) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final checker = UpdateChecker(prefs);
+      final latestVersion = await checker.checkSilently(AppState.currentVersion);
+      if (latestVersion == null) return;
+
+      final releaseUrl = 'https://api.github.com/repos/anomalyco/'
+          'chinese_classical_rec_sys/releases/tags/v$latestVersion';
+      final resp = await http.get(Uri.parse(releaseUrl), headers: {
+        'Accept': 'application/vnd.github.v3+json',
+      });
+      if (resp.statusCode != 200) return;
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final assets = data['assets'] as List<dynamic>?;
+      if (assets == null) return;
+
+      String? downloadUrl;
+      for (final a in assets) {
+        final map = a as Map<String, dynamic>;
+        final name = map['name'] as String?;
+        if (name == 'classical.db' || name == 'classical.db.gz') {
+          downloadUrl = map['browser_download_url'] as String?;
+          break;
+        }
+      }
+      if (downloadUrl == null) return;
+
+      await app.remoteSyncDb(
+        remoteVersion: 'v$latestVersion',
+        downloadUrl: downloadUrl,
+      );
+    } catch (_) {}
   }
 
   Future<String> _resolveDbPath() async {
     try {
       final dir = await getApplicationSupportDirectory();
       final dbPath = '${dir.path}/classical.db';
+      final verPath = '${dir.path}/db_version.txt';
       final dbFile = File(dbPath);
+
       if (!await dbFile.exists()) {
         final data = await rootBundle.load('assets/data/classical.db');
         await dbFile.writeAsBytes(data.buffer.asUint8List());
+        final assetVer = await _readAssetDbVersion();
+        await File(verPath).writeAsString(assetVer);
+      } else {
+        final assetVer = await _readAssetDbVersion();
+        String localVer = '';
+        try {
+          localVer = (await File(verPath).readAsString()).trim();
+        } catch (_) {}
+        if (localVer != assetVer) {
+          final tmp = File('${dir.path}/classical.db.tmp');
+          final data = await rootBundle.load('assets/data/classical.db');
+          await tmp.writeAsBytes(data.buffer.asUint8List());
+          final bak = File('${dir.path}/classical.db.bak');
+          if (await bak.exists()) await bak.delete();
+          await dbFile.rename(bak.path);
+          await tmp.rename(dbPath);
+          await File(verPath).writeAsString(assetVer);
+          debugPrint('[main] DB 已更新: $localVer → $assetVer');
+        }
       }
       return dbPath;
     } catch (e) {
       debugPrint('[main] _resolveDbPath 失败: $e，回退到相对路径');
       return '../data/classical.db';
+    }
+  }
+
+  Future<String> _readAssetDbVersion() async {
+    try {
+      final data = await rootBundle.loadString('assets/data/db_version.txt');
+      return data.trim();
+    } catch (_) {
+      return 'unknown';
     }
   }
 

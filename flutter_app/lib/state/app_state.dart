@@ -4,12 +4,16 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/update_checker.dart';
+import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 /// 单篇文章的阅读计时状态
@@ -20,9 +24,14 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
+  static const currentVersion = '0.2.0';
+
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
   late KnowledgeTracker _tracker;
+  UpdateChecker? _updateChecker;
+  RemoteDbSync? _remoteDbSync;
+  SharedPreferences? _prefs;
 
   User? _user;
   int _pageIndex = 0;
@@ -392,5 +401,51 @@ class AppState extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  Future<void> initUpdateChecker() async {
+    _prefs = await SharedPreferences.getInstance();
+    _updateChecker = UpdateChecker(_prefs!);
+  }
+
+  Future<Version?> silentCheckForUpdates() async {
+    if (_updateChecker == null) return null;
+    return _updateChecker!.checkSilently(currentVersion);
+  }
+
+  Future<Version?> manualCheckForUpdates() async {
+    if (_updateChecker == null) return null;
+    return _updateChecker!.checkManually(currentVersion);
+  }
+
+  Future<void> remoteSyncDb({String? remoteVersion, String? downloadUrl}) async {
+    if (remoteVersion == null || downloadUrl == null) return;
+    if (_remoteDbSync == null) return;
+    final ok = await _remoteDbSync!.trySyncFromRelease(
+      remoteVersion: remoteVersion,
+      downloadUrl: downloadUrl,
+    );
+    if (ok && _bridge != null && _initialized) {
+      _bridge!.dbClose();
+      final cPath = _dbPathAfterSync?.toNativeUtf8(allocator: calloc);
+      if (cPath != null) {
+        _bridge!.dbOpen(cPath);
+        calloc.free(cPath);
+        _engine.loadTextCache();
+        _loadUser();
+        _loadTextTrackedStates();
+        notifyListeners();
+      }
+    }
+  }
+
+  String? _dbPathAfterSync;
+
+  void setDbPathAfterSync(String path) {
+    _dbPathAfterSync = path;
+  }
+
+  void initRemoteDbSync(SharedPreferences prefs, String dbDirPath) {
+    _remoteDbSync = RemoteDbSync(prefs, dbDirPath);
   }
 }
