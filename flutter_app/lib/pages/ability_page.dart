@@ -46,38 +46,59 @@ class _AbilityContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.read<AppState>().darkMode;
-    final isSmall = MediaQuery.sizeOf(context).width < 600;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(context.pagePadding),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // header
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  '我的能力',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontSize: isSmall ? 24 : 36,
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              if (constraints.maxWidth < 480) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '我的能力',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: context.gapSmall),
+                    Text(
+                      '综合: ${(_average * 100).toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontFamily: AppTheme.fontUI,
+                        color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Text(
+                    '我的能力',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '综合: ${(_average * 100).toStringAsFixed(1)}%',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontFamily: AppTheme.fontUI,
-                  color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                ),
-              ),
-            ],
+                  const Spacer(),
+                  Text(
+                    '综合: ${(_average * 100).toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontFamily: AppTheme.fontUI,
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: context.gapHuge),
           const Divider(color: AppTheme.border, height: 1),
-          const SizedBox(height: 24),
+          SizedBox(height: context.gapXHuge),
 
           // radar chart
           LayoutBuilder(
@@ -92,21 +113,21 @@ class _AbilityContent extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: context.gapXXHuge),
 
           // dimension bars
-          ...List.generate(10, (i) => _buildDimBar(i, isDark)),
+          ...List.generate(10, (i) => _buildDimBar(context, i, isDark)),
         ],
       ),
     );
   }
 
-  Widget _buildDimBar(int idx, bool isDark) {
+  Widget _buildDimBar(BuildContext context, int idx, bool isDark) {
     final val = abilities[idx].clamp(0.0, 1.0);
     final pct = (val * 100).toStringAsFixed(0);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: context.cardPaddingV),
       child: Row(
         children: [
           SizedBox(
@@ -121,7 +142,7 @@ class _AbilityContent extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: context.gapMedium),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(2),
@@ -142,7 +163,7 @@ class _AbilityContent extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: context.gapMedium),
           SizedBox(
             width: 36,
             child: Text(

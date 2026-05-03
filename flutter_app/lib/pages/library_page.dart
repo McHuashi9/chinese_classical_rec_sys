@@ -35,7 +35,6 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget build(BuildContext context) {
     final allTexts = context.select((AppState a) => a.texts);
     final isDark = context.select((AppState a) => a.darkMode);
-    final isSmall = MediaQuery.sizeOf(context).width < 600;
     final filtered = allTexts.where((t) {
       if (_filter.isEmpty) return true;
       return t.title.toLowerCase().contains(_filter) ||
@@ -43,72 +42,98 @@ class _LibraryPageState extends State<LibraryPage> {
     }).toList();
 
     return Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(context.pagePadding),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // header
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      '文库',
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontSize: isSmall ? 24 : 36,
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  if (constraints.maxWidth < 480) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('文库',
+                            style: Theme.of(context).textTheme.headlineLarge,
+                            overflow: TextOverflow.ellipsis),
+                        SizedBox(height: context.gapSmall),
+                        Text('(${filtered.length}篇)',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontFamily: AppTheme.fontBody,
+                              color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                            )),
+                        SizedBox(height: context.gapMedium),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextField(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                          decoration: InputDecoration(
+                            hintText: '搜索篇目或作者…',
+                            hintStyle: TextStyle(
+                              fontSize: 16,
+                              fontFamily: AppTheme.fontUI,
+                              color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                            border: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+                            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+                            focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.vermilion, width: 2)),
+                          ),
+                        ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Text(
+                        '文库',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '(${filtered.length}篇)',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontFamily: AppTheme.fontBody,
-                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Flexible(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
-                      child: TextField(
-                      controller: _searchController,
-                      onChanged: _onSearchChanged,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: AppTheme.fontUI,
-                        color: isDark ? AppTheme.darkInk : AppTheme.ink,
+                      SizedBox(width: context.gapMedium),
+                      Text(
+                        '(${filtered.length}篇)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontFamily: AppTheme.fontBody,
+                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                        ),
                       ),
-                      decoration: InputDecoration(
-                        hintText: '搜索篇目或作者…',
-                        hintStyle: TextStyle(
+                      const Spacer(),
+                      SizedBox(
+                        width: 260,
+                        child: TextField(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        style: TextStyle(
                           fontSize: 16,
                           fontFamily: AppTheme.fontUI,
-                          color: isDark
-                              ? AppTheme.darkInkSecondary
-                              : AppTheme.inkSecondary,
+                          color: isDark ? AppTheme.darkInk : AppTheme.ink,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 12),
-                        border: const UnderlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.border),
-                        ),
-                        enabledBorder: const UnderlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.border),
-                        ),
-                        focusedBorder: const UnderlineInputBorder(
-                          borderSide:
-                              BorderSide(color: AppTheme.vermilion, width: 2),
+                        decoration: InputDecoration(
+                          hintText: '搜索篇目或作者…',
+                          hintStyle: TextStyle(
+                            fontSize: 16,
+                            fontFamily: AppTheme.fontUI,
+                            color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                          border: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+                          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+                          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.vermilion, width: 2)),
                         ),
                       ),
-                    ),
-                  ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: context.gapHuge),
               const Divider(color: AppTheme.border, height: 1),
-              const SizedBox(height: 8),
+              SizedBox(height: context.gapMedium),
 
               // list
               Expanded(

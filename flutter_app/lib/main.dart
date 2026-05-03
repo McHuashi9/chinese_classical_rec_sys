@@ -32,16 +32,19 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '中国古文推荐系统',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: context.select((AppState a) => a.darkMode)
-          ? ThemeMode.dark
-          : ThemeMode.light,
-      home: const MainShell(),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
+      final isDark = context.select((AppState a) => a.darkMode);
+
+      return MaterialApp(
+        title: '中国古文推荐系统',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme(screenSize),
+        darkTheme: AppTheme.darkTheme(screenSize),
+        themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+        home: const MainShell(),
+      );
+    });
   }
 }
 
@@ -363,67 +366,97 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
   }
 
+  final _bodyKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isNarrow = width < 600;
+    final isFullLabel = width >= AppTheme.breakLarge;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: _onBackPressed,
       child: Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: _pageIndex,
-              labelType: NavigationRailLabelType.all,
-              onDestinationSelected: _onDestinationSelected,
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.library_books),
-                  label: Text('文库'),
+        body: SafeArea(
+          child: isNarrow
+              ? _buildBody()
+              : Row(
+                  children: [
+                    NavigationRail(
+                      selectedIndex: _pageIndex,
+                      labelType: isFullLabel
+                          ? NavigationRailLabelType.all
+                          : NavigationRailLabelType.selected,
+                      onDestinationSelected: _onDestinationSelected,
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.library_books),
+                          label: Text('文库'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.recommend),
+                          label: Text('推荐'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.menu_book),
+                          label: Text('阅读'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.radar),
+                          label: Text('能力'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.settings),
+                          label: Text('设置'),
+                        ),
+                      ],
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _buildBody()),
+                  ],
                 ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.recommend),
-                  label: Text('推荐'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.menu_book),
-                  label: Text('阅读'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.radar),
-                  label: Text('能力'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.settings),
-                  label: Text('设置'),
-                ),
-              ],
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: _initialized
-                  ? _buildBody()
-                  : const Center(child: CircularProgressIndicator()),
-            ),
-          ],
         ),
+        bottomNavigationBar: isNarrow
+            ? NavigationBar(
+                selectedIndex: _pageIndex,
+                onDestinationSelected: _onDestinationSelected,
+                destinations: const [
+                  NavigationDestination(
+                      icon: Icon(Icons.library_books), label: '文库'),
+                  NavigationDestination(
+                      icon: Icon(Icons.recommend), label: '推荐'),
+                  NavigationDestination(
+                      icon: Icon(Icons.menu_book), label: '阅读'),
+                  NavigationDestination(
+                      icon: Icon(Icons.radar), label: '能力'),
+                  NavigationDestination(
+                      icon: Icon(Icons.settings), label: '设置'),
+                ],
+              )
+            : null,
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildBody() {
+    if (!_initialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (!_transitioning) {
-      return IndexedStack(index: _pageIndex, children: _pages);
+      return IndexedStack(
+          key: _bodyKey, index: _pageIndex, children: _pages);
     }
     return ClipRect(
       child: Stack(
         children: [
           Positioned.fill(
-            child: SlideTransition(position: _slideOut, child: _pages[_prevPageIndex]),
+            child: SlideTransition(
+                position: _slideOut, child: _pages[_prevPageIndex]),
           ),
           Positioned.fill(
-            child: SlideTransition(position: _slideIn, child: _pages[_pageIndex]),
+            child: SlideTransition(
+                position: _slideIn, child: _pages[_pageIndex]),
           ),
         ],
       ),

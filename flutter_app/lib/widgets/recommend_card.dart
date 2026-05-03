@@ -53,7 +53,9 @@ class RecommendCard extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(4),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(
+              horizontal: context.cardPaddingH,
+              vertical: context.cardPaddingV),
           child: Row(
             children: [
               Expanded(
@@ -69,7 +71,7 @@ class RecommendCard extends StatelessWidget {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: context.gapTiny),
                     Text(
                       '${result.text.author} · ${result.text.dynasty}',
                       style: TextStyle(

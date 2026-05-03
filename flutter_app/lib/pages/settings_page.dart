@@ -18,23 +18,20 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final isDark = context.select((AppState a) => a.darkMode);
     final logLevel = context.select((AppState a) => a.logLevel);
-    final isSmall = MediaQuery.sizeOf(context).width < 600;
 
     return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(context.pagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('设置', style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontSize: isSmall ? 24 : 36,
-              )),
-              const SizedBox(height: 16),
+              Text('设置', style: Theme.of(context).textTheme.headlineLarge),
+              SizedBox(height: context.gapHuge),
               const Divider(color: AppTheme.border, height: 1),
-              const SizedBox(height: 24),
+              SizedBox(height: context.gapXHuge),
               _buildAppearanceCard(context, isDark),
-              const SizedBox(height: 16),
+              SizedBox(height: context.gapHuge),
               _buildLoggingCard(context, isDark, logLevel),
-              const SizedBox(height: 16),
+              SizedBox(height: context.gapHuge),
               _buildAboutCard(isDark),
             ],
           ),
@@ -47,7 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(context.cardPaddingH),
         child: isSmall
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,35 +57,31 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: isDark ? AppTheme.darkInk : AppTheme.ink,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        '主题',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontFamily: AppTheme.fontUI,
-                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                        ),
-                      ),
-                      const Spacer(),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment<String>(value: 'light', label: Text('亮色')),
-                          ButtonSegment<String>(value: 'dark', label: Text('暗色')),
-                        ],
-                        selected: {isDark ? 'dark' : 'light'},
-                        onSelectionChanged: (Set<String> selection) {
-                          app.setDarkMode(selection.first == 'dark');
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          textStyle: WidgetStateProperty.all(
-                            const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
-                          ),
-                        ),
-                      ),
+                  SizedBox(height: context.gapMedium),
+                  Text(
+                    '主题',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: AppTheme.fontUI,
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+                  ),
+                  SizedBox(height: context.gapSmall),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment<String>(value: 'light', label: Text('亮色')),
+                      ButtonSegment<String>(value: 'dark', label: Text('暗色')),
                     ],
+                    selected: {isDark ? 'dark' : 'light'},
+                    onSelectionChanged: (Set<String> selection) {
+                      app.setDarkMode(selection.first == 'dark');
+                    },
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: WidgetStateProperty.all(
+                        const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
+                      ),
+                    ),
                   ),
                 ],
               )
@@ -102,7 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: isDark ? AppTheme.darkInk : AppTheme.ink,
                     ),
                   ),
-                  const SizedBox(width: 24),
+                  SizedBox(width: context.gapXHuge),
                   Text(
                     '主题',
                     style: TextStyle(
@@ -139,7 +132,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(context.cardPaddingH),
         child: isSmall
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,33 +145,27 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: isDark ? AppTheme.darkInk : AppTheme.ink,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        '日志级别',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontFamily: AppTheme.fontUI,
-                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                        ),
-                      ),
-                      const Spacer(),
-                      Flexible(
-                        child: SizedBox(
-                          width: 150,
-                          child: DropdownButtonFormField<String>(
-                            initialValue: logLevel,
-                            items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
-                                .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v != null) context.read<AppState>().setLogLevel(v);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
+                  SizedBox(height: context.gapMedium),
+                  Text(
+                    '日志级别',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: AppTheme.fontUI,
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+                  ),
+                  SizedBox(height: context.gapSmall),
+                  SizedBox(
+                    width: 150,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: logLevel,
+                      items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
+                          .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) context.read<AppState>().setLogLevel(v);
+                      },
+                    ),
                   ),
                 ],
               )
@@ -192,7 +179,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: isDark ? AppTheme.darkInk : AppTheme.ink,
                     ),
                   ),
-                  const SizedBox(width: 24),
+                  SizedBox(width: context.gapXHuge),
                   Text(
                     '日志级别',
                     style: TextStyle(
@@ -202,18 +189,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const Spacer(),
-                  Flexible(
-                    child: SizedBox(
-                      width: 150,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: logLevel,
-                        items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
-                            .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) context.read<AppState>().setLogLevel(v);
-                        },
-                      ),
+                  SizedBox(
+                    width: 150,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: logLevel,
+                      items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
+                          .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) context.read<AppState>().setLogLevel(v);
+                      },
                     ),
                   ),
                 ],
@@ -225,7 +210,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAboutCard(bool isDark) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(
+            horizontal: context.cardPaddingH,
+            vertical: context.cardPaddingV),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -237,7 +224,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: isDark ? AppTheme.darkInk : AppTheme.ink,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: context.gapSmall),
             Text(
               '古典文学阅读推荐系统',
               style: TextStyle(
@@ -246,7 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
               ),
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: context.gapTiny),
             Text(
               '版本 ${AppState.currentVersion}',
               style: TextStyle(
@@ -255,7 +242,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: context.cardPaddingV),
             _buildCheckUpdateButton(context),
           ],
         ),

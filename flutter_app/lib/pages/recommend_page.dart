@@ -53,8 +53,9 @@ class _RecommendPageState extends State<RecommendPage> {
     final isDark = context.select((AppState a) => a.darkMode);
 
     return Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(context.pagePadding),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // header
               LayoutBuilder(
@@ -65,24 +66,20 @@ class _RecommendPageState extends State<RecommendPage> {
                       children: [
                         Text(
                           '为你推荐',
-                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                            fontSize: 24,
-                          ),
+                          style: Theme.of(context).textTheme.headlineLarge,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: context.gapMedium),
                         _buildSpinBox(isDark),
                       ],
                     );
                   }
                   return Row(
                     children: [
-                      Flexible(
-                        child: Text(
-                          '为你推荐',
-                          style: Theme.of(context).textTheme.headlineLarge,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        '为你推荐',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const Spacer(),
                       _buildSpinBox(isDark),
@@ -90,9 +87,9 @@ class _RecommendPageState extends State<RecommendPage> {
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: context.gapHuge),
               const Divider(color: AppTheme.border, height: 1),
-              const SizedBox(height: 16),
+              SizedBox(height: context.gapHuge),
 
               // content
               Expanded(
@@ -128,7 +125,7 @@ class _RecommendPageState extends State<RecommendPage> {
           fontFamily: AppTheme.fontUI,
           color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
         )),
-        const SizedBox(width: 8),
+        SizedBox(width: context.gapMedium),
         IconButton(
           icon: const Icon(Icons.remove, size: 18),
           visualDensity: VisualDensity.compact,

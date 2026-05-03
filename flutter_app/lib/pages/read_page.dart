@@ -15,6 +15,7 @@ class _ReadPageState extends State<ReadPage> {
   final _focusNode = FocusNode();
   bool _needsPaginate = true;
   Size _frameSize = Size.zero;
+  double _framePadding = 16;
   AppState? _app;
 
   @override
@@ -47,7 +48,6 @@ class _ReadPageState extends State<ReadPage> {
   Widget build(BuildContext context) {
     final text = context.select((AppState a) => a.readingText);
     final isDark = context.select((AppState a) => a.darkMode);
-    final isSmall = MediaQuery.sizeOf(context).width < 600;
     final pages = context.select((AppState a) => a.pages);
     final currentPage = context.select((AppState a) => a.currentPage);
     final totalPages = context.select((AppState a) => a.totalPages);
@@ -61,29 +61,34 @@ class _ReadPageState extends State<ReadPage> {
       _needsPaginate = true;
     }
 
+    final framePadding = context.framePadding;
+
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: _handleKey,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: EdgeInsets.symmetric(
+            horizontal: context.pagePadding,
+            vertical: context.gapHuge),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(text.title,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: isSmall ? 20 : 24,
-                ),
+                style: Theme.of(context).textTheme.headlineMedium,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: context.gapSmall),
             Text('${text.author} · ${text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 16),
-            Expanded(child: _buildReadingFrame(context, isDark, pages, currentPage)),
-            const SizedBox(height: 12),
-            _buildNavigationBar(context, isDark, pages, currentPage, totalPages, timer),
+            SizedBox(height: context.gapHuge),
+            Expanded(
+                child: _buildReadingFrame(
+                    context, isDark, pages, currentPage, framePadding)),
+            SizedBox(height: context.cardPaddingV),
+            _buildNavigationBar(
+                context, isDark, pages, currentPage, totalPages, timer),
           ],
         ),
       ),
@@ -95,8 +100,11 @@ class _ReadPageState extends State<ReadPage> {
     bool isDark,
     List<String> pages,
     int currentPage,
+    double framePadding,
   ) {
     final bgColor = isDark ? AppTheme.darkCard : AppTheme.cardBg;
+    final bodyStyle = AppTheme.bodyReadingSize(
+        AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width));
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
@@ -105,6 +113,7 @@ class _ReadPageState extends State<ReadPage> {
         if (needsIt) {
           _needsPaginate = false;
           _frameSize = constraints.biggest;
+          _framePadding = framePadding;
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }
 
@@ -123,20 +132,21 @@ class _ReadPageState extends State<ReadPage> {
                 ? CustomPaint(
                     painter: _TextRuledPainter(
                       content: current,
-                      style: AppTheme.bodyReading,
-                      maxWidth: constraints.maxWidth - 32,
+                      style: bodyStyle,
+                      maxWidth: constraints.maxWidth - framePadding * 2,
                       lineColor: isDark
                           ? AppTheme.borderLight.withAlpha(60)
                           : AppTheme.borderLight,
+                      padding: framePadding,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(framePadding),
                       child: SizedBox(
                         width: double.infinity,
                         height: double.infinity,
                         child: Text(
                           current,
-                          style: AppTheme.bodyReading.copyWith(color: textColor),
+                          style: bodyStyle.copyWith(color: textColor),
                         ),
                       ),
                     ),
@@ -150,8 +160,9 @@ class _ReadPageState extends State<ReadPage> {
 
   void _doPaginate() {
     if (_app == null || _app!.readingText == null || _frameSize == Size.zero) return;
-    final innerWidth = (_frameSize.width - 32).clamp(100.0, double.infinity);
-    final innerHeight = (_frameSize.height - 32).clamp(50.0, double.infinity);
+    final pad2 = _framePadding * 2;
+    final innerWidth = (_frameSize.width - pad2).clamp(100.0, double.infinity);
+    final innerHeight = (_frameSize.height - pad2).clamp(50.0, double.infinity);
     if (innerWidth > 0 && innerHeight > 0) {
       _app!.paginate(innerWidth, innerHeight);
     }
@@ -205,12 +216,14 @@ class _TextRuledPainter extends CustomPainter {
   final TextStyle style;
   final double maxWidth;
   final Color lineColor;
+  final double padding;
 
   _TextRuledPainter({
     required this.content,
     required this.style,
     required this.maxWidth,
     required this.lineColor,
+    required this.padding,
   });
 
   @override
@@ -228,8 +241,6 @@ class _TextRuledPainter extends CustomPainter {
       ..color = lineColor
       ..strokeWidth = 1.0;
 
-    const padding = 16.0;
-
     for (final line in metrics) {
       final y = padding + line.baseline;
       canvas.drawLine(Offset(padding, y), Offset(size.width - padding, y), paint);
@@ -240,5 +251,6 @@ class _TextRuledPainter extends CustomPainter {
   bool shouldRepaint(covariant _TextRuledPainter oldDelegate) =>
       oldDelegate.content != content ||
       oldDelegate.maxWidth != maxWidth ||
-      oldDelegate.lineColor != lineColor;
+      oldDelegate.lineColor != lineColor ||
+      oldDelegate.padding != padding;
 }
