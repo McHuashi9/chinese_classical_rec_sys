@@ -220,7 +220,7 @@ class AppState extends ChangeNotifier {
     tp.layout(maxWidth: pageWidth);
     final lineMetrics = tp.computeLineMetrics();
 
-    const lineHeight = 18 * 1.8;
+    final lineHeight = AppTheme.bodyReading.fontSize! * AppTheme.bodyReading.height!;
     final linesPerPage = (pageHeight / lineHeight).floor();
     if (linesPerPage <= 0 || lineMetrics.isEmpty) {
       _pages = [content];
