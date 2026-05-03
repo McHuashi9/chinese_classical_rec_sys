@@ -17,6 +17,7 @@ import 'pages/recommend_page.dart';
 import 'pages/read_page.dart';
 import 'pages/ability_page.dart';
 import 'pages/settings_page.dart';
+import 'widgets/dialogs.dart';
 
 void main() {
   runApp(
@@ -314,57 +315,13 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     if (!app.hasUnrecordedReading) return AppExitResponse.exit;
 
-    final discard = await _showExitConfirmDialog(context);
+    final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
     if (discard) {
       app.discardCurrentReading();
     } else {
       app.resumeReadingTimer();
     }
     return discard ? AppExitResponse.exit : AppExitResponse.cancel;
-  }
-
-  Future<bool> _showExitConfirmDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确认退出'),
-        content: const Text('当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('放弃并退出'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
-
-  Future<bool> _showSimpleExitConfirmDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确认退出'),
-        content: const Text('确定要退出应用吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('退出'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
   }
 
   @override
@@ -379,13 +336,13 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (didPop) return;
     final app = _app;
     if (app == null || !app.hasUnrecordedReading) {
-      final exit = await _showSimpleExitConfirmDialog(context);
+      final exit = await showConfirmDialog(context, title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出');
       if (exit && context.mounted) SystemNavigator.pop();
       return;
     }
     app.stopReadingTimer();
     app.applyReadingEffect();
-    final discard = await _showExitConfirmDialog(context);
+    final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
     if (!context.mounted) return;
     if (discard) {
       app.discardCurrentReading();
