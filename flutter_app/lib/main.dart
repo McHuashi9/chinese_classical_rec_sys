@@ -1,5 +1,8 @@
+import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart' show getApplicationSupportDirectory;
 import 'package:provider/provider.dart';
 import 'state/app_state.dart';
 import 'theme/theme.dart';
@@ -92,10 +95,46 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _initApp(AppState app) async {
-    const dbPath = '../data/classical.db';
-    await app.initialize(dbPath);
+    final dbPath = await _resolveDbPath();
+    final libPath = _bundleLibPath();
+    await app.initialize(dbPath, libPath: libPath);
     if (!mounted) return;
     app.getRecommendations(10);
+  }
+
+  Future<String> _resolveDbPath() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final dbPath = '${dir.path}/classical.db';
+      final dbFile = File(dbPath);
+      if (!await dbFile.exists()) {
+        final data = await rootBundle.load('assets/data/classical.db');
+        await dbFile.writeAsBytes(data.buffer.asUint8List());
+      }
+      return dbPath;
+    } catch (e) {
+      debugPrint('[main] _resolveDbPath 失败: $e，回退到相对路径');
+      return '../data/classical.db';
+    }
+  }
+
+  String _bundleLibPath() {
+    if (Platform.isMacOS) {
+      final execDir = File(Platform.resolvedExecutable).parent;
+      return '${execDir.path}/../Frameworks/libchinese_core.dylib';
+    }
+    if (Platform.isLinux) {
+      final execDir = File(Platform.resolvedExecutable).parent;
+      return '${execDir.path}/lib/libchinese_core.so';
+    }
+    if (Platform.isWindows) {
+      final execDir = File(Platform.resolvedExecutable).parent;
+      return '${execDir.path}/lib/chinese_core.dll';
+    }
+    throw UnsupportedError(
+      'chinese_classical_rec_sys 仅支持桌面平台 (Linux/macOS/Windows)。'
+      '当前平台: ${Platform.operatingSystem}',
+    );
   }
 
   void _onAppStateChanged() {

@@ -7,7 +7,7 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "chinese_classical_rec_sys")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.example.chinese_classical_rec_sys")
+set(APPLICATION_ID "chinese_classical_rec_sys")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -125,4 +125,12 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
+endif()
+
+# Install custom FFI library (libchinese_core.so) alongside Flutter's bundled libs
+set(CHINESE_CORE_SO "${CMAKE_SOURCE_DIR}/../../build/libchinese_core.so")
+if(EXISTS "${CHINESE_CORE_SO}")
+  install(FILES "${CHINESE_CORE_SO}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+else()
+  message(WARNING "libchinese_core.so 未找到 (${CHINESE_CORE_SO})，请在项目根目录先执行 make chinese_core")
 endif()
