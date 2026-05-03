@@ -1,4 +1,5 @@
 #include "c_types.h"
+#include "export.h"
 #include "database/DatabaseManager.h"
 #include "database/UserRepository.h"
 #include "database/TextRepository.h"
@@ -52,7 +53,7 @@ static void c_to_user(const UserData* src, User& dst)
 
 // ─── lifecycle ─────────────────────────────────────────────────────────────────
 
-extern "C" int db_open(const char* db_path)
+extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
 {
     Logger::getInstance().init();
     LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
@@ -101,7 +102,7 @@ extern "C" int db_open(const char* db_path)
     return BRIDGE_OK;
 }
 
-extern "C" void db_close()
+extern "C" CHINESE_CORE_EXPORT void db_close()
 {
     g_state = {};
     LOG_INFO("bridge: db_close 完成");
@@ -109,14 +110,14 @@ extern "C" void db_close()
 
 // ─── user ──────────────────────────────────────────────────────────────────────
 
-extern "C" int user_load(UserData* out)
+extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     user_to_c(*g_state.user, out);
     return BRIDGE_OK;
 }
 
-extern "C" int user_save(const UserData* in)
+extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     c_to_user(in, *g_state.user);
@@ -127,7 +128,7 @@ extern "C" int user_save(const UserData* in)
     return BRIDGE_ERR_GENERIC;
 }
 
-extern "C" int user_init_default()
+extern "C" CHINESE_CORE_EXPORT int user_init_default()
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     g_state.user->initializeDefault();
@@ -139,13 +140,13 @@ extern "C" int user_init_default()
 
 // ─── text ──────────────────────────────────────────────────────────────────────
 
-extern "C" int text_get_count()
+extern "C" CHINESE_CORE_EXPORT int text_get_count()
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     return static_cast<int>(g_state.texts->size());
 }
 
-extern "C" void text_get_all(TextInfo* out, int max_count)
+extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
 {
     if (!g_state.initialized || !out) return;
     int n = std::min(max_count, static_cast<int>(g_state.texts->size()));
@@ -161,7 +162,7 @@ extern "C" void text_get_all(TextInfo* out, int max_count)
     }
 }
 
-extern "C" int text_get_detail(int id, TextDetail* out)
+extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
@@ -189,8 +190,8 @@ extern "C" int text_get_detail(int id, TextDetail* out)
 
 // ─── recommend ─────────────────────────────────────────────────────────────────
 
-extern "C" int recommend(const UserData* user, int top_k,
-                          int* out_ids, double* out_probs)
+extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
+                           int* out_ids, double* out_probs)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!user || !out_ids || !out_probs) return BRIDGE_ERR_GENERIC;
@@ -209,9 +210,9 @@ extern "C" int recommend(const UserData* user, int top_k,
 
 // ─── knowledge tracker ─────────────────────────────────────────────────────────
 
-extern "C" int tracker_apply_read(const UserData* user, int text_id,
-                                  double read_time, int64_t timestamp,
-                                  UserData* out_user)
+extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int text_id,
+                                   double read_time, int64_t timestamp,
+                                   UserData* out_user)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
@@ -234,8 +235,8 @@ extern "C" int tracker_apply_read(const UserData* user, int text_id,
     return BRIDGE_OK;
 }
 
-extern "C" int tracker_apply_forgetting(const UserData* user, int64_t now,
-                                        UserData* out_user)
+extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user, int64_t now,
+                                         UserData* out_user)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
@@ -247,7 +248,7 @@ extern "C" int tracker_apply_forgetting(const UserData* user, int64_t now,
     return BRIDGE_OK;
 }
 
-extern "C" int tracker_prune(const UserData* user, int64_t now, UserData* out_user)
+extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t now, UserData* out_user)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
@@ -264,7 +265,7 @@ extern "C" int tracker_prune(const UserData* user, int64_t now, UserData* out_us
 
 // ─── history ──────────────────────────────────────────────────────────────────
 
-extern "C" int history_add_record(int text_id, double read_time, int64_t timestamp)
+extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_time, int64_t timestamp)
 {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     bool ok = g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
@@ -274,7 +275,7 @@ extern "C" int history_add_record(int text_id, double read_time, int64_t timesta
     return ok ? BRIDGE_OK : BRIDGE_ERR_GENERIC;
 }
 
-extern "C" int history_get_recent(int limit, ReadingRecordData* out, int max_count)
+extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordData* out, int max_count)
 {
     if (!g_state.initialized || !out) return BRIDGE_ERR_NOT_INIT;
 
@@ -290,13 +291,13 @@ extern "C" int history_get_recent(int limit, ReadingRecordData* out, int max_cou
     return n;
 }
 
-extern "C" int history_get_total_count()
+extern "C" CHINESE_CORE_EXPORT int history_get_total_count()
 {
     if (!g_state.initialized) return 0;
     return g_state.historyRepo->getTotalReadCount();
 }
 
-extern "C" int history_get_tracked_text_ids(int* out, int max_count)
+extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int max_count)
 {
     if (!g_state.initialized || !out) return 0;
 
@@ -311,7 +312,7 @@ extern "C" int history_get_tracked_text_ids(int* out, int max_count)
 
 // ─── logging ──────────────────────────────────────────────────────────────────
 
-extern "C" void log_set_level(const char* level)
+extern "C" CHINESE_CORE_EXPORT void log_set_level(const char* level)
 {
     Logger::getInstance().setLevel(level);
     LOG_INFO("bridge: 日志级别切换为 {}", level);

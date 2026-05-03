@@ -107,3 +107,66 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+  flutter-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+
+      - name: Build chinese_core
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make chinese_core -j$(nproc)
+
+      - name: Flutter pub get && build
+        run: |
+          flutter pub get
+          flutter build linux --release
+        working-directory: flutter_app
+
+      - name: Package
+        run: |
+          tar -czvf chinese-classical-rec-sys-${{ github.ref_name }}-linux-flutter.tar.gz \
+            -C flutter_app/build/linux/x64/release/bundle .
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: chinese-classical-rec-sys-${{ github.ref_name }}-linux-flutter.tar.gz
+
+  flutter-windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+
+      - name: Build chinese_core (DLL)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target chinese_core
+
+      - name: Flutter pub get && build
+        run: |
+          flutter pub get
+          flutter build windows --release
+        working-directory: flutter_app
+
+      - name: Package
+        run: |
+          Compress-Archive -Path flutter_app/build/windows/x64/runner/Release/* `
+            -DestinationPath chinese-classical-rec-sys-${{ github.ref_name }}-windows-flutter.zip
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: chinese-classical-rec-sys-${{ github.ref_name }}-windows-flutter.zip

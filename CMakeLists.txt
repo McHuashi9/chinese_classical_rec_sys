@@ -104,7 +104,10 @@ target_link_libraries(chinese_core PRIVATE sqlite3_static)
 set_target_properties(sqlite3_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(chinese_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
 )
+target_compile_definitions(chinese_core PRIVATE CHINESE_CORE_EXPORTS)
 
 # ─── 测试 ───────────────────────────────────────────────────────────────────────
 
