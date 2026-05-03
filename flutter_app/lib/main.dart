@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
@@ -101,8 +102,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   Future<void> _initApp(AppState app) async {
     final dbPath = await _resolveDbPath();
-    final libPath = _bundleLibPath();
-    await app.initialize(dbPath, libPath: libPath);
+    final lib = _loadLibrary();
+    await app.initialize(dbPath, lib);
     if (!mounted) return;
     app.setDbPathAfterSync(dbPath);
     app.getRecommendations(10);
@@ -219,21 +220,28 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
   }
 
-  String _bundleLibPath() {
-    if (Platform.isMacOS) {
-      final execDir = File(Platform.resolvedExecutable).parent;
-      return '${execDir.path}/../Frameworks/libchinese_core.dylib';
-    }
+  DynamicLibrary _loadLibrary() {
     if (Platform.isLinux) {
       final execDir = File(Platform.resolvedExecutable).parent;
-      return '${execDir.path}/lib/libchinese_core.so';
+      return DynamicLibrary.open('${execDir.path}/lib/libchinese_core.so');
+    }
+    if (Platform.isMacOS) {
+      final execDir = File(Platform.resolvedExecutable).parent;
+      return DynamicLibrary.open(
+          '${execDir.path}/../Frameworks/libchinese_core.dylib');
     }
     if (Platform.isWindows) {
       final execDir = File(Platform.resolvedExecutable).parent;
-      return '${execDir.path}/lib/chinese_core.dll';
+      return DynamicLibrary.open('${execDir.path}/lib/chinese_core.dll');
+    }
+    if (Platform.isAndroid || Platform.isIOS) {
+      throw UnsupportedError(
+        'chinese_classical_rec_sys 暂不支持移动端 (Android/iOS)。'
+        '当前平台: ${Platform.operatingSystem}',
+      );
     }
     throw UnsupportedError(
-      'chinese_classical_rec_sys 仅支持桌面平台 (Linux/macOS/Windows)。'
+      'chinese_classical_rec_sys 不支持当前平台。'
       '当前平台: ${Platform.operatingSystem}',
     );
   }

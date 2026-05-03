@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ffi';
-import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -93,12 +92,11 @@ class AppState extends ChangeNotifier {
 
   // ─── 生命周期 ─────────────────────────────────────────────────
 
-  Future<bool> initialize(String dbPath, {String? libPath}) async {
+  Future<bool> initialize(String dbPath, DynamicLibrary lib) async {
     if (_initialized) return true;
 
     try {
-      final lib = libPath ?? _defaultLibPath();
-      _bridge = NativeBridge(lib);
+      _bridge = NativeBridge.fromLib(lib);
 
       final cPath = dbPath.toNativeUtf8(allocator: calloc);
       final rc = _bridge!.dbOpen(cPath);
@@ -126,13 +124,6 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-  }
-
-  String _defaultLibPath() {
-    if (Platform.isLinux) return '../build/libchinese_core.so';
-    if (Platform.isMacOS) return '../build/libchinese_core.dylib';
-    if (Platform.isWindows) return '../build/chinese_core.dll';
-    return '../build/libchinese_core.so';
   }
 
   void _loadUser() {

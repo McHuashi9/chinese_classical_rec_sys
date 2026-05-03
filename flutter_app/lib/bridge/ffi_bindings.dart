@@ -66,7 +66,7 @@ final class NativeBridge {
 
   // ──────────────────────────────────────────────────────────────
 
-  NativeBridge(String libPath) : _lib = DynamicLibrary.open(libPath) {
+  NativeBridge.fromLib(DynamicLibrary lib) : _lib = lib {
     dbOpen = _lib.lookupFunction<
         Int32 Function(Pointer<Utf8>),
         int Function(Pointer<Utf8>)>('db_open');
