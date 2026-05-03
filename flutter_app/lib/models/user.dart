@@ -2,6 +2,20 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 
+const abilityLabels = [
+  '平均句长',
+  '句子数量',
+  '虚词比例',
+  '字频对数',
+  '通假密度',
+  '古PPL',
+  '现PPL',
+  'MATTR',
+  '典故密度',
+  '语义复杂度',
+];
+const abilityCount = 10;
+
 /// Dart 视图层 User 类 — 封装 [UserData] C struct 的读写
 class User {
   final Pointer<UserData> ptr;
@@ -31,18 +45,6 @@ class User {
       sum += getAbility(i);
     }
     return sum / 10.0;
-  }
-
-  Map<String, double> get breakdown {
-    const names = [
-      '平均句长', '句子数', '虚词比例', '字均对数频次', '通假字密度',
-      '古汉语困惑度', '今汉语困惑度', '词汇多样性', '典故密度', '语义复杂度',
-    ];
-    final map = <String, double>{};
-    for (int i = 0; i < 10; i++) {
-      map[names[i]] = getAbility(i);
-    }
-    return map;
   }
 
   void dispose() {

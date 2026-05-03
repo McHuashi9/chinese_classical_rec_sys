@@ -5,19 +5,6 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 
-const _dimLabels = [
-  '平均句长',
-  '句子数量',
-  '虚词比例',
-  '字频对数',
-  '通假密度',
-  '古PPL',
-  '现PPL',
-  'MATTR',
-  '典故密度',
-  '语义复杂度',
-];
-
 class AbilityPage extends StatelessWidget {
   const AbilityPage({super.key});
 
@@ -133,7 +120,7 @@ class _AbilityContent extends StatelessWidget {
           SizedBox(
             width: 76,
             child: Text(
-              _dimLabels[idx],
+              abilityLabels[idx],
               style: TextStyle(
                 fontSize: 14,
                 fontFamily: AppTheme.fontUI,

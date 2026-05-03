@@ -142,38 +142,43 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _silentRemoteDbSync(AppState app) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final checker = UpdateChecker(prefs);
-      final latestVersion = await checker.checkSilently(AppState.currentVersion);
-      if (latestVersion == null) return;
+    final asset = await _fetchLatestReleaseAsset();
+    if (asset != null) {
+      await _syncIfNewer(app, asset.$1, asset.$2);
+    }
+  }
 
-      final releaseUrl = 'https://api.github.com/repos/anomalyco/'
-          'chinese_classical_rec_sys/releases/tags/v$latestVersion';
-      final resp = await http.get(Uri.parse(releaseUrl), headers: {
-        'Accept': 'application/vnd.github.v3+json',
-      });
-      if (resp.statusCode != 200) return;
+  Future<(String, String)?> _fetchLatestReleaseAsset() async {
+    final prefs = await SharedPreferences.getInstance();
+    final checker = UpdateChecker(prefs);
+    final latestVersion = await checker.checkSilently(AppState.currentVersion);
+    if (latestVersion == null) return null;
 
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final assets = data['assets'] as List<dynamic>?;
-      if (assets == null) return;
+    final releaseUrl = 'https://api.github.com/repos/anomalyco/'
+        'chinese_classical_rec_sys/releases/tags/v$latestVersion';
+    final resp = await http.get(Uri.parse(releaseUrl), headers: {
+      'Accept': 'application/vnd.github.v3+json',
+    });
+    if (resp.statusCode != 200) return null;
 
-      String? downloadUrl;
-      for (final a in assets) {
-        final map = a as Map<String, dynamic>;
-        final name = map['name'] as String?;
-        if (name == 'classical.db' || name == 'classical.db.gz') {
-          downloadUrl = map['browser_download_url'] as String?;
-          break;
-        }
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final assets = data['assets'] as List<dynamic>?;
+    if (assets == null) return null;
+
+    for (final a in assets) {
+      final map = a as Map<String, dynamic>;
+      final name = map['name'] as String?;
+      if (name == 'classical.db' || name == 'classical.db.gz') {
+        final url = map['browser_download_url'] as String?;
+        if (url != null) return (latestVersion.toString(), url);
       }
-      if (downloadUrl == null) return;
+    }
+    return null;
+  }
 
-      await app.remoteSyncDb(
-        remoteVersion: 'v$latestVersion',
-        downloadUrl: downloadUrl,
-      );
+  Future<void> _syncIfNewer(AppState app, String version, String url) async {
+    try {
+      await app.remoteSyncDb(remoteVersion: 'v$version', downloadUrl: url);
     } catch (_) {}
   }
 

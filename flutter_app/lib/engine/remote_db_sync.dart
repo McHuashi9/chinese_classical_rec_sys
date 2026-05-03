@@ -11,17 +11,6 @@ class RemoteDbSync {
 
   RemoteDbSync(this._prefs, this._dbDirPath);
 
-  Future<bool> trySync({String? dbVersion, String? downloadUrl}) async {
-    try {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final lastSync = _prefs.getInt('db_last_sync_ms') ?? 0;
-      if (now - lastSync < _syncInterval.inMilliseconds) return false;
-    } catch (_) {
-      return false;
-    }
-    return false;
-  }
-
   Future<bool> trySyncFromRelease({
     required String remoteVersion,
     required String downloadUrl,

@@ -1,26 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
-
-const _dimLabels = [
-  '平均句长',
-  '句子数量',
-  '虚词比例',
-  '字频对数',
-  '通假密度',
-  '古PPL',
-  '现PPL',
-  'MATTR',
-  '典故密度',
-  '语义复杂度',
-];
-const int _dimCount = 10;
+import 'package:chinese_classical_rec_sys/models/user.dart';
 
 class RadarChart extends StatefulWidget {
   final List<double> targetValues;
 
   const RadarChart({super.key, required this.targetValues})
-      : assert(targetValues.length == _dimCount);
+      : assert(targetValues.length == abilityCount);
 
   @override
   State<RadarChart> createState() => _RadarChartState();
@@ -69,7 +56,7 @@ class _RadarChartState extends State<RadarChart>
               size: Size(w, h),
               painter: _RadarChartPainter(
                 values: _interpolateValues(),
-                labels: _dimLabels,
+                labels: abilityLabels,
                 progress: _anim.value,
               ),
             );
@@ -82,7 +69,7 @@ class _RadarChartState extends State<RadarChart>
   List<double> _interpolateValues() {
     final t = _anim.value;
     final result = <double>[];
-    for (int i = 0; i < _dimCount; i++) {
+    for (int i = 0; i < abilityCount; i++) {
       final target = widget.targetValues[i].clamp(0.0, 1.0);
       result.add(target * t);
     }
@@ -105,7 +92,7 @@ class _RadarChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = min(size.width, size.height) / 2 - 42;
-    const angleStep = 2 * pi / _dimCount;
+    const angleStep = 2 * pi / abilityCount;
     const startAngle = -pi / 2;
 
     // grid polygons
@@ -117,7 +104,7 @@ class _RadarChartPainter extends CustomPainter {
     for (int level = 1; level <= 5; level++) {
       final r = radius * level / 5;
       final path = Path();
-      for (int i = 0; i < _dimCount; i++) {
+      for (int i = 0; i < abilityCount; i++) {
         final angle = startAngle + i * angleStep;
         final p = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
         if (i == 0) {
@@ -136,7 +123,7 @@ class _RadarChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    for (int i = 0; i < _dimCount; i++) {
+    for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
       canvas.drawLine(
         center,
@@ -147,7 +134,7 @@ class _RadarChartPainter extends CustomPainter {
 
     // data polygon fill
     final dataPath = Path();
-    for (int i = 0; i < _dimCount; i++) {
+    for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
       final r = radius * values[i].clamp(0.0, 1.0);
       final p = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
@@ -176,7 +163,7 @@ class _RadarChartPainter extends CustomPainter {
 
     // data points
     final pointPaint = Paint()..color = AppTheme.vermilion;
-    for (int i = 0; i < _dimCount; i++) {
+    for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
       final r = radius * values[i].clamp(0.0, 1.0);
       canvas.drawCircle(
@@ -188,7 +175,7 @@ class _RadarChartPainter extends CustomPainter {
 
     // axis labels
     final labelRadius = radius + 18;
-    for (int i = 0; i < _dimCount; i++) {
+    for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
       final lx = center.dx + labelRadius * cos(angle);
       final ly = center.dy + labelRadius * sin(angle);
