@@ -305,6 +305,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (app == null) return AppExitResponse.exit;
 
     app.stopReadingTimer();
+    app.applyReadingEffect();
 
     if (!app.hasUnrecordedReading) return AppExitResponse.exit;
 
@@ -378,6 +379,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return;
     }
     app.stopReadingTimer();
+    app.applyReadingEffect();
     final discard = await _showExitConfirmDialog(context);
     if (!context.mounted) return;
     if (discard) {

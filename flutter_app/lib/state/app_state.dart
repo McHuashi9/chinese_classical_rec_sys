@@ -282,6 +282,7 @@ class AppState extends ChangeNotifier {
 
   void goHome() {
     stopReadingTimer();
+    applyReadingEffect();
     _readingText = null;
     _readingTextId = null;
     _pages = [];
@@ -309,7 +310,10 @@ class AppState extends ChangeNotifier {
     if (state != null) {
       state.totalSeconds = _elapsedSeconds;
     }
+  }
 
+  void applyReadingEffect() {
+    final state = _readingTextId != null ? _textReadStates[_readingTextId] : null;
     if (_elapsedSeconds >= 30 &&
         _user != null &&
         _readingText != null &&
@@ -351,6 +355,7 @@ class AppState extends ChangeNotifier {
     if (_pageIndex != index) {
       if (_pageIndex == 2 && index != 2) {
         stopReadingTimer();
+        applyReadingEffect();
       }
       _previousPageIndex = _pageIndex;
       _pageIndex = index;
