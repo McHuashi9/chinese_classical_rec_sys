@@ -4,7 +4,7 @@ import 'dart:ffi';
 import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show SystemNavigator, rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart' show getApplicationSupportDirectory;
 import 'package:provider/provider.dart';
@@ -323,11 +323,33 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('确认退出'),
-        content: const Text('当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录吗？'),
+        content: const Text('当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('放弃'),
+            child: const Text('放弃并退出'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<bool> _showSimpleExitConfirmDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('确定要退出应用吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('退出'),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -351,16 +373,16 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (didPop) return;
     final app = _app;
     if (app == null || !app.hasUnrecordedReading) {
-      if (context.mounted) Navigator.of(context).pop();
+      final exit = await _showSimpleExitConfirmDialog(context);
+      if (exit && context.mounted) SystemNavigator.pop();
       return;
     }
     app.stopReadingTimer();
-    final nav = Navigator.of(context);
     final discard = await _showExitConfirmDialog(context);
     if (!context.mounted) return;
     if (discard) {
       app.discardCurrentReading();
-      nav.pop();
+      SystemNavigator.pop();
     } else {
       app.resumeReadingTimer();
     }
