@@ -58,16 +58,22 @@ class _RadarChartState extends State<RadarChart>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (ctx, _) {
-        return CustomPaint(
-          size: const Size(400, 400),
-          painter: _RadarChartPainter(
-            values: _interpolateValues(),
-            labels: _dimLabels,
-            progress: _anim.value,
-          ),
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
+        final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 400.0;
+        return AnimatedBuilder(
+          animation: _anim,
+          builder: (ctx, _) {
+            return CustomPaint(
+              size: Size(w, h),
+              painter: _RadarChartPainter(
+                values: _interpolateValues(),
+                labels: _dimLabels,
+                progress: _anim.value,
+              ),
+            );
+          },
         );
       },
     );

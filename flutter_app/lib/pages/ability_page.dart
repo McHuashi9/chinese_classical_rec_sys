@@ -46,6 +46,7 @@ class _AbilityContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.read<AppState>().darkMode;
+    final isSmall = MediaQuery.sizeOf(context).width < 600;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -54,7 +55,15 @@ class _AbilityContent extends StatelessWidget {
           // header
           Row(
             children: [
-              Text('我的能力', style: Theme.of(context).textTheme.headlineLarge),
+              Flexible(
+                child: Text(
+                  '我的能力',
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontSize: isSmall ? 24 : 36,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const Spacer(),
               Text(
                 '综合: ${(_average * 100).toStringAsFixed(1)}%',
@@ -71,12 +80,17 @@ class _AbilityContent extends StatelessWidget {
           const SizedBox(height: 24),
 
           // radar chart
-          Center(
-            child: SizedBox(
-              width: 400,
-              height: 400,
-              child: RadarChart(targetValues: abilities),
-            ),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final sz = constraints.maxWidth.clamp(0.0, 400.0);
+              return Center(
+                child: SizedBox(
+                  width: sz,
+                  height: sz,
+                  child: RadarChart(targetValues: abilities),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 32),
 

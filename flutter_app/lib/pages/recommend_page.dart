@@ -57,14 +57,38 @@ class _RecommendPageState extends State<RecommendPage> {
           child: Column(
             children: [
               // header
-              Row(
-                children: [
-                  Text('为你推荐', style: Theme.of(context).textTheme.headlineLarge),
-                  const Spacer(),
-                  _buildSpinBox(isDark),
-                  const SizedBox(width: 12),
-                  _buildGenerateButton(isDark),
-                ],
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  if (constraints.maxWidth < 480) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '为你推荐',
+                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                            fontSize: 24,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSpinBox(isDark),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '为你推荐',
+                          style: Theme.of(context).textTheme.headlineLarge,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Spacer(),
+                      _buildSpinBox(isDark),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               const Divider(color: AppTheme.border, height: 1),
@@ -75,7 +99,7 @@ class _RecommendPageState extends State<RecommendPage> {
                 child: recs.isEmpty && !_initialLoad
                     ? Center(
                         child: Text(
-                          '点击「生成推荐」获取个性化篇目',
+                          '能力变化时将自动生成推荐',
                           style: TextStyle(
                             fontSize: 16,
                             fontFamily: AppTheme.fontUI,
@@ -138,30 +162,6 @@ class _RecommendPageState extends State<RecommendPage> {
               : null,
         ),
       ],
-    );
-  }
-
-  Widget _buildGenerateButton(bool isDark) {
-    return GestureDetector(
-      onTap: _refresh,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          color: AppTheme.vermilion,
-          child: const Text(
-            '生成推荐',
-            style: TextStyle(
-              fontSize: 14,
-              fontFamily: AppTheme.fontUI,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

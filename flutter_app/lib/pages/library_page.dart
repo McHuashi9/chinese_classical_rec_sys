@@ -35,6 +35,7 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget build(BuildContext context) {
     final allTexts = context.select((AppState a) => a.texts);
     final isDark = context.select((AppState a) => a.darkMode);
+    final isSmall = MediaQuery.sizeOf(context).width < 600;
     final filtered = allTexts.where((t) {
       if (_filter.isEmpty) return true;
       return t.title.toLowerCase().contains(_filter) ||
@@ -48,7 +49,15 @@ class _LibraryPageState extends State<LibraryPage> {
               // header
               Row(
                 children: [
-                  Text('文库', style: Theme.of(context).textTheme.headlineLarge),
+                  Flexible(
+                    child: Text(
+                      '文库',
+                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        fontSize: isSmall ? 24 : 36,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     '(${filtered.length}篇)',
@@ -59,9 +68,10 @@ class _LibraryPageState extends State<LibraryPage> {
                     ),
                   ),
                   const Spacer(),
-                  SizedBox(
-                    width: 260,
-                    child: TextField(
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: TextField(
                       controller: _searchController,
                       onChanged: _onSearchChanged,
                       style: TextStyle(
@@ -92,6 +102,7 @@ class _LibraryPageState extends State<LibraryPage> {
                         ),
                       ),
                     ),
+                  ),
                   ),
                 ],
               ),

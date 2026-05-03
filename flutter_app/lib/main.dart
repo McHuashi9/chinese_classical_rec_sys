@@ -344,9 +344,31 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Future<void> _onBackPressed(bool didPop, _) async {
+    if (didPop) return;
+    final app = _app;
+    if (app == null || !app.hasUnrecordedReading) {
+      if (context.mounted) Navigator.of(context).pop();
+      return;
+    }
+    app.stopReadingTimer();
+    final nav = Navigator.of(context);
+    final discard = await _showExitConfirmDialog(context);
+    if (!context.mounted) return;
+    if (discard) {
+      app.discardCurrentReading();
+      nav.pop();
+    } else {
+      app.resumeReadingTimer();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _onBackPressed,
+      child: Scaffold(
       body: SafeArea(
         child: Row(
           children: [
@@ -386,7 +408,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildBody() {

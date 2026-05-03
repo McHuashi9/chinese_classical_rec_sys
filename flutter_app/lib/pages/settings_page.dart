@@ -18,13 +18,16 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final isDark = context.select((AppState a) => a.darkMode);
     final logLevel = context.select((AppState a) => a.logLevel);
+    final isSmall = MediaQuery.sizeOf(context).width < 600;
 
     return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('设置', style: Theme.of(context).textTheme.headlineLarge),
+              Text('设置', style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                fontSize: isSmall ? 24 : 36,
+              )),
               const SizedBox(height: 16),
               const Divider(color: AppTheme.border, height: 1),
               const SizedBox(height: 24),
@@ -40,89 +43,181 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildAppearanceCard(BuildContext context, bool isDark) {
     final app = context.read<AppState>();
+    final isSmall = MediaQuery.sizeOf(context).width < 480;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Text(
-              '外观',
-              style: TextStyle(
-                fontSize: 20,
-                fontFamily: AppTheme.fontTitle,
-                color: isDark ? AppTheme.darkInk : AppTheme.ink,
+        child: isSmall
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '外观',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontFamily: AppTheme.fontTitle,
+                      color: isDark ? AppTheme.darkInk : AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        '主题',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontFamily: AppTheme.fontUI,
+                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment<String>(value: 'light', label: Text('亮色')),
+                          ButtonSegment<String>(value: 'dark', label: Text('暗色')),
+                        ],
+                        selected: {isDark ? 'dark' : 'light'},
+                        onSelectionChanged: (Set<String> selection) {
+                          app.setDarkMode(selection.first == 'dark');
+                        },
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          textStyle: WidgetStateProperty.all(
+                            const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Text(
+                    '外观',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontFamily: AppTheme.fontTitle,
+                      color: isDark ? AppTheme.darkInk : AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Text(
+                    '主题',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: AppTheme.fontUI,
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment<String>(value: 'light', label: Text('亮色')),
+                      ButtonSegment<String>(value: 'dark', label: Text('暗色')),
+                    ],
+                    selected: {isDark ? 'dark' : 'light'},
+                    onSelectionChanged: (Set<String> selection) {
+                      app.setDarkMode(selection.first == 'dark');
+                    },
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: WidgetStateProperty.all(
+                        const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 24),
-            Text(
-              '主题',
-              style: TextStyle(
-                fontSize: 16,
-                fontFamily: AppTheme.fontUI,
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
-            ),
-            const Spacer(),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment<String>(value: 'light', label: Text('亮色')),
-                ButtonSegment<String>(value: 'dark', label: Text('暗色')),
-              ],
-              selected: {isDark ? 'dark' : 'light'},
-              onSelectionChanged: (Set<String> selection) {
-                app.setDarkMode(selection.first == 'dark');
-              },
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStateProperty.all(
-                  const TextStyle(fontSize: 14, fontFamily: AppTheme.fontUI),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
   Widget _buildLoggingCard(BuildContext context, bool isDark, String logLevel) {
+    final isSmall = MediaQuery.sizeOf(context).width < 480;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Text(
-              '日志',
-              style: TextStyle(
-                fontSize: 20,
-                fontFamily: AppTheme.fontTitle,
-                color: isDark ? AppTheme.darkInk : AppTheme.ink,
+        child: isSmall
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '日志',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontFamily: AppTheme.fontTitle,
+                      color: isDark ? AppTheme.darkInk : AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        '日志级别',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontFamily: AppTheme.fontUI,
+                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Flexible(
+                        child: SizedBox(
+                          width: 150,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: logLevel,
+                            items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
+                                .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) context.read<AppState>().setLogLevel(v);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Text(
+                    '日志',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontFamily: AppTheme.fontTitle,
+                      color: isDark ? AppTheme.darkInk : AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Text(
+                    '日志级别',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: AppTheme.fontUI,
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Flexible(
+                    child: SizedBox(
+                      width: 150,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: logLevel,
+                        items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
+                            .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) context.read<AppState>().setLogLevel(v);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 24),
-            Text(
-              '日志级别',
-              style: TextStyle(
-                fontSize: 16,
-                fontFamily: AppTheme.fontUI,
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: 150,
-              child: DropdownButtonFormField<String>(
-                initialValue: logLevel,
-                items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
-                    .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) context.read<AppState>().setLogLevel(v);
-                },
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

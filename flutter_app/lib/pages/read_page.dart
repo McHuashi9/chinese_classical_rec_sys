@@ -47,6 +47,7 @@ class _ReadPageState extends State<ReadPage> {
   Widget build(BuildContext context) {
     final text = context.select((AppState a) => a.readingText);
     final isDark = context.select((AppState a) => a.darkMode);
+    final isSmall = MediaQuery.sizeOf(context).width < 600;
     final pages = context.select((AppState a) => a.pages);
     final currentPage = context.select((AppState a) => a.currentPage);
     final totalPages = context.select((AppState a) => a.totalPages);
@@ -70,7 +71,12 @@ class _ReadPageState extends State<ReadPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(text.title,
-                style: Theme.of(context).textTheme.headlineMedium),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontSize: isSmall ? 20 : 24,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+            ),
             const SizedBox(height: 4),
             Text('${text.author} · ${text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium),
