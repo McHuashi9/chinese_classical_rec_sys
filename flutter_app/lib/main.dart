@@ -234,9 +234,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       final execDir = File(Platform.resolvedExecutable).parent;
       return DynamicLibrary.open('${execDir.path}/lib/chinese_core.dll');
     }
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (Platform.isAndroid) {
+      return DynamicLibrary.open('libchinese_core.so');
+    }
+    if (Platform.isIOS) {
       throw UnsupportedError(
-        'chinese_classical_rec_sys 暂不支持移动端 (Android/iOS)。'
+        'chinese_classical_rec_sys 暂不支持 iOS。'
         '当前平台: ${Platform.operatingSystem}',
       );
     }
