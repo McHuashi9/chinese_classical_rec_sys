@@ -158,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   SizedBox(
                     width: 150,
                     child: DropdownButtonFormField<String>(
-                      initialValue: logLevel,
+                      value: logLevel,
                       items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
                           .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                           .toList(),
@@ -192,7 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   SizedBox(
                     width: 150,
                     child: DropdownButtonFormField<String>(
-                      initialValue: logLevel,
+                      value: logLevel,
                       items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
                           .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                           .toList(),
