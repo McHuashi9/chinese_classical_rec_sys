@@ -1,9 +1,14 @@
 #include "utils/Logger.h"
+
+#ifdef __ANDROID__
+#include <spdlog/sinks/android_sink.h>
+#else
 #include <nowide/iostream.hpp>
 #include <nowide/convert.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <filesystem>
+#endif
 
 Logger& Logger::getInstance() {
     static Logger instance;
@@ -16,6 +21,12 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
     }
     
     try {
+#ifdef __ANDROID__
+        // Android: 使用 logcat 输出 (tag="chinese_core")
+        auto android_sink = std::make_shared<spdlog::sinks::android_sink_mt>("chinese_core");
+        android_sink->set_pattern("%v");
+        logger_ = std::make_shared<spdlog::logger>("app", android_sink);
+#else
         // 确保日志目录存在
         std::filesystem::path logPath = std::filesystem::current_path() / logDir;
         if (!std::filesystem::exists(logPath)) {
@@ -37,6 +48,7 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         
         // 创建 logger
         logger_ = std::make_shared<spdlog::logger>("app", file_sink);
+#endif
         
         // 设置为默认 logger
         spdlog::set_default_logger(logger_);
@@ -51,7 +63,11 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         return true;
         
     } catch (const spdlog::spdlog_ex& ex) {
+#ifdef __ANDROID__
+        __android_log_print(ANDROID_LOG_ERROR, "chinese_core", "日志初始化失败: %s", ex.what());
+#else
         nowide::cerr << "日志初始化失败: " << ex.what() << std::endl;
+#endif
         return false;
     }
 }

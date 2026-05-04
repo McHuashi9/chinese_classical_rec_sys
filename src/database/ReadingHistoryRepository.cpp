@@ -6,7 +6,7 @@
 ReadingHistoryRepository::ReadingHistoryRepository(DatabaseManager* dbManager) : db(dbManager) {}
 
 bool ReadingHistoryRepository::initTable() {
-    const char* sql = 
+    const char* sql1 = 
         "CREATE TABLE IF NOT EXISTS reading_history ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "
         "user_id INTEGER NOT NULL DEFAULT 1, "
@@ -15,11 +15,23 @@ bool ReadingHistoryRepository::initTable() {
         "read_timestamp INTEGER NOT NULL"
         ");";
     
-    bool result = db->executeSQL(sql);
-    if (!result) {
-        LOG_ERROR("ReadingHistoryRepository::initTable failed: {}", db->getLastError());
+    if (!db->executeSQL(sql1)) {
+        LOG_ERROR("ReadingHistoryRepository::initTable reading_history failed: {}", db->getLastError());
+        return false;
     }
-    return result;
+
+    const char* sql2 = 
+        "CREATE TABLE IF NOT EXISTS text_tracking ("
+        "text_id INTEGER PRIMARY KEY, "
+        "tracked_at INTEGER NOT NULL"
+        ");";
+
+    if (!db->executeSQL(sql2)) {
+        LOG_ERROR("ReadingHistoryRepository::initTable text_tracking failed: {}", db->getLastError());
+        return false;
+    }
+
+    return true;
 }
 
 bool ReadingHistoryRepository::addRecord(int textId, double readTime, time_t timestamp) {
@@ -83,4 +95,35 @@ int ReadingHistoryRepository::getTotalReadCount() {
     
     sqlite3_finalize(stmt);
     return count;
+}
+
+bool ReadingHistoryRepository::markAsTracked(int textId) {
+    time_t now = time(nullptr);
+    return db->executeSQL(
+        "INSERT OR IGNORE INTO text_tracking (text_id, tracked_at) VALUES (?, ?);",
+        std::vector<double>{static_cast<double>(textId), static_cast<double>(now)}
+    );
+}
+
+std::vector<int> ReadingHistoryRepository::getTrackedTextIds() {
+    std::vector<int> ids;
+    if (!db || !db->getConnection()) {
+        return ids;
+    }
+
+    const char* sql = "SELECT text_id FROM text_tracking;";
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
+
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("查询已追踪文本失败: {}", db->getLastError());
+        return ids;
+    }
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        ids.push_back(sqlite3_column_int(stmt, 0));
+    }
+
+    sqlite3_finalize(stmt);
+    return ids;
 }

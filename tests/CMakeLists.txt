@@ -2,11 +2,14 @@
 
 # 包含 Catch2 头文件
 include_directories(${CMAKE_SOURCE_DIR}/third_party/catch2)
+include_directories(${CMAKE_SOURCE_DIR}/bridge)
 
 # 测试源文件
 set(TEST_SOURCES
     test_main.cpp
     test_math_functions.cpp
+    test_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge.cpp
 )
 
 # Catch2 编译源

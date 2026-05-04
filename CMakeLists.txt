@@ -47,40 +47,69 @@ target_include_directories(sqlite3_static PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/sqlite3
 )
 
-# 静态编译 replxx（命令行编辑库，支持历史记录、自动补全、UTF-8）
-set(BUILD_SHARED_LIBS OFF)
-set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/replxx)
-
-# 核心逻辑静态库（排除 main.cpp，避免重复编译）
+# ─── 核心逻辑静态库 ───────────────────────────────────────────────────────────
 file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
 add_library(chinese_classical_lib STATIC ${LIB_SOURCES})
 
 # 设置 PUBLIC 包含目录，使链接此库的目标自动获得头文件路径
 target_include_directories(chinese_classical_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/third_party/spdlog-1.17.0/include
-    ${CMAKE_SOURCE_DIR}/third_party/replxx/include
-    ${CMAKE_SOURCE_DIR}/third_party/tabulate-1.5
 )
 
-# 链接 SQLite3 和 replxx（PUBLIC 使依赖传递给链接此库的目标）
-target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static replxx::replxx)
+# 链接 SQLite3
+target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static)
 
 # Windows 平台链接 nowide（包含 cin/cout/cerr 全局对象定义）
 if(WIN32)
     target_link_libraries(chinese_classical_lib PUBLIC nowide_static)
 endif()
 
-# 主程序
-add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE chinese_classical_lib)
+# ─── Flutter FFI 共享库 (chinese_core_shared) ──────────────────────────────────
 
-# Windows 平台额外链接
+file(GLOB_RECURSE CORE_SOURCES "src/*.cpp")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
+list(APPEND CORE_SOURCES "bridge/bridge.cpp")
+
+add_library(chinese_core SHARED ${CORE_SOURCES})
+target_include_directories(chinese_core PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/third_party/spdlog-1.17.0/include
+    ${CMAKE_SOURCE_DIR}/third_party/sqlite3
+    ${CMAKE_SOURCE_DIR}/bridge
+)
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
+    target_include_directories(chinese_core PUBLIC
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/src
+    )
+    target_compile_definitions(chinese_core PRIVATE SPDLOG_WCHAR_FILENAMES)
+    target_link_libraries(chinese_core PRIVATE nowide_static)
+else()
+    target_include_directories(chinese_core PUBLIC
+        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
+    )
 endif()
+
+target_link_libraries(chinese_core PRIVATE sqlite3_static)
+
+# Linux: 确保 SQLite3 以 -fPIC 编译（共享库必需）
+set_target_properties(sqlite3_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(chinese_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
+)
+target_compile_definitions(chinese_core PRIVATE CHINESE_CORE_EXPORTS)
+
+# ─── 测试 ───────────────────────────────────────────────────────────────────────
 
 # 单元测试
 enable_testing()
