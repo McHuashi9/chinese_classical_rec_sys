@@ -302,7 +302,6 @@ def create_tables(conn: sqlite3.Connection) -> bool:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user (
             id INTEGER PRIMARY KEY CHECK (id = 1),
-            name TEXT NOT NULL,
             d1_ability REAL DEFAULT 0.0,
             d2_ability REAL DEFAULT 0.0,
             d3_ability REAL DEFAULT 0.0,

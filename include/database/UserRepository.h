@@ -27,13 +27,6 @@ public:
     bool getUser(User& user);
     
     /**
-     * @brief 保存用户名（插入或更新）
-     * @param userName 用户名
-     * @return true 成功，false 失败
-     */
-    bool saveUserName(const std::string& userName);
-    
-    /**
      * @brief 保存完整用户信息（包括能力向量）
      * @param user 用户对象
      * @return true 成功，false 失败

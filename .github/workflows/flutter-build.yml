@@ -1,0 +1,70 @@
+name: Flutter Desktop Build
+
+on:
+  push:
+    branches: [feature/flutter-migration, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+
+      - name: Build chinese_core
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make chinese_core -j$(nproc)
+
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config
+
+      - name: Flutter pub get
+        run: flutter pub get
+        working-directory: flutter_app
+
+      - name: Flutter analyze
+        run: flutter analyze
+        working-directory: flutter_app
+
+      - name: Flutter build linux
+        run: flutter build linux --release
+        working-directory: flutter_app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chinese-classical-linux
+          path: flutter_app/build/linux/x64/release/bundle/
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+
+      - name: Build chinese_core (DLL)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target chinese_core
+
+      - name: Flutter pub get
+        run: flutter pub get
+        working-directory: flutter_app
+
+      - name: Flutter build windows
+        run: flutter build windows --release
+        working-directory: flutter_app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chinese-classical-windows
+          path: flutter_app/build/windows/x64/runner/Release/

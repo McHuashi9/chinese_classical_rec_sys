@@ -14,7 +14,6 @@ bool UserRepository::initTable() {
     const char* sql = 
         "CREATE TABLE IF NOT EXISTS user ("
         "id INTEGER PRIMARY KEY CHECK (id = 1), "
-        "name TEXT NOT NULL, "
         "d1_ability REAL DEFAULT 0.0, "  // f1 平均句长
         "d2_ability REAL DEFAULT 0.0, "  // f3 句子数
         "d3_ability REAL DEFAULT 0.0, "  // f5 虚词比例
@@ -47,6 +46,10 @@ bool UserRepository::initTable() {
     // 迁移：为旧数据库添加 last_read_time 列（如果不存在）
     const char* migrateSql = "ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;";
     db->executeSQL(migrateSql);  // 忽略错误
+
+    // 迁移：移除已弃用的 name 列（如果存在）
+    const char* dropNameSql = "ALTER TABLE user DROP COLUMN name;";
+    db->executeSQL(dropNameSql);  // 忽略错误（列不存在或 SQLite < 3.35.0）
     
     // 迁移：添加基础能力字段（如果不存在）
     const char* baseAbilityMigrations[] = {
@@ -70,11 +73,16 @@ bool UserRepository::initTable() {
 }
 
 static int getUserCallback(void* data, int argc, char** argv, char** azColName) {
-    User* user = static_cast<User*>(data);
+    struct GetUserData {
+        User* user;
+        bool found;
+    };
+    auto* gd = static_cast<GetUserData*>(data);
+    User* user = gd->user;
+    gd->found = true;
     
     // 字段映射表：列名 -> setter函数
     static const std::unordered_map<std::string, std::function<void(User*, const char*)>> fieldMap = {
-        {"name", [](User* u, const char* v) { u->setName(v); }},
         {"d1_ability", [](User* u, const char* v) { u->setAbility(0, std::atof(v)); }},
         {"d2_ability", [](User* u, const char* v) { u->setAbility(1, std::atof(v)); }},
         {"d3_ability", [](User* u, const char* v) { u->setAbility(2, std::atof(v)); }},
@@ -115,15 +123,17 @@ bool UserRepository::getUser(User& user) {
         return false;
     }
     
-    const char* sql = "SELECT name, d1_ability, d2_ability, d3_ability, d4_ability, "
+    const char* sql = "SELECT d1_ability, d2_ability, d3_ability, d4_ability, "
                       "d5_ability, d6_ability, d7_ability, d8_ability, d9_ability, d10_ability, "
                       "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
                       "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
                       "d9_base_ability, d10_base_ability, last_read_time "
                       "FROM user WHERE id = 1;";
     char* errMsg = nullptr;
+
+    struct GetUserData { User* user; bool found = false; } gd = {&user, false};
     
-    int rc = sqlite3_exec(db->getConnection(), sql, getUserCallback, &user, &errMsg);
+    int rc = sqlite3_exec(db->getConnection(), sql, getUserCallback, &gd, &errMsg);
     
     if (rc != SQLITE_OK) {
         LOG_ERROR("查询用户失败: {}", errMsg);
@@ -131,22 +141,13 @@ bool UserRepository::getUser(User& user) {
         return false;
     }
     
-    return !user.isEmpty();
-}
-
-bool UserRepository::saveUserName(const std::string& userName) {
-    return db->executeSQL(
-        "INSERT INTO user (id, name) VALUES (1, ?) "
-        "ON CONFLICT(id) DO UPDATE SET name = ?;",
-        std::vector<std::string>{userName, userName}
-    );
+    return gd.found;
 }
 
 bool UserRepository::saveUser(const User& user) {
     std::vector<SqlParam> params;
     
     // INSERT 部分的参数
-    params.push_back(user.getName());  // name
     for (int i = 0; i < 10; ++i) {
         params.push_back(user.getAbility(i));
     }
@@ -163,7 +164,6 @@ bool UserRepository::saveUser(const User& user) {
     params.push_back(static_cast<double>(user.getLastReadTime()));
     
     // UPDATE 部分的参数
-    params.push_back(user.getName());  // name
     for (int i = 0; i < 10; ++i) {
         params.push_back(user.getAbility(i));
     }
@@ -180,15 +180,14 @@ bool UserRepository::saveUser(const User& user) {
     params.push_back(static_cast<double>(user.getLastReadTime()));
     
     return db->executeSQL(
-        "INSERT INTO user (id, name, "
+        "INSERT INTO user (id, "
         "d1_ability, d2_ability, d3_ability, d4_ability, d5_ability, d6_ability, "
         "d7_ability, d8_ability, d9_ability, d10_ability, "
         "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
         "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
         "d9_base_ability, d10_base_ability, last_read_time) "
-        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(id) DO UPDATE SET "
-        "name = ?, "
         "d1_ability = ?, d2_ability = ?, d3_ability = ?, d4_ability = ?, "
         "d5_ability = ?, d6_ability = ?, d7_ability = ?, d8_ability = ?, "
         "d9_ability = ?, d10_ability = ?, "

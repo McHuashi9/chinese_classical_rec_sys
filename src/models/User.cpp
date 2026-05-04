@@ -2,20 +2,8 @@
 #include <algorithm>
 #include <numeric>
 
-User::User() : name(""), abilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, 
+User::User() : abilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, 
                 baseAbilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, lastReadTime(0) {}
-
-void User::setName(const std::string& name) {
-    this->name = name;
-}
-
-std::string User::getName() const {
-    return name;
-}
-
-bool User::isEmpty() const {
-    return name.empty();
-}
 
 void User::setAbility(int index, double value) {
     if (index >= 0 && index < 10) {
