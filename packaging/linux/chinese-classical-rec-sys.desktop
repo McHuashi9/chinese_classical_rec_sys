@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=文言文推荐系统
+Comment=中国古文推荐系统
+Icon=chinese-classical-rec-sys
+Exec=chinese_classical_rec_sys
+Terminal=false
+Categories=Education;Literature;
