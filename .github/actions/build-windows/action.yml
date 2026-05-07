@@ -1,0 +1,64 @@
+name: 'Build Flutter Windows'
+description: 'Build Flutter Windows app with native DLL and NSIS installer'
+inputs:
+  version:
+    description: 'Version string for NSIS installer (e.g. 0.3.0)'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Build chinese_core (DLL)
+      shell: bash
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --config Release --target chinese_core
+
+    - name: Flutter build windows
+      shell: bash
+      run: |
+        flutter pub get
+        flutter build windows --release
+      working-directory: flutter_app
+
+    - name: Copy chinese_core.dll to Release
+      shell: cmd
+      run: copy build\Release\chinese_core.dll flutter_app\build\windows\x64\runner\Release\
+
+    - name: Copy VC++ runtime DLLs
+      shell: pwsh
+      run: |
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+        if (-not $vsPath) { Write-Warning "vswhere not found — skipping VC++ runtime DLL copy"; return }
+        $redistBase = Join-Path $vsPath "VC\Redist\MSVC"
+        if (-not (Test-Path $redistBase)) { Write-Warning "Redist dir not found"; return }
+        $latest = Get-ChildItem $redistBase -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        $crtDir = Join-Path $latest.FullName "x64\Microsoft.VC143.CRT"
+        if (Test-Path $crtDir) {
+          Copy-Item "$crtDir\*" "flutter_app\build\windows\x64\runner\Release\" -Force
+          Write-Host "Copied VC++ runtime DLLs from $crtDir"
+        } else {
+          Write-Warning "CRT dir not found at $crtDir"
+        }
+
+    - name: Install NSIS
+      shell: bash
+      run: choco install nsis -y
+
+    - name: Inject version into NSIS script
+      shell: bash
+      run: |
+        sed -i "s/!define PRODUCT_VERSION \".*\"/!define PRODUCT_VERSION \"${{ inputs.version }}\"/" packaging/nsis/installer.nsi
+
+    - name: Build NSIS installer
+      shell: pwsh
+      run: |
+        $releasePath = (Resolve-Path "flutter_app\build\windows\x64\runner\Release").Path
+        Write-Host "Release path: $releasePath"
+        $nsisPaths = @(
+          "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+          "${env:ProgramFiles}\NSIS\makensis.exe"
+        )
+        $makensis = $nsisPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if (-not $makensis) { throw "makensis.exe not found" }
+        & $makensis /DRELEASE_DIR="$releasePath" packaging\nsis\installer.nsi
+        Move-Item packaging\nsis\chinese-classical-rec-sys-*.exe .

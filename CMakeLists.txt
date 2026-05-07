@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # MSVC 编译选项（UTF-8 编码支持）
 if(MSVC)
     add_compile_options(/utf-8)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 # 包含头文件目录

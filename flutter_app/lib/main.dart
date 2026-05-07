@@ -38,7 +38,7 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
       final isDark = context.select((AppState a) => a.darkMode);
 
       return MaterialApp(
-        title: '中国古文推荐系统',
+        title: '文言文推荐系统',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme(screenSize),
         darkTheme: AppTheme.darkTheme(screenSize),
@@ -106,8 +106,15 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   Future<void> _initApp(AppState app) async {
     final dbPath = await _resolveDbPath();
-    final lib = _loadLibrary();
-    await app.initialize(dbPath, lib);
+    try {
+      final lib = _loadLibrary();
+      await app.initialize(dbPath, lib);
+    } catch (e) {
+      debugPrint('[main] FFI load failed: $e');
+      if (!mounted) return;
+      app.setError('无法加载核心组件，请尝试重新安装。\n$e');
+      return;
+    }
     if (!mounted) return;
     app.setDbPathAfterSync(dbPath);
     app.getRecommendations(10);
@@ -241,19 +248,19 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
     if (Platform.isWindows) {
       final execDir = File(Platform.resolvedExecutable).parent;
-      return DynamicLibrary.open('${execDir.path}/lib/chinese_core.dll');
+      return DynamicLibrary.open('${execDir.path}/chinese_core.dll');
     }
     if (Platform.isAndroid) {
       return DynamicLibrary.open('libchinese_core.so');
     }
     if (Platform.isIOS) {
       throw UnsupportedError(
-        'chinese_classical_rec_sys 暂不支持 iOS。'
+        '文言文推荐系统 暂不支持 iOS。'
         '当前平台: ${Platform.operatingSystem}',
       );
     }
     throw UnsupportedError(
-      'chinese_classical_rec_sys 不支持当前平台。'
+      '文言文推荐系统 不支持当前平台。'
       '当前平台: ${Platform.operatingSystem}',
     );
   }

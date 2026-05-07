@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="chinese_classical_rec_sys"
+        android:label="文言文推荐系统"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

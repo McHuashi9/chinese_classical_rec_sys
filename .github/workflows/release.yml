@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   flutter-linux:
     runs-on: ubuntu-latest
@@ -15,30 +18,37 @@ jobs:
         with:
           flutter-version: '3.27.x'
 
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config fuse
+
       - name: Build chinese_core
         run: |
-          mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          make chinese_core -j$(nproc)
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target chinese_core -j$(nproc)
 
-      - name: Install Linux dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config
+      - uses: actions/cache@v4
+        with:
+          path: |
+            flutter_app/.dart_tool
+            ~/.pub-cache
+          key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
 
-      - name: Flutter pub get && build
-        run: |
-          flutter pub get
-          flutter build linux --release
+      - name: Flutter pub get
+        run: flutter pub get
         working-directory: flutter_app
 
-      - name: Package
+      - name: Package AppImage
         run: |
-          tar -czvf chinese-classical-rec-sys-${{ github.ref_name }}-linux-flutter.tar.gz \
-            -C flutter_app/build/linux/x64/release/bundle .
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          bash packaging/appimage/build.sh "${VERSION}"
+        env:
+          ARCH: x86_64
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: chinese-classical-rec-sys-${{ github.ref_name }}-linux-flutter.tar.gz
+          files: chinese-classical-rec-sys-*-linux.AppImage
 
   flutter-windows:
     runs-on: windows-latest
@@ -49,23 +59,60 @@ jobs:
         with:
           flutter-version: '3.27.x'
 
-      - name: Build chinese_core (DLL)
+      - name: Extract version
+        id: version
+        shell: bash
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release --target chinese_core
+          VERSION="${{ github.ref_name }}"
+          echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
 
-      - name: Flutter pub get && build
-        run: |
-          flutter pub get
-          flutter build windows --release
-        working-directory: flutter_app
+      - uses: actions/cache@v4
+        with:
+          path: |
+            flutter_app/.dart_tool
+            ~/.pub-cache
+          key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
 
-      - name: Package
-        run: |
-          Compress-Archive -Path flutter_app/build/windows/x64/runner/Release/* `
-            -DestinationPath chinese-classical-rec-sys-${{ github.ref_name }}-windows-flutter.zip
+      - uses: ./.github/actions/build-windows
+        with:
+          version: ${{ steps.version.outputs.version }}
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: chinese-classical-rec-sys-${{ github.ref_name }}-windows-flutter.zip
+          files: chinese-classical-rec-sys-*.exe
+
+  flutter-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            flutter_app/.dart_tool
+            ~/.pub-cache
+          key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
+
+      - name: Flutter pub get && build
+        run: |
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64
+        working-directory: flutter_app
+      - name: Rename APK
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+            "chinese-classical-rec-sys-${VERSION}-android.apk"
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: chinese-classical-rec-sys-*-android.apk

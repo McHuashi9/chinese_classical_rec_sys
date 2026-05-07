@@ -23,7 +23,7 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
-  static const currentVersion = '0.2.0';
+  static const currentVersion = '0.3.0';
 
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
@@ -61,6 +61,7 @@ class AppState extends ChangeNotifier {
   bool get darkMode => _darkMode;
   String get logLevel => _logLevel;
   String? get error => _error;
+  void setError(String? message) { _error = message; notifyListeners(); }
   User? get user => _user;
   double get averageAbility => _user?.averageAbility ?? 0.3;
   List<ChineseText> get texts => _initialized ? _engine.texts : [];
