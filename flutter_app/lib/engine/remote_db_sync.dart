@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class RemoteDbSync {
   static const _syncInterval = Duration(hours: 24);
@@ -46,10 +46,10 @@ class RemoteDbSync {
       await tmp.rename(dbPath);
       await File(verPath).writeAsString(remoteVersion);
       await _prefs.setInt('db_last_sync_ms', now);
-      debugPrint('[RemoteDbSync] DB 已同步: $localVer → $remoteVersion');
+      AppLogger().info('DB 已同步: $localVer → $remoteVersion');
       return true;
     } catch (e) {
-      debugPrint('[RemoteDbSync] 同步失败: $e');
+      AppLogger().error('同步失败: $e');
       return false;
     }
   }

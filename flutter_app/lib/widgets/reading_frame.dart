@@ -1,28 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-class ReadPage extends StatefulWidget {
-  const ReadPage({super.key});
+class ReadingFrame extends StatefulWidget {
+  final ChineseText text;
+  final List<String> pages;
+  final int currentPage;
+  final int totalPages;
+  final String formattedTime;
+  final bool isDark;
+  final int elapsedSeconds;
+  final bool alreadyTracked;
+  final void Function(int innerWidth, int innerHeight) onPaginate;
+  final VoidCallback onNextPage;
+  final VoidCallback onPrevPage;
+  final VoidCallback onComplete;
+  final VoidCallback onAbandon;
+  final VoidCallback onExit;
+
+  const ReadingFrame({
+    super.key,
+    required this.text,
+    required this.pages,
+    required this.currentPage,
+    required this.totalPages,
+    required this.formattedTime,
+    required this.isDark,
+    required this.elapsedSeconds,
+    required this.alreadyTracked,
+    required this.onPaginate,
+    required this.onNextPage,
+    required this.onPrevPage,
+    required this.onComplete,
+    required this.onAbandon,
+    required this.onExit,
+  });
 
   @override
-  State<ReadPage> createState() => _ReadPageState();
+  State<ReadingFrame> createState() => _ReadingFrameState();
 }
 
-class _ReadPageState extends State<ReadPage> {
+class _ReadingFrameState extends State<ReadingFrame> {
   final _focusNode = FocusNode();
   bool _needsPaginate = true;
   Size _frameSize = Size.zero;
   double _framePadding = 16;
-  AppState? _app;
-
-  @override
-  void initState() {
-    super.initState();
-    _app = context.read<AppState>();
-  }
+  double _lastFontScale = 1.0;
 
   @override
   void dispose() {
@@ -32,12 +58,11 @@ class _ReadPageState extends State<ReadPage> {
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
-      final app = context.read<AppState>();
       if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-        app.prevPage();
+        widget.onPrevPage();
         return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-        app.nextPage();
+        widget.onNextPage();
         return KeyEventResult.handled;
       }
     }
@@ -46,18 +71,13 @@ class _ReadPageState extends State<ReadPage> {
 
   @override
   Widget build(BuildContext context) {
-    final text = context.select((AppState a) => a.readingText);
-    final isDark = context.select((AppState a) => a.darkMode);
-    final pages = context.select((AppState a) => a.pages);
-    final currentPage = context.select((AppState a) => a.currentPage);
-    final totalPages = context.select((AppState a) => a.totalPages);
-    final timer = context.select((AppState a) => a.formattedReadingTime);
-
-    if (text == null) {
-      return const Center(child: Text('请从文库选择一篇古文'));
+    final fontScale = context.select((AppState a) => a.fontScale);
+    if (fontScale != _lastFontScale) {
+      _lastFontScale = fontScale;
+      _needsPaginate = true;
     }
 
-    if (pages.isEmpty) {
+    if (widget.pages.isEmpty) {
       _needsPaginate = true;
     }
 
@@ -74,41 +94,34 @@ class _ReadPageState extends State<ReadPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(text.title,
+            Text(widget.text.title,
                 style: Theme.of(context).textTheme.headlineMedium,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
             ),
             SizedBox(height: context.gapSmall),
-            Text('${text.author} · ${text.dynasty}',
+            Text('${widget.text.author} · ${widget.text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium),
             SizedBox(height: context.gapHuge),
             Expanded(
-                child: _buildReadingFrame(
-                    context, isDark, pages, currentPage, framePadding)),
+                child: _buildReadingFrame(context, framePadding, fontScale)),
             SizedBox(height: context.cardPaddingV),
-            _buildNavigationBar(
-                context, isDark, pages, currentPage, totalPages, timer),
+            _buildNavigationBar(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReadingFrame(
-    BuildContext context,
-    bool isDark,
-    List<String> pages,
-    int currentPage,
-    double framePadding,
-  ) {
-    final bgColor = isDark ? AppTheme.darkCard : AppTheme.cardBg;
+  Widget _buildReadingFrame(BuildContext context, double framePadding, double fontScale) {
+    final bgColor = widget.isDark ? AppTheme.darkCard : AppTheme.cardBg;
     final bodyStyle = AppTheme.bodyReadingSize(
-        AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width));
+        AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
+        fontScale);
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final needsIt = (_needsPaginate && context.read<AppState>().readingText != null)
+        final needsIt = (_needsPaginate && widget.pages.isEmpty)
             || (constraints.biggest != _frameSize && constraints.biggest != Size.zero);
         if (needsIt) {
           _needsPaginate = false;
@@ -117,8 +130,8 @@ class _ReadPageState extends State<ReadPage> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }
 
-        final current = pages.isNotEmpty ? pages[currentPage] : '';
-        final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
+        final current = widget.pages.isNotEmpty ? widget.pages[widget.currentPage] : '';
+        final textColor = widget.isDark ? AppTheme.darkInk : AppTheme.ink;
 
         return Container(
           decoration: BoxDecoration(
@@ -134,7 +147,7 @@ class _ReadPageState extends State<ReadPage> {
                       content: current,
                       style: bodyStyle,
                       maxWidth: constraints.maxWidth - framePadding * 2,
-                      lineColor: isDark
+                      lineColor: widget.isDark
                           ? AppTheme.borderLight.withAlpha(60)
                           : AppTheme.borderLight,
                       padding: framePadding,
@@ -159,52 +172,57 @@ class _ReadPageState extends State<ReadPage> {
   }
 
   void _doPaginate() {
-    if (_app == null || _app!.readingText == null || _frameSize == Size.zero) return;
+    if (_frameSize.width <= 0 || _frameSize.height <= 0) return;
     final pad2 = _framePadding * 2;
     final innerWidth = (_frameSize.width - pad2).clamp(100.0, double.infinity);
     final innerHeight = (_frameSize.height - pad2).clamp(50.0, double.infinity);
     if (innerWidth > 0 && innerHeight > 0) {
-      _app!.paginate(innerWidth, innerHeight);
+      widget.onPaginate(innerWidth.toInt(), innerHeight.toInt());
     }
   }
 
-  Widget _buildNavigationBar(
-    BuildContext context,
-    bool isDark,
-    List<String> pages,
-    int currentPage,
-    int totalPages,
-    String timer,
-  ) {
-    final hasPrev = currentPage > 0;
-    final hasNext = currentPage < totalPages - 1;
+  Widget _buildNavigationBar(BuildContext context) {
+    final hasPrev = widget.currentPage > 0;
+    final hasNext = widget.currentPage < widget.totalPages - 1;
 
     return SizedBox(
       height: 36,
       child: Row(
         children: [
+          if (widget.alreadyTracked) const Spacer() else
           TextButton(
-            onPressed: hasPrev
-                ? () => context.read<AppState>().prevPage()
-                : null,
+            onPressed: widget.onAbandon,
+            child: Text('放弃',
+                style: TextStyle(color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary)),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: hasPrev ? widget.onPrevPage : null,
             child: const Text('◀ 上一页'),
           ),
           const Spacer(),
           Text(
-            timer,
-            style: TextStyle(
-              fontSize: 16,
-              fontFamily: AppTheme.fontUI,
-              color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+            widget.formattedTime,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
             ),
           ),
           const Spacer(),
           TextButton(
-            onPressed: hasNext
-                ? () => context.read<AppState>().nextPage()
-                : null,
+            onPressed: hasNext ? widget.onNextPage : null,
             child: const Text('下一页 ▶'),
           ),
+          const Spacer(),
+          if (widget.alreadyTracked)
+            TextButton(
+              onPressed: widget.onExit,
+              child: const Text('返回'),
+            )
+          else
+            TextButton(
+              onPressed: widget.elapsedSeconds >= 30 ? widget.onComplete : null,
+              child: Text(widget.elapsedSeconds >= 30 ? '完成' : '${30 - widget.elapsedSeconds}s'),
+            ),
         ],
       ),
     );
@@ -252,5 +270,6 @@ class _TextRuledPainter extends CustomPainter {
       oldDelegate.content != content ||
       oldDelegate.maxWidth != maxWidth ||
       oldDelegate.lineColor != lineColor ||
-      oldDelegate.padding != padding;
+      oldDelegate.padding != padding ||
+      oldDelegate.style != style;
 }

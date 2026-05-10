@@ -1,0 +1,13 @@
+src/database/DatabaseManager.cpp
+src/database/LearningIncrementRepository.cpp
+src/database/ReadingHistoryRepository.cpp
+src/database/TextRepository.cpp
+src/database/UserRepository.cpp
+src/models/Text.cpp
+src/models/User.cpp
+src/core/KnowledgeTracker.cpp
+src/core/RecommendationEngine.cpp
+src/utils/FeatureExtractor.cpp
+src/utils/Logger.cpp
+bridge/bridge.cpp
+third_party/sqlite3/sqlite3.c

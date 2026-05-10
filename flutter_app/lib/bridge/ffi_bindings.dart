@@ -4,6 +4,8 @@ import 'c_types.dart';
 
 /// Dart FFI 函数表 — 绑定 libchinese_core.so 的所有 C 函数
 final class NativeBridge {
+  static NativeBridge? instance;
+
   final DynamicLibrary _lib;
 
   // ─── 生命周期 ────────────────────────────────────────────────
@@ -62,6 +64,7 @@ final class NativeBridge {
       historyGetTrackedTextIds;
 
   // ─── 日志 ────────────────────────────────────────────────────
+  late final void Function(int level, Pointer<Utf8> message) logWrite;
   late final void Function(Pointer<Utf8> level) logSetLevel;
 
   // ──────────────────────────────────────────────────────────────
@@ -135,8 +138,14 @@ final class NativeBridge {
         Int32 Function(Pointer<Int32>, Int32),
         int Function(Pointer<Int32>, int)>('history_get_tracked_text_ids');
 
+    logWrite = _lib.lookupFunction<
+        Void Function(Int32, Pointer<Utf8>),
+        void Function(int, Pointer<Utf8>)>('log_write');
+
     logSetLevel = _lib.lookupFunction<
         Void Function(Pointer<Utf8>),
         void Function(Pointer<Utf8>)>('log_set_level');
+
+    instance = this;
   }
 }

@@ -69,8 +69,8 @@ void main() {
       });
 
       test('switchPage followed by getter returns new index', () {
-        app.switchPage(3);
-        expect(app.pageIndex, 3);
+        app.switchPage(2);
+        expect(app.pageIndex, 2);
       });
 
       test('switchPage to same index is no-op', () {

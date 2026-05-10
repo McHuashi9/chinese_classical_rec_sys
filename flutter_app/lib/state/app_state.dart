@@ -14,6 +14,8 @@ import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/service/history_service.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 /// 单篇文章的阅读计时状态
 class _TextReadState {
@@ -23,7 +25,7 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
-  static const currentVersion = '0.3.0';
+  static const currentVersion = '0.4.0';
 
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
@@ -31,11 +33,13 @@ class AppState extends ChangeNotifier {
   UpdateChecker? _updateChecker;
   RemoteDbSync? _remoteDbSync;
   SharedPreferences? _prefs;
+  HistoryService? _historyService;
 
   User? _user;
   int _pageIndex = 0;
   int _previousPageIndex = 0;
   bool _darkMode = false;
+  double _fontScale = 1.0;
   String _logLevel = 'INFO';
   bool _initialized = false;
   String? _error;
@@ -59,6 +63,7 @@ class AppState extends ChangeNotifier {
   bool get initialized => _initialized;
   int get pageIndex => _pageIndex;
   bool get darkMode => _darkMode;
+  double get fontScale => _fontScale;
   String get logLevel => _logLevel;
   String? get error => _error;
   void setError(String? message) { _error = message; notifyListeners(); }
@@ -72,6 +77,7 @@ class AppState extends ChangeNotifier {
   int get totalPages => _pages.isEmpty ? 0 : _pages.length;
   int get elapsedSeconds => _elapsedSeconds;
   bool get isReading => _readingText != null;
+  HistoryService get history => _historyService!;
 
   bool get hasUnrecordedReading {
     if (_readingTextId == null) return false;
@@ -115,6 +121,7 @@ class AppState extends ChangeNotifier {
       _tracker = KnowledgeTracker(_bridge!);
       _loadUser();
       _loadTextTrackedStates();
+      _historyService = HistoryService(_bridge!, _engine);
 
       _initialized = true;
       _error = null;
@@ -155,7 +162,7 @@ class AppState extends ChangeNotifier {
     }
     calloc.free(idsPtr);
     if (count > 0) {
-      debugPrint('[AppState] 启动回填: 已追踪 $count 篇文章');
+      AppLogger().info('启动回填: 已追踪 $count 篇文章');
     }
   }
 
@@ -164,6 +171,7 @@ class AppState extends ChangeNotifier {
     _readingTimer?.cancel();
     _bridge?.dbClose();
     _user?.dispose();
+    // _historyService holds no resources to dispose
     super.dispose();
   }
 
@@ -180,9 +188,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─── 历史 ─────────────────────────────────────────────────────
+
+  List<ReadingRecord> getRecentHistory() => history.getRecent(30);
+
+  int getTotalReadCount() => history.getTotalCount();
+
+  ReadingStats getReadingStats() => history.computeStats(history.getRecent(9999));
+
   // ─── 阅读 ─────────────────────────────────────────────────────
 
-  void loadTextForReading(int textId) {
+  bool loadTextForReading(int textId) {
+    final text = _engine.getTextDetail(textId);
+    if (text == null) return false;
+
     if (_readingTextId != null) {
       _textReadStates.putIfAbsent(_readingTextId!, () => _TextReadState());
       _textReadStates[_readingTextId!]!.totalSeconds = _elapsedSeconds;
@@ -191,22 +210,20 @@ class AppState extends ChangeNotifier {
     _readingTimer?.cancel();
     _readingTimer = null;
 
-    _readingText = _engine.getTextDetail(textId);
+    _readingText = text;
     _readingTextId = textId;
     _currentPage = 0;
     _pages = [];
 
     _textReadStates.putIfAbsent(textId, () => _TextReadState());
-    _elapsedSeconds = _textReadStates[textId]!.totalSeconds;
-
-    _previousPageIndex = _pageIndex;
-    _pageIndex = 2;
+    _elapsedSeconds = 0;
 
     startReadingTimer();
     notifyListeners();
+    return true;
   }
 
-  void paginate(double pageWidth, double pageHeight) {
+  void paginate(double pageWidth, double pageHeight, ScreenSize screenSize) {
     if (_readingText == null) return;
     final content = _readingText!.content;
     if (content.isEmpty) {
@@ -214,14 +231,15 @@ class AppState extends ChangeNotifier {
       return;
     }
 
+    final bodyStyle = AppTheme.bodyReadingSize(screenSize, _fontScale);
     final tp = TextPainter(
-      text: TextSpan(text: content, style: AppTheme.bodyReading),
+      text: TextSpan(text: content, style: bodyStyle),
       textDirection: TextDirection.ltr,
     );
     tp.layout(maxWidth: pageWidth);
     final lineMetrics = tp.computeLineMetrics();
 
-    final lineHeight = AppTheme.bodyReading.fontSize! * AppTheme.bodyReading.height!;
+    final lineHeight = bodyStyle.fontSize! * bodyStyle.height!;
     final linesPerPage = (pageHeight / lineHeight).floor();
     if (linesPerPage <= 0 || lineMetrics.isEmpty) {
       _pages = [content];
@@ -289,7 +307,7 @@ class AppState extends ChangeNotifier {
     _pages = [];
     _currentPage = 0;
     _elapsedSeconds = 0;
-    _pageIndex = _previousPageIndex.clamp(0, 4);
+    _pageIndex = _previousPageIndex.clamp(0, 2);
     notifyListeners();
   }
 
@@ -325,7 +343,8 @@ class AppState extends ChangeNotifier {
           _tracker.applyRead(_user!, _readingText!.id, _elapsedSeconds.toDouble());
       if (updated != null) {
         _user!.dispose();
-        _user = updated;
+        _user = _tracker.prune(updated);
+        updated.dispose();
       }
     }
   }
@@ -344,25 +363,20 @@ class AppState extends ChangeNotifier {
   }
 
   void discardCurrentReading() {
-    if (_readingTextId != null) {
-      _textReadStates.remove(_readingTextId);
-    }
+    _readingText = null;
+    _readingTextId = null;
+    _pages = [];
+    _currentPage = 0;
     _elapsedSeconds = 0;
     _readingTimer?.cancel();
     _readingTimer = null;
+    notifyListeners();
   }
 
   void switchPage(int index) {
     if (_pageIndex != index) {
-      if (_pageIndex == 2 && index != 2) {
-        stopReadingTimer();
-        applyReadingEffect();
-      }
       _previousPageIndex = _pageIndex;
       _pageIndex = index;
-      if (_pageIndex == 2 && _readingText != null) {
-        startReadingTimer();
-      }
       notifyListeners();
     }
   }
@@ -372,7 +386,8 @@ class AppState extends ChangeNotifier {
     final updated = _tracker.applyRead(_user!, textId, seconds);
     if (updated != null) {
       _user!.dispose();
-      _user = updated;
+      _user = _tracker.prune(updated);
+      updated.dispose();
       _textReadStates.putIfAbsent(textId, () => _TextReadState());
       _textReadStates[textId]!.effectApplied = true;
       notifyListeners();
@@ -386,12 +401,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFontScale(double value) {
+    _fontScale = value;
+    _prefs?.setDouble('fontScale', value);
+    notifyListeners();
+  }
+
   void setLogLevel(String value) {
     _logLevel = value;
     final cLevel = value.toLowerCase();
     final ptr = cLevel.toNativeUtf8(allocator: calloc);
     _bridge?.logSetLevel(ptr);
     calloc.free(ptr);
+    _prefs?.setString('logLevel', value);
     notifyListeners();
   }
 
@@ -402,6 +424,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> initUpdateChecker() async {
     _prefs = await SharedPreferences.getInstance();
+    _fontScale = _prefs?.getDouble('fontScale') ?? 1.0;
+    final savedLevel = _prefs?.getString('logLevel') ?? 'INFO';
+    setLogLevel(savedLevel);
     _updateChecker = UpdateChecker(_prefs!);
   }
 

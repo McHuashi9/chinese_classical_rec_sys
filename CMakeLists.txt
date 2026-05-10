@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
-project(chinese_classical_rec_sys)
+project(chinese_classical_rec_sys VERSION 0.3.0)
+
+# 全局启用所有日志级别。运行时通过 spdlog::set_level 控制输出。
+add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -65,6 +68,9 @@ target_include_directories(chinese_classical_lib PUBLIC
 # 链接 SQLite3
 target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static)
 
+# 为静态库提供版本宏（供 Logger.cpp session 标记使用）
+target_compile_definitions(chinese_classical_lib PUBLIC APP_VERSION="${CMAKE_PROJECT_VERSION}")
+
 # Windows 平台链接 nowide（包含 cin/cout/cerr 全局对象定义）
 if(WIN32)
     target_link_libraries(chinese_classical_lib PUBLIC nowide_static)
@@ -109,6 +115,7 @@ set_target_properties(chinese_core PROPERTIES
     VISIBILITY_INLINES_HIDDEN YES
 )
 target_compile_definitions(chinese_core PRIVATE CHINESE_CORE_EXPORTS)
+target_compile_definitions(chinese_core PRIVATE APP_VERSION="${CMAKE_PROJECT_VERSION}")
 
 # ─── 测试 ───────────────────────────────────────────────────────────────────────
 

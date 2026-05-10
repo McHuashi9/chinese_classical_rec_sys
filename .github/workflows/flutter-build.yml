@@ -99,14 +99,19 @@ jobs:
             ~/.pub-cache
           key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
 
-      - name: Flutter pub get
-        run: flutter pub get
-        working-directory: flutter_app
       - name: Flutter build apk
-        run: flutter build apk --release --split-per-abi
+        run: |
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64
         working-directory: flutter_app
+      - name: Rename APK
+        shell: bash
+        run: |
+          VERSION=$(grep '^version: ' flutter_app/pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+            "chinese-classical-rec-sys-${VERSION}-android.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: chinese-classical-android
-          path: flutter_app/build/app/outputs/flutter-apk/*.apk
+          path: chinese-classical-rec-sys-*-android.apk
           retention-days: 7

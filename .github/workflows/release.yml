@@ -45,9 +45,26 @@ jobs:
         env:
           ARCH: x86_64
 
+      - name: Extract changelog for release body
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (index($0, "## [" ver "]") == 1) { flag = 1 }
+              else if (flag) { exit }
+            }
+            flag
+          ' CHANGELOG.md > /tmp/release_body.md
+          [ -s /tmp/release_body.md ] || \
+            echo "No CHANGELOG entry found for v${VERSION}" > /tmp/release_body.md
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: /tmp/release_body.md
           files: chinese-classical-rec-sys-*-linux.AppImage
 
   flutter-windows:
@@ -116,3 +133,34 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: chinese-classical-rec-sys-*-android.apk
+
+  ios-build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+      - name: Generate ios/
+        run: |
+          rm -rf flutter_app/ios
+          cd flutter_app && flutter create --platforms=ios .
+      - name: Build libchinese_core.a
+        run: bash scripts/build_ios_core.sh
+      - name: Copy static lib into Runner
+        run: cp build/ios/libchinese_core.a flutter_app/ios/Runner/
+      - name: Build unsigned IPA
+        run: flutter build ios --release --no-codesign
+        working-directory: flutter_app
+      - name: Package IPA
+        run: |
+          mkdir -p output
+          cd flutter_app/build/ios/iphoneos && zip -r ../../../../output/Runner.ipa Runner.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: output/Runner.ipa
+      - name: Upload IPA to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: output/Runner.ipa

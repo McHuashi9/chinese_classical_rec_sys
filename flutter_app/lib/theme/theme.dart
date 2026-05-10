@@ -71,25 +71,19 @@ class AppTheme {
         ScreenSize.large => 16,
       };
 
-  static TextStyle bodyReadingSize(ScreenSize size) => TextStyle(
+  static TextStyle bodyReadingSize(ScreenSize size, double fontScale) => TextStyle(
         fontSize: switch (size) {
           ScreenSize.small => 15,
           ScreenSize.medium => 16,
           ScreenSize.large => 18,
-        },
+        } * fontScale,
         fontFamily: fontBody,
         height: 1.8,
       );
 
-  static const TextStyle bodyReading = TextStyle(
-    fontSize: 18,
-    fontFamily: fontBody,
-    height: 1.8,
-  );
-
   // ─── Light Theme ──────────────────────────────────────────────
 
-  static ThemeData lightTheme(ScreenSize size) => ThemeData(
+  static ThemeData lightTheme(ScreenSize size, double fontScale) => ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: ColorScheme.fromSeed(
@@ -114,28 +108,48 @@ class AppTheme {
         ),
         textTheme: TextTheme(
           headlineLarge: TextStyle(
-              fontSize: _headlineLarge(size),
+              fontSize: _headlineLarge(size) * fontScale,
               fontFamily: fontTitle,
               color: ink),
           headlineMedium: TextStyle(
-              fontSize: _headlineMedium(size),
+              fontSize: _headlineMedium(size) * fontScale,
+              fontFamily: fontTitle,
+              color: ink),
+          headlineSmall: TextStyle(
+              fontSize: 22 * fontScale,
               fontFamily: fontTitle,
               color: ink),
           titleLarge: TextStyle(
-              fontSize: _titleLarge(size),
+              fontSize: _titleLarge(size) * fontScale,
               fontFamily: fontTitle,
               color: ink),
+          titleMedium: TextStyle(
+              fontSize: 16 * fontScale,
+              fontFamily: fontTitle,
+              color: ink),
+          titleSmall: TextStyle(
+              fontSize: 14 * fontScale,
+              fontFamily: fontUI,
+              color: inkSecondary),
           bodyLarge: TextStyle(
-              fontSize: _bodyLarge(size),
+              fontSize: _bodyLarge(size) * fontScale,
               fontFamily: fontBody,
               color: ink,
               height: 2.0),
-          bodyMedium: const TextStyle(
-              fontSize: 14,
+          bodyMedium: TextStyle(
+              fontSize: 14 * fontScale,
               fontFamily: fontUI,
               color: inkSecondary),
-          labelSmall: const TextStyle(
-              fontSize: 12,
+          bodySmall: TextStyle(
+              fontSize: 12 * fontScale,
+              fontFamily: fontUI,
+              color: inkSecondary),
+          labelLarge: TextStyle(
+              fontSize: 14 * fontScale,
+              fontFamily: fontUI,
+              color: inkSecondary),
+          labelSmall: TextStyle(
+              fontSize: 12 * fontScale,
               fontFamily: fontUI,
               color: inkSecondary),
         ),
@@ -143,7 +157,7 @@ class AppTheme {
 
   // ─── Dark Theme ───────────────────────────────────────────────
 
-  static ThemeData darkTheme(ScreenSize size) => ThemeData(
+  static ThemeData darkTheme(ScreenSize size, double fontScale) => ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
@@ -168,28 +182,48 @@ class AppTheme {
         ),
         textTheme: TextTheme(
           headlineLarge: TextStyle(
-              fontSize: _headlineLarge(size),
+              fontSize: _headlineLarge(size) * fontScale,
               fontFamily: fontTitle,
               color: darkInk),
           headlineMedium: TextStyle(
-              fontSize: _headlineMedium(size),
+              fontSize: _headlineMedium(size) * fontScale,
+              fontFamily: fontTitle,
+              color: darkInk),
+          headlineSmall: TextStyle(
+              fontSize: 22 * fontScale,
               fontFamily: fontTitle,
               color: darkInk),
           titleLarge: TextStyle(
-              fontSize: _titleLarge(size),
+              fontSize: _titleLarge(size) * fontScale,
               fontFamily: fontTitle,
               color: darkInk),
+          titleMedium: TextStyle(
+              fontSize: 16 * fontScale,
+              fontFamily: fontTitle,
+              color: darkInk),
+          titleSmall: TextStyle(
+              fontSize: 14 * fontScale,
+              fontFamily: fontUI,
+              color: darkInkSecondary),
           bodyLarge: TextStyle(
-              fontSize: _bodyLarge(size),
+              fontSize: _bodyLarge(size) * fontScale,
               fontFamily: fontBody,
               color: darkInk,
               height: 2.0),
-          bodyMedium: const TextStyle(
-              fontSize: 14,
+          bodyMedium: TextStyle(
+              fontSize: 14 * fontScale,
               fontFamily: fontUI,
               color: darkInkSecondary),
-          labelSmall: const TextStyle(
-              fontSize: 12,
+          bodySmall: TextStyle(
+              fontSize: 12 * fontScale,
+              fontFamily: fontUI,
+              color: darkInkSecondary),
+          labelLarge: TextStyle(
+              fontSize: 14 * fontScale,
+              fontFamily: fontUI,
+              color: darkInkSecondary),
+          labelSmall: TextStyle(
+              fontSize: 12 * fontScale,
               fontFamily: fontUI,
               color: darkInkSecondary),
         ),

@@ -98,7 +98,7 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
     g_state.userRepo->saveUser(*g_state.user);
 
     g_state.initialized = true;
-    LOG_INFO("bridge: db_open 成功, {} 篇文本已加载", g_state.texts->size());
+    LOG_INFO("bridge: 数据库已打开 — {} 篇文本已加载", g_state.texts->size());
     return BRIDGE_OK;
 }
 
@@ -205,6 +205,7 @@ extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
         out_ids[i] = results[i].first;
         out_probs[i] = results[i].second;
     }
+    LOG_INFO("bridge: 推荐完成 — 返回 {} 篇 (top_k={})", results.size(), top_k);
     return BRIDGE_OK;
 }
 
@@ -228,7 +229,8 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
 
     g_state.historyRepo->markAsTracked(text_id);
     g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
-    LOG_INFO("bridge: text_id={} 阅读追踪完成, read_time={:.1f}s", text_id, read_time);
+    LOG_INFO("bridge: 知识追踪完成 — text_id={}, read_time={:.1f}s, avg_ability={:.3f}→{:.3f}",
+             text_id, read_time, g_state.user->getAverageAbility(), cpp_user.getAverageAbility());
 
     // 持久化
     g_state.userRepo->saveUser(cpp_user);
@@ -311,6 +313,17 @@ extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int ma
 }
 
 // ─── logging ──────────────────────────────────────────────────────────────────
+
+extern "C" CHINESE_CORE_EXPORT void log_write(int level, const char* message)
+{
+    switch (level) {
+        case 0: LOG_DEBUG("{}", message); break;
+        case 1: LOG_INFO("{}", message);  break;
+        case 2: LOG_WARN("{}", message);  break;
+        case 3: LOG_ERROR("{}", message); break;
+        default: LOG_INFO("{}", message); break;
+    }
+}
 
 extern "C" CHINESE_CORE_EXPORT void log_set_level(const char* level)
 {
