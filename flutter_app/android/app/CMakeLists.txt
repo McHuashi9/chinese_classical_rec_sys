@@ -28,4 +28,6 @@ target_include_directories(chinese_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/nowide/include
 )
 target_link_libraries(chinese_core PRIVATE sqlite3_android log)
+add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 target_compile_definitions(chinese_core PRIVATE __ANDROID__)
+target_compile_definitions(chinese_core PRIVATE APP_VERSION="0.4.0")

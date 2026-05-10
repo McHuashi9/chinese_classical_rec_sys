@@ -3,9 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
-import 'package:chinese_classical_rec_sys/pages/library_page.dart';
-import 'package:chinese_classical_rec_sys/pages/read_page.dart';
-import 'package:chinese_classical_rec_sys/pages/ability_page.dart';
+import 'package:chinese_classical_rec_sys/pages/my_page.dart';
+import 'package:chinese_classical_rec_sys/pages/read_hub_page.dart';
 
 Widget _wrap(AppState app, Widget child) {
   return ChangeNotifierProvider.value(
@@ -33,7 +32,7 @@ void main() {
       expect(find.text('外观'), findsOneWidget);
       expect(find.text('日志'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
-      expect(find.text('版本 0.2.0'), findsOneWidget);
+      expect(find.text('版本 0.3.0'), findsOneWidget);
       app.dispose();
     });
 
@@ -60,8 +59,8 @@ void main() {
     });
   });
 
-  group('LibraryPage', () {
-    testWidgets('shows empty state when no texts', (tester) async {
+  group('ReadHubPage', () {
+    testWidgets('shows library tab by default', (tester) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -69,33 +68,15 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final app = AppState();
-      await tester.pumpWidget(_wrap(app, const LibraryPage()));
+      await tester.pumpWidget(_wrap(app, const ReadHubPage()));
       await tester.pumpAndSettle();
 
       expect(find.text('文库'), findsOneWidget);
-      expect(find.text('未找到匹配篇目'), findsOneWidget);
       app.dispose();
     });
   });
 
-  group('ReadPage', () {
-    testWidgets('shows placeholder when no text loaded', (tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      final app = AppState();
-      await tester.pumpWidget(_wrap(app, const ReadPage()));
-      await tester.pumpAndSettle();
-
-      expect(find.text('请从文库选择一篇古文'), findsOneWidget);
-      app.dispose();
-    });
-  });
-
-  group('AbilityPage', () {
+  group('MyPage', () {
     testWidgets('shows loader when user is null', (tester) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -104,8 +85,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final app = AppState();
-      await tester.pumpWidget(_wrap(app, const AbilityPage()));
-      // RadarChart uses AnimationController; pump frame to avoid timeout
+      await tester.pumpWidget(_wrap(app, const MyPage()));
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);

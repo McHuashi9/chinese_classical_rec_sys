@@ -12,10 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'state/app_state.dart';
 import 'engine/update_checker.dart';
 import 'theme/theme.dart';
-import 'pages/library_page.dart';
-import 'pages/recommend_page.dart';
-import 'pages/read_page.dart';
-import 'pages/ability_page.dart';
+import 'engine/app_logger.dart';
+import 'pages/read_hub_page.dart';
+import 'pages/my_page.dart';
 import 'pages/settings_page.dart';
 import 'widgets/dialogs.dart';
 
@@ -36,12 +35,13 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
       final isDark = context.select((AppState a) => a.darkMode);
+      final fontScale = context.select((AppState a) => a.fontScale);
 
       return MaterialApp(
         title: '文言文推荐系统',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme(screenSize),
-        darkTheme: AppTheme.darkTheme(screenSize),
+        theme: AppTheme.lightTheme(screenSize, fontScale),
+        darkTheme: AppTheme.darkTheme(screenSize, fontScale),
         themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
         home: const MainShell(),
       );
@@ -58,17 +58,16 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   static final _pages = <Widget>[
-    const RepaintBoundary(child: LibraryPage()),
-    const RepaintBoundary(child: RecommendPage()),
-    const RepaintBoundary(child: ReadPage()),
-    const RepaintBoundary(child: AbilityPage()),
-    const RepaintBoundary(child: SettingsPage()),
+    const RepaintBoundary(child: ReadHubPage()),   // 0 阅读
+    const RepaintBoundary(child: MyPage()),         // 1 我的
+    const RepaintBoundary(child: SettingsPage()),   // 2 设置
   ];
 
   bool _initialized = false;
   int _pageIndex = 0;
   int _prevPageIndex = 0;
   bool _transitioning = false;
+  bool _isReading = false;
   AppState? _app;
 
   late final AnimationController _ctrl;
@@ -110,7 +109,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       final lib = _loadLibrary();
       await app.initialize(dbPath, lib);
     } catch (e) {
-      debugPrint('[main] FFI load failed: $e');
+      AppLogger().error('FFI load failed: $e');
       if (!mounted) return;
       app.setError('无法加载核心组件，请尝试重新安装。\n$e');
       return;
@@ -141,7 +140,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           action: SnackBarAction(
             label: '查看',
             onPressed: () {
-              app.switchPage(4);
+              app.switchPage(2);
             },
           ),
         ),
@@ -217,12 +216,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           await dbFile.rename(bak.path);
           await tmp.rename(dbPath);
           await File(verPath).writeAsString(assetVer);
-          debugPrint('[main] DB 已更新: $localVer → $assetVer');
+          AppLogger().info('DB 已更新: $localVer → $assetVer');
         }
       }
       return dbPath;
     } catch (e) {
-      debugPrint('[main] _resolveDbPath 失败: $e，回退到相对路径');
+      AppLogger().warn('_resolveDbPath 失败: $e，回退到相对路径');
       return '../data/classical.db';
     }
   }
@@ -254,10 +253,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return DynamicLibrary.open('libchinese_core.so');
     }
     if (Platform.isIOS) {
-      throw UnsupportedError(
-        '文言文推荐系统 暂不支持 iOS。'
-        '当前平台: ${Platform.operatingSystem}',
-      );
+      return DynamicLibrary.process();
     }
     throw UnsupportedError(
       '文言文推荐系统 不支持当前平台。'
@@ -284,6 +280,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (!_initialized && app.initialized) {
       setState(() => _initialized = true);
     }
+    if (app.isReading != _isReading) {
+      _isReading = app.isReading;
+      setState(() {});
+    }
     if (app.pageIndex != _pageIndex) {
       _prevPageIndex = _pageIndex;
       _pageIndex = app.pageIndex;
@@ -307,7 +307,30 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   void _onDestinationSelected(int index) {
     if (index == _pageIndex) return;
+    final app = _app;
+    if (app != null && app.isReading && index != 0) {
+      _showAbandonDialog(index);
+      return;
+    }
     _app?.switchPage(index);
+  }
+
+  Future<void> _showAbandonDialog(int targetIndex) async {
+    final app = _app!;
+    app.pauseReadingTimer();
+    final discard = await showConfirmDialog(context,
+      title: '放弃阅读？',
+      content: '阅读中切换页面将放弃当前记录。确定吗？',
+      confirmLabel: '放弃',
+    );
+    if (discard) {
+      app.stopReadingTimer();
+      app.applyReadingEffect();
+      app.discardCurrentReading();
+      app.switchPage(targetIndex);
+    } else {
+      app.resumeReadingTimer();
+    }
   }
 
   void _onBackground() => _app?.pauseReadingTimer();
@@ -342,14 +365,34 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   Future<void> _onBackPressed(bool didPop, _) async {
     if (didPop) return;
     final app = _app;
-    if (app == null || !app.hasUnrecordedReading) {
-      final exit = await showConfirmDialog(context, title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出');
+    if (app == null || !app.isReading) {
+      final exit = await showConfirmDialog(context,
+        title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
+      );
       if (exit && context.mounted) SystemNavigator.pop();
       return;
     }
+
     app.stopReadingTimer();
     app.applyReadingEffect();
-    final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
+
+    if (!app.hasUnrecordedReading) {
+      final exit = await showConfirmDialog(context,
+        title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
+      );
+      if (exit && context.mounted) {
+        SystemNavigator.pop();
+      } else {
+        app.resumeReadingTimer();
+      }
+      return;
+    }
+
+    final discard = await showConfirmDialog(context,
+      title: '确认退出',
+      content: '当前文章阅读未满30秒，未完成追踪。放弃并退出？',
+      confirmLabel: '放弃并退出',
+    );
     if (!context.mounted) return;
     if (discard) {
       app.discardCurrentReading();
@@ -372,62 +415,54 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       onPopInvokedWithResult: _onBackPressed,
       child: Scaffold(
         body: SafeArea(
-          child: isNarrow
+          child: _isReading
               ? _buildBody()
-              : Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: _pageIndex,
-                      labelType: isFullLabel
-                          ? NavigationRailLabelType.all
-                          : NavigationRailLabelType.selected,
-                      onDestinationSelected: _onDestinationSelected,
-                      destinations: const [
-                        NavigationRailDestination(
-                          icon: Icon(Icons.library_books),
-                          label: Text('文库'),
+              : isNarrow
+                  ? _buildBody()
+                  : Row(
+                      children: [
+                        NavigationRail(
+                          selectedIndex: _pageIndex,
+                          labelType: isFullLabel
+                              ? NavigationRailLabelType.all
+                              : NavigationRailLabelType.selected,
+                          onDestinationSelected: _onDestinationSelected,
+                          destinations: const [
+                            NavigationRailDestination(
+                              icon: Icon(Icons.menu_book),
+                              label: Text('阅读'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.person),
+                              label: Text('我的'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.settings),
+                              label: Text('设置'),
+                            ),
+                          ],
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.recommend),
-                          label: Text('推荐'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.menu_book),
-                          label: Text('阅读'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.radar),
-                          label: Text('能力'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.settings),
-                          label: Text('设置'),
-                        ),
+                        const VerticalDivider(width: 1),
+                        Expanded(child: _buildBody()),
                       ],
                     ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: _buildBody()),
-                  ],
-                ),
         ),
-        bottomNavigationBar: isNarrow
-            ? NavigationBar(
-                selectedIndex: _pageIndex,
-                onDestinationSelected: _onDestinationSelected,
-                destinations: const [
-                  NavigationDestination(
-                      icon: Icon(Icons.library_books), label: '文库'),
-                  NavigationDestination(
-                      icon: Icon(Icons.recommend), label: '推荐'),
-                  NavigationDestination(
-                      icon: Icon(Icons.menu_book), label: '阅读'),
-                  NavigationDestination(
-                      icon: Icon(Icons.radar), label: '能力'),
-                  NavigationDestination(
-                      icon: Icon(Icons.settings), label: '设置'),
-                ],
-              )
-            : null,
+        bottomNavigationBar: _isReading
+            ? null
+            : isNarrow
+                ? NavigationBar(
+                    selectedIndex: _pageIndex,
+                    onDestinationSelected: _onDestinationSelected,
+                    destinations: const [
+                      NavigationDestination(
+                          icon: Icon(Icons.menu_book), label: '阅读'),
+                      NavigationDestination(
+                          icon: Icon(Icons.person), label: '我的'),
+                      NavigationDestination(
+                          icon: Icon(Icons.settings), label: '设置'),
+                    ],
+                  )
+                : null,
       ),
     );
   }

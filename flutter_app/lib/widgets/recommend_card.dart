@@ -28,7 +28,23 @@ class RecommendCard extends StatelessWidget {
             }
             app.discardCurrentReading();
           }
-          app.loadTextForReading(result.text.id);
+          if (!app.loadTextForReading(result.text.id)) {
+            if (!context.mounted) return;
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('无法打开'),
+                content: const Text('无法加载文本，请检查后重试'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('确定'),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
         },
         borderRadius: BorderRadius.circular(4),
         child: Padding(
@@ -41,37 +57,20 @@ class RecommendCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      result.text.title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: AppTheme.fontTitle,
-                        color: theme.textTheme.titleLarge?.color ?? AppTheme.ink,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(result.text.title,
+                        style: theme.textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis),
                     SizedBox(height: context.gapTiny),
-                    Text(
-                      '${result.text.author} · ${result.text.dynasty}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: AppTheme.fontBody,
-                        color: theme.textTheme.bodyMedium?.color ??
-                            AppTheme.inkSecondary,
-                      ),
-                    ),
+                    Text('${result.text.author} · ${result.text.dynasty}',
+                        style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),
-              Text(
-                '$prob%',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontFamily: AppTheme.fontUI,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.vermilion,
-                ),
-              ),
+              Text('$prob%',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.vermilion,
+                  )),
             ],
           ),
         ),

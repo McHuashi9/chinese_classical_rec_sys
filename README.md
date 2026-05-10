@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/badge/Linux-✓-FCC624?logo=linux" alt="Linux">
   <img src="https://img.shields.io/badge/Windows-✓-0078D6?logo=windows" alt="Windows">
   <img src="https://img.shields.io/badge/Android-✓-3DDC84?logo=android" alt="Android">
+  <img src="https://img.shields.io/badge/iOS-needs%20help-999999?logo=apple" alt="iOS">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
@@ -12,6 +13,14 @@
 <p align="center">
   <strong>基于 Flutter Desktop 的古文个性化学习推荐系统</strong><br>
 </p>
+
+>  **诚征 macOS 贡献者 / Help Wanted: macOS Contributor**
+>
+> 项目维护者没有 Mac，也没有 $99 开发者账号。iOS 代码适配正在进行，但没有 macOS 环境无法完成构建。对苹果生态不熟悉，有意者欢迎邮件细聊。
+>
+> The maintainer has no Mac or $99 Apple developer account. iOS code adaptation is in progress, but building requires macOS. Not familiar with the Apple ecosystem — feel free to email me for details.
+>
+> 联系方式 / Contact：3407131764@qq.com
 
 ---
 
@@ -45,30 +54,19 @@ cd build && make test_runner && ./tests/test_runner   # C++ 测试
 cd ../flutter_app && flutter analyze                    # Dart 静态分析
 ```
 
-## 算法
+## iOS 安装（侧载）
 
-#### 10 维难度量化
+CI 每次发版自动构建未签名 `.ipa`，需用户自行签名安装：
 
-| 维度 | 特征 | 权重 |
-|:----:|------|-----:|
-| d1 | 平均句长 | 9.22% |
-| d2 | 句子数 | 9.38% |
-| d3 | 虚词比例 | 13.11% |
-| d4 | 字平均对数频次 | 9.25% |
-| d5 | 通假字密度 | 10.34% |
-| d6 | 古汉语困惑度 | 11.62% |
-| d7 | 现代文困惑度 | 8.77% |
-| d8 | 词汇多样性 (MATTR) | 8.54% |
-| d9 | 典故密度 | 10.09% |
-| d10 | 语义复杂度 | 9.68% |
+| 工具 | 说明 |
+|------|------|
+| **SideStore** ⭐⭐⭐ | 手机无线自签续签，无需电脑 |
+| AltStore ⭐⭐ | 需电脑 AltServer 后台自动续签 |
+| Sideloadly ⭐ | 每 7 天手动重拖 |
 
-#### 高斯 i+1 推荐
+步骤：下载 CI Release 的 `Runner.ipa` → SideStore 导入 → 用免费 Apple ID 签名安装 → `设置 → VPN与设备管理` 信任证书。
 
-$$P = \exp\!\left(-\frac{\|d - u - \delta^*\|^2}{2\sigma^2}\right) \qquad \delta^*=0.13,\ \sigma=0.25$$
-
-#### 知识追踪
-
-**学习率** $\eta = \eta_0 \cdot (1 - |d - u|)^\gamma$ &nbsp;&nbsp;|&nbsp;&nbsp; **遗忘率** $\psi(\Delta t) = (1 + \Delta t/\tau)^{-c},\ \tau=10.0,\ c=0.70$
+> 构建由 `macos-14` runner 执行，产物始终未签名。无 Mac 贡献者时 CI 注入占位 Team ID。
 
 ## 架构
 

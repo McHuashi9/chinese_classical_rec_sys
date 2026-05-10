@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class UpdateChecker {
   static const _releaseUrl =
@@ -86,7 +86,7 @@ class UpdateChecker {
       if (remaining <= 5) {
         final until = DateTime.now().millisecondsSinceEpoch + _rateLimitBackoff.inMilliseconds;
         await _prefs.setInt('update_rate_limited_until_ms', until);
-        debugPrint('[UpdateChecker] rate limit 即将耗尽 ($remaining)，退避 1 小时');
+        AppLogger().warn('rate limit 即将耗尽 ($remaining)，退避 1 小时');
         return null;
       }
 
@@ -94,7 +94,7 @@ class UpdateChecker {
       if (resp.statusCode == 403) {
         final until = DateTime.now().millisecondsSinceEpoch + _rateLimitBackoff.inMilliseconds;
         await _prefs.setInt('update_rate_limited_until_ms', until);
-        debugPrint('[UpdateChecker] 403 限流/滥用，退避 1 小时');
+        AppLogger().warn('403 限流/滥用，退避 1 小时');
         return null;
       }
       if (resp.statusCode != 200) return null;
@@ -110,7 +110,7 @@ class UpdateChecker {
 
       return _ReleaseResult(tagName: tag);
     } catch (e) {
-      debugPrint('[UpdateChecker] 请求失败: $e');
+      AppLogger().error('请求失败: $e');
       return null;
     }
   }
