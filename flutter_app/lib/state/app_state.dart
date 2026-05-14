@@ -25,7 +25,7 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
-  static const currentVersion = '0.5.0';
+  static const currentVersion = '0.5.1';
 
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
@@ -444,6 +444,8 @@ class AppState extends ChangeNotifier {
     if (_updateChecker == null) return null;
     return _updateChecker!.checkManually(currentVersion);
   }
+
+  String? get updateCheckError => _updateChecker?.lastErrorReason;
 
   Future<void> remoteSyncDb({String? remoteVersion, String? downloadUrl}) async {
     if (remoteVersion == null || downloadUrl == null) return;
