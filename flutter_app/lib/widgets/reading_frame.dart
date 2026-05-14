@@ -59,14 +59,35 @@ class _ReadingFrameState extends State<ReadingFrame> {
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-        widget.onPrevPage();
+        if (widget.currentPage > 0) {
+          widget.onPrevPage();
+        } else {
+          _boundaryFeedback('已到首页');
+        }
         return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-        widget.onNextPage();
+        if (widget.currentPage < widget.totalPages - 1) {
+          widget.onNextPage();
+        } else {
+          _boundaryFeedback('已到末页');
+        }
         return KeyEventResult.handled;
       }
     }
     return KeyEventResult.ignored;
+  }
+
+  void _boundaryFeedback(String message) {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(message, textAlign: TextAlign.center),
+        duration: const Duration(milliseconds: 600),
+        width: 180,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
   }
 
   @override
@@ -185,9 +206,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
     final hasPrev = widget.currentPage > 0;
     final hasNext = widget.currentPage < widget.totalPages - 1;
 
-    return SizedBox(
-      height: 36,
-      child: Row(
+    return Row(
         children: [
           if (widget.alreadyTracked) const Spacer() else
           TextButton(
@@ -224,7 +243,6 @@ class _ReadingFrameState extends State<ReadingFrame> {
               child: Text(widget.elapsedSeconds >= 30 ? '完成' : '${30 - widget.elapsedSeconds}s'),
             ),
         ],
-      ),
     );
   }
 }
@@ -260,6 +278,7 @@ class _TextRuledPainter extends CustomPainter {
       ..strokeWidth = 1.0;
 
     for (final line in metrics) {
+      if (line.width == 0) continue;
       final y = padding + line.baseline;
       canvas.drawLine(Offset(padding, y), Offset(size.width - padding, y), paint);
     }

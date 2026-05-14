@@ -49,18 +49,20 @@ std::vector<ReadingRecord> ReadingHistoryRepository::getRecentRecords(int limit)
         return records;
     }
     
-    std::string sql = "SELECT id, text_id, read_time, read_timestamp "
+    const char* sql = "SELECT id, text_id, read_time, read_timestamp "
                       "FROM reading_history "
                       "WHERE user_id = 1 "
-                      "ORDER BY read_timestamp DESC LIMIT " + std::to_string(limit) + ";";
+                      "ORDER BY read_timestamp DESC LIMIT ?;";
     
     sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql.c_str(), -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
     
     if (rc != SQLITE_OK) {
         LOG_ERROR("查询阅读历史失败: {}", db->getLastError());
         return records;
     }
+    
+    sqlite3_bind_int(stmt, 1, limit);
     
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         ReadingRecord record;

@@ -161,7 +161,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final latestVersion = await checker.checkSilently(AppState.currentVersion);
     if (latestVersion == null) return null;
 
-    final releaseUrl = 'https://api.github.com/repos/anomalyco/'
+    final releaseUrl = 'https://api.github.com/repos/McHuashi9/'
         'chinese_classical_rec_sys/releases/tags/v$latestVersion';
     final resp = await http.get(Uri.parse(releaseUrl), headers: {
       'Accept': 'application/vnd.github.v3+json',
@@ -346,6 +346,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (!app.hasUnrecordedReading) return AppExitResponse.exit;
 
     final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
+    if (!context.mounted) return AppExitResponse.exit;
     if (discard) {
       app.discardCurrentReading();
     } else {

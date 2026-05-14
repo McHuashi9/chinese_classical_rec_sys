@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#pragma pack(push, 1)
+
 /**
  * @brief C ABI 用户数据结构
  *
@@ -27,6 +29,7 @@ typedef struct {
     char title[256];             ///< 标题 (UTF-8)
     char author[128];            ///< 作者 (UTF-8)
     char dynasty[64];            ///< 朝代 (UTF-8)
+    char source[64];             ///< 来源 (UTF-8)
 } TextInfo;
 
 /**
@@ -37,7 +40,10 @@ typedef struct {
     char title[256];             ///< 标题 (UTF-8)
     char author[128];            ///< 作者 (UTF-8)
     char dynasty[64];            ///< 朝代 (UTF-8)
+    char source[64];             ///< 来源 (UTF-8)
+    char background[2048];       ///< 背景介绍 (UTF-8)
     char content[65536];         ///< 正文 (UTF-8, 64KB)
+    int char_count;              ///< 纯字数（去空白后）
     double difficulties[10];     ///< d1-d10 难度特征值
 } TextDetail;
 
@@ -59,6 +65,8 @@ typedef struct {
 #define BRIDGE_ERR_NOT_INIT   -2   ///< 未初始化 (未调用 db_open)
 #define BRIDGE_ERR_USER       -3   ///< 用户不存在
 #define BRIDGE_ERR_TEXT       -4   ///< 文本不存在
+
+#pragma pack(pop)
 
 #ifdef __cplusplus
 }

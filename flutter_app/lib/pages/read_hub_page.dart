@@ -5,9 +5,9 @@ import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
+import 'package:chinese_classical_rec_sys/pages/article_detail_page.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
-
-enum _ReadHubMode { browsing, reading }
+import 'package:chinese_classical_rec_sys/widgets/text_card.dart';
 
 class ReadHubPage extends StatefulWidget {
   const ReadHubPage({super.key});
@@ -17,7 +17,6 @@ class ReadHubPage extends StatefulWidget {
 
 class _ReadHubPageState extends State<ReadHubPage>
     with TickerProviderStateMixin {
-  _ReadHubMode _mode = _ReadHubMode.browsing;
 
   // browsing 状态
   late final TabController _tabController;
@@ -81,12 +80,7 @@ class _ReadHubPageState extends State<ReadHubPage>
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
-    if (app.isReading && _mode != _ReadHubMode.reading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _mode = _ReadHubMode.reading);
-      });
-    }
-    if (_mode == _ReadHubMode.reading) {
+    if (app.isReading && app.readingText != null) {
       return _buildReadingMode();
     }
     return _buildBrowsingMode();
@@ -136,12 +130,6 @@ class _ReadHubPageState extends State<ReadHubPage>
                     Text('文库',
                         style: Theme.of(context).textTheme.headlineLarge,
                         overflow: TextOverflow.ellipsis),
-                    SizedBox(height: context.gapSmall),
-                    Text('(${filtered.length}篇)',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontFamily: AppTheme.fontBody,
-                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                        )),
                     SizedBox(height: context.gapMedium),
                     SizedBox(
                       width: double.infinity,
@@ -170,12 +158,6 @@ class _ReadHubPageState extends State<ReadHubPage>
                     style: Theme.of(context).textTheme.headlineLarge,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(width: context.gapMedium),
-                  Text('(${filtered.length}篇)',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontFamily: AppTheme.fontBody,
-                        color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                      )),
                   const Spacer(),
                   SizedBox(
                     width: 260,
@@ -214,43 +196,14 @@ class _ReadHubPageState extends State<ReadHubPage>
                   )
                 : ListView.builder(
                     itemCount: filtered.length,
-                    itemBuilder: (ctx, i) => _buildLibraryCard(filtered[i]),
+                    itemBuilder: (ctx, i) => TextCard(
+                      title: filtered[i].title,
+                      trailing: _ReadStatusLabel(textId: filtered[i].id),
+                      onTap: () => _onSelectText(filtered[i]),
+                    ),
                   ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLibraryCard(ChineseText text) {
-    return Card(
-      child: InkWell(
-        onTap: () => _onSelectText(text),
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-              horizontal: context.cardPaddingH,
-              vertical: context.cardPaddingV),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(text.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis),
-                    SizedBox(height: context.gapTiny),
-                    Text('${text.author} · ${text.dynasty}',
-                        style: Theme.of(context).textTheme.bodyMedium),
-                  ],
-                ),
-              ),
-              Text('${(text.averageDifficulty * 100).toStringAsFixed(0)}%',
-                  style: Theme.of(context).textTheme.labelSmall),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -306,47 +259,22 @@ class _ReadHubPageState extends State<ReadHubPage>
                   )
                 : ListView.builder(
                     itemCount: recs.length,
-                    itemBuilder: (ctx, i) => _buildRecommendCard(recs[i]),
+                    itemBuilder: (ctx, i) {
+                      final prob = (recs[i].probability * 100).toStringAsFixed(1);
+                      return TextCard(
+                        title: recs[i].text.title,
+                        subtitle: '${recs[i].text.author} · ${recs[i].text.dynasty}',
+                        trailing: Text('$prob%',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.vermilion,
+                          )),
+                        onTap: () => _onSelectText(recs[i].text),
+                      );
+                    },
                   ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRecommendCard(RecommendResult result) {
-    final prob = (result.probability * 100).toStringAsFixed(1);
-    return Card(
-      child: InkWell(
-        onTap: () => _onSelectText(result.text),
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-              horizontal: context.cardPaddingH,
-              vertical: context.cardPaddingV),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(result.text.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis),
-                    SizedBox(height: context.gapTiny),
-                    Text('${result.text.author} · ${result.text.dynasty}',
-                        style: Theme.of(context).textTheme.bodyMedium),
-                  ],
-                ),
-              ),
-              Text('$prob%',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.vermilion,
-                  )),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -398,22 +326,12 @@ class _ReadHubPageState extends State<ReadHubPage>
     _initialLoad = false;
   }
 
-  void _onSelectText(ChineseText text) async {
-    final app = context.read<AppState>();
-    if (app.hasUnrecordedReading && app.readingText?.id != text.id) {
-      app.pauseReadingTimer();
-      final discard = await showConfirmDialog(context,
-        title: '确认切换',
-        content: '当前文章阅读未满30秒，确定放弃？',
-        confirmLabel: '放弃',
-      );
-      if (!discard) { app.resumeReadingTimer(); return; }
-      app.discardCurrentReading();
-    }
-    final ok = app.loadTextForReading(text.id);
-    if (ok) {
-      setState(() => _mode = _ReadHubMode.reading);
-    }
+  void _onSelectText(ChineseText text) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ArticleDetailPage(textId: text.id),
+      ),
+    );
   }
 
   Widget _buildReadingMode() {
@@ -453,7 +371,6 @@ class _ReadHubPageState extends State<ReadHubPage>
     app.applyReadingEffect();
     app.stopReadingTimer();
     app.discardCurrentReading();
-    setState(() => _mode = _ReadHubMode.browsing);
   }
 
   void _confirmAbandon() async {
@@ -475,7 +392,6 @@ class _ReadHubPageState extends State<ReadHubPage>
       app.applyReadingEffect();
     }
     app.discardCurrentReading();
-    setState(() => _mode = _ReadHubMode.browsing);
   }
 
   void _exitReading() {
@@ -483,6 +399,21 @@ class _ReadHubPageState extends State<ReadHubPage>
     app.stopReadingTimer();
     app.applyReadingEffect();
     app.discardCurrentReading();
-    setState(() => _mode = _ReadHubMode.browsing);
+  }
+}
+
+class _ReadStatusLabel extends StatelessWidget {
+  const _ReadStatusLabel({required this.textId});
+  final int textId;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRead = context.select((AppState a) => a.isTextRead(textId));
+    return Text(
+      isRead ? '已读' : '未读',
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: isRead ? AppTheme.stoneGreen : AppTheme.inkSecondary,
+      ),
+    );
   }
 }

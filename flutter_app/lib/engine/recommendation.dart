@@ -28,6 +28,7 @@ class RecommendationEngine {
         readCString(info.title, 256),
         readCString(info.author, 128),
         readCString(info.dynasty, 64),
+        source: readCString(info.source, 64),
       ));
     }
     calloc.free(infos);
@@ -47,7 +48,10 @@ class RecommendationEngine {
       readCString(d.title, 256),
       readCString(d.author, 128),
       readCString(d.dynasty, 64),
+      readCString(d.source, 64),
+      readCString(d.background, 2048),
       readCString(d.content, 65536),
+      d.charCount,
       [for (int i = 0; i < 10; i++) d.difficulties[i]],
     );
     calloc.free(detail);

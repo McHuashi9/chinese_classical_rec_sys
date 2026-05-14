@@ -159,6 +159,8 @@ extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
         out[i].author[127] = '\0';
         std::strncpy(out[i].dynasty, t.getDynasty().c_str(), 63);
         out[i].dynasty[63] = '\0';
+        std::strncpy(out[i].source, t.getSource().c_str(), 63);
+        out[i].source[63] = '\0';
     }
 }
 
@@ -180,8 +182,13 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
     out->author[127] = '\0';
     std::strncpy(out->dynasty, text.getDynasty().c_str(), 63);
     out->dynasty[63] = '\0';
+    std::strncpy(out->source, text.getSource().c_str(), 63);
+    out->source[63] = '\0';
+    std::strncpy(out->background, text.getBackground().c_str(), 2047);
+    out->background[2047] = '\0';
     std::strncpy(out->content, text.getContent().c_str(), 65535);
     out->content[65535] = '\0';
+    out->char_count = text.getCharCount();
     for (int i = 0; i < 10; i++) {
         out->difficulties[i] = text.getDifficulty(i);
     }
@@ -234,6 +241,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
 
     // 持久化
     g_state.userRepo->saveUser(cpp_user);
+    g_state.user = std::make_unique<User>(cpp_user);
     return BRIDGE_OK;
 }
 
@@ -262,6 +270,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
 
     // 持久化修剪后的状态
     g_state.userRepo->saveUser(cpp_user);
+    g_state.user = std::make_unique<User>(cpp_user);
     return BRIDGE_OK;
 }
 

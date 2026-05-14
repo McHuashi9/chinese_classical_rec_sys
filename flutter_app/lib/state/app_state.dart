@@ -25,7 +25,7 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
-  static const currentVersion = '0.4.0';
+  static const currentVersion = '0.5.0';
 
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
@@ -78,6 +78,9 @@ class AppState extends ChangeNotifier {
   int get elapsedSeconds => _elapsedSeconds;
   bool get isReading => _readingText != null;
   HistoryService get history => _historyService!;
+
+  bool isTextRead(int textId) =>
+      _textReadStates[textId]?.effectApplied ?? false;
 
   bool get hasUnrecordedReading {
     if (_readingTextId == null) return false;
@@ -197,6 +200,8 @@ class AppState extends ChangeNotifier {
   ReadingStats getReadingStats() => history.computeStats(history.getRecent(9999));
 
   // ─── 阅读 ─────────────────────────────────────────────────────
+
+  ChineseText? getTextDetail(int textId) => _engine.getTextDetail(textId);
 
   bool loadTextForReading(int textId) {
     final text = _engine.getTextDetail(textId);

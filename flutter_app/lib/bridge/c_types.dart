@@ -3,6 +3,7 @@ import 'dart:ffi';
 
 /// C UserData struct — matches bridge/c_types.h
 /// 10维能力向量 + 基础能力 + 最近阅读时间
+@Packed(1)
 final class UserData extends Struct {
   @Array(10)
   external Array<Double> abilities;
@@ -15,6 +16,7 @@ final class UserData extends Struct {
 }
 
 /// C TextInfo struct — 列表展示用摘要
+@Packed(1)
 final class TextInfo extends Struct {
   @Int32()
   external int id;
@@ -27,9 +29,13 @@ final class TextInfo extends Struct {
 
   @Array(64)
   external Array<Uint8> dynasty;
+
+  @Array(64)
+  external Array<Uint8> source;
 }
 
 /// C TextDetail struct — 含全文 + 难度向量
+@Packed(1)
 final class TextDetail extends Struct {
   @Int32()
   external int id;
@@ -43,14 +49,24 @@ final class TextDetail extends Struct {
   @Array(64)
   external Array<Uint8> dynasty;
 
+  @Array(64)
+  external Array<Uint8> source;
+
+  @Array(2048)
+  external Array<Uint8> background;
+
   @Array(65536)
   external Array<Uint8> content;
+
+  @Int32()
+  external int charCount;
 
   @Array(10)
   external Array<Double> difficulties;
 }
 
 /// C ReadingRecordData struct — 阅读历史记录
+@Packed(1)
 final class ReadingRecordData extends Struct {
   @Int32()
   external int id;

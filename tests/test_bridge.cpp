@@ -49,6 +49,7 @@ TEST_CASE("bridge - 完整初始化链路 smoke test", "[bridge][smoke]") {
     TextDetail detail;
     REQUIRE(text_get_detail(1, &detail) == BRIDGE_OK);
     REQUIRE(detail.id == 1);
+    REQUIRE(detail.char_count > 0);
 
     int out_ids[5];
     double out_probs[5];

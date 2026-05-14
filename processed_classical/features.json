@@ -1754,21 +1754,6 @@
     "f12_allusion_density": 0.003868,
     "f13_semantic_complexity": 0.004484
   },
-  "楚归晋知": {
-    "f1_avg_sentence_length": 14.85,
-    "f2_char_count": 297,
-    "f3_sentence_count": 20,
-    "f4_total_words": 294,
-    "f5_function_word_ratio": 0.2181,
-    "f6_avg_char_log_freq": -2.7952,
-    "f7_rare_char_density": 0.0538,
-    "f8_tongjiazi_density": 0.0,
-    "f9_ppl_ancient": 3.28,
-    "f10_ppl_modern": 102.98,
-    "f11_mattr": 0.8525,
-    "f12_allusion_density": 0.0,
-    "f13_semantic_complexity": 0.017544
-  },
   "永州韦使君新堂记": {
     "f1_avg_sentence_length": 17.75,
     "f2_char_count": 284,
@@ -4018,5 +4003,20 @@
     "f11_mattr": 0.7961,
     "f12_allusion_density": 0.00457,
     "f13_semantic_complexity": 0.051546
+  },
+  "楚归晋知罃": {
+    "f1_avg_sentence_length": 14.85,
+    "f2_char_count": 297,
+    "f3_sentence_count": 20,
+    "f4_total_words": 294,
+    "f5_function_word_ratio": 0.2181,
+    "f6_avg_char_log_freq": -2.7952,
+    "f7_rare_char_density": 0.0538,
+    "f8_tongjiazi_density": 0.0,
+    "f9_ppl_ancient": 3.28,
+    "f10_ppl_modern": 102.98,
+    "f11_mattr": 0.8525,
+    "f12_allusion_density": 0.0,
+    "f13_semantic_complexity": 0.017544
   }
 }
