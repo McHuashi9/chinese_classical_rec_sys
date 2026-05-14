@@ -243,9 +243,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
 
       if (latest == null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('网络不可用，请稍后重试')),
-        );
+        final reason = app.updateCheckError ?? '网络不可用，请稍后重试';
+        messenger.showSnackBar(SnackBar(content: Text(reason)));
       } else if (latest == current) {
         messenger.showSnackBar(
           SnackBar(content: Text('已是最新版本 ${AppState.currentVersion}')),
