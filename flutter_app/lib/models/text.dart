@@ -4,7 +4,10 @@ class ChineseText {
   final String title;
   final String author;
   final String dynasty;
+  final String source;
+  final String background;
   final String content;
+  final int charCount;
   final List<double> difficulties;
 
   const ChineseText({
@@ -12,17 +15,21 @@ class ChineseText {
     required this.title,
     required this.author,
     required this.dynasty,
+    this.source = '',
+    this.background = '',
     this.content = '',
+    this.charCount = 0,
     this.difficulties = const [],
   });
 
   /// 从 C [TextInfo] 创建摘要视图 (不含全文内容)
-  factory ChineseText.fromInfo(int id, String title, String author, String dynasty) {
+  factory ChineseText.fromInfo(int id, String title, String author, String dynasty, {String source = ''}) {
     return ChineseText(
       id: id,
       title: title,
       author: author,
       dynasty: dynasty,
+      source: source,
     );
   }
 
@@ -32,7 +39,10 @@ class ChineseText {
     String title,
     String author,
     String dynasty,
+    String source,
+    String background,
     String content,
+    int charCount,
     List<double> difficulties,
   ) {
     return ChineseText(
@@ -40,7 +50,10 @@ class ChineseText {
       title: title,
       author: author,
       dynasty: dynasty,
+      source: source,
+      background: background,
       content: content,
+      charCount: charCount,
       difficulties: difficulties,
     );
   }

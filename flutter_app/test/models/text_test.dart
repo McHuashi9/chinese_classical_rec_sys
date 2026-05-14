@@ -16,18 +16,24 @@ void main() {
 
     test('fromDetail creates full record', () {
       final text = ChineseText.fromDetail(
-        1, '论语', '孔子', '春秋', '子曰：学而时习之',
+        1, '论语', '孔子', '春秋', '《论语》', '背景介绍',
+        '子曰：学而时习之',
+        8,
         [0.3, 0.2, 0.4, 0.1, 0.5, 0.6, 0.7, 0.8, 0.9, 0.0],
       );
       expect(text.id, 1);
       expect(text.content, '子曰：学而时习之');
+      expect(text.source, '《论语》');
+      expect(text.background, '背景介绍');
+      expect(text.charCount, 8);
       expect(text.difficulties.length, 10);
       expect(text.difficulties[2], 0.4);
     });
 
     test('averageDifficulty computes correctly', () {
       final text = ChineseText.fromDetail(
-        1, 'test', 'author', '唐', '',
+        1, 'test', 'author', '唐', '', '',
+        '', 0,
         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
       );
       expect(text.averageDifficulty, 0.05);
@@ -40,6 +46,8 @@ void main() {
         id: 1, title: '论语', author: '孔子', dynasty: '春秋');
       expect(a.id, b.id);
       expect(a.title, b.title);
+      expect(a.source, b.source);
+      expect(a.background, b.background);
     });
   });
 

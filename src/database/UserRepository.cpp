@@ -145,39 +145,22 @@ bool UserRepository::getUser(User& user) {
 }
 
 bool UserRepository::saveUser(const User& user) {
+    auto buildUserParams = [&user]() -> std::vector<SqlParam> {
+        std::vector<SqlParam> p;
+        for (int i = 0; i < 10; ++i) {
+            p.push_back(user.getAbility(i));
+        }
+        for (int i = 0; i < 10; ++i) {
+            p.push_back(user.getBaseAbility(i));
+        }
+        p.push_back(static_cast<double>(user.getLastReadTime()));
+        return p;
+    };
+
+    auto userParams = buildUserParams();
     std::vector<SqlParam> params;
-    
-    // INSERT 部分的参数
-    for (int i = 0; i < 10; ++i) {
-        params.push_back(user.getAbility(i));
-    }
-    params.push_back(user.getBaseAbility(0));
-    params.push_back(user.getBaseAbility(1));
-    params.push_back(user.getBaseAbility(2));
-    params.push_back(user.getBaseAbility(3));
-    params.push_back(user.getBaseAbility(4));
-    params.push_back(user.getBaseAbility(5));
-    params.push_back(user.getBaseAbility(6));
-    params.push_back(user.getBaseAbility(7));
-    params.push_back(user.getBaseAbility(8));
-    params.push_back(user.getBaseAbility(9));
-    params.push_back(static_cast<double>(user.getLastReadTime()));
-    
-    // UPDATE 部分的参数
-    for (int i = 0; i < 10; ++i) {
-        params.push_back(user.getAbility(i));
-    }
-    params.push_back(user.getBaseAbility(0));
-    params.push_back(user.getBaseAbility(1));
-    params.push_back(user.getBaseAbility(2));
-    params.push_back(user.getBaseAbility(3));
-    params.push_back(user.getBaseAbility(4));
-    params.push_back(user.getBaseAbility(5));
-    params.push_back(user.getBaseAbility(6));
-    params.push_back(user.getBaseAbility(7));
-    params.push_back(user.getBaseAbility(8));
-    params.push_back(user.getBaseAbility(9));
-    params.push_back(static_cast<double>(user.getLastReadTime()));
+    params.insert(params.end(), userParams.begin(), userParams.end());
+    params.insert(params.end(), userParams.begin(), userParams.end());
     
     return db->executeSQL(
         "INSERT INTO user (id, "

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
+import 'package:chinese_classical_rec_sys/state/app_state.dart';
 
 class StatsCard extends StatelessWidget {
   final ReadingStats stats;
@@ -9,6 +11,7 @@ class StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fontScale = context.select((AppState a) => a.fontScale);
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -16,7 +19,7 @@ class StatsCard extends StatelessWidget {
           crossAxisCount: 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 2.5,
+          childAspectRatio: (2.5 / fontScale.clamp(1.0, 2.5)),
           children: [
             _StatItem(
               label: '总阅读时间',

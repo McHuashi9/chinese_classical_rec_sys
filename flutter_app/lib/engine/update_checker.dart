@@ -6,7 +6,7 @@ import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class UpdateChecker {
   static const _releaseUrl =
-      'https://api.github.com/repos/anomalyco/chinese_classical_rec_sys/releases/latest';
+      'https://api.github.com/repos/McHuashi9/chinese_classical_rec_sys/releases/latest';
   static const _autoCheckInterval = Duration(hours: 24);
   static const _minManualInterval = Duration(minutes: 5);
   static const _rateLimitBackoff = Duration(hours: 1);
@@ -43,11 +43,9 @@ class UpdateChecker {
 
     await _prefs.setInt('update_last_manual_ms', now);
     final result = await _fetchLatestVersion();
-    if (result != null) {
-      await _prefs.setInt('update_last_check_ms', now);
-    }
     if (result == null) return null;
-    return result.toVersion() > Version.parse(currentVersion) ? result.toVersion() : null;
+    await _prefs.setInt('update_last_check_ms', now);
+    return result.toVersion();
   }
 
   Future<Version?> _check(String currentVersion) async {

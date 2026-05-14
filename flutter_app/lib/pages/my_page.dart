@@ -15,22 +15,23 @@ class MyPage extends StatelessWidget {
     final user = context.select((AppState a) => a.user);
 
     return user != null
-        ? _MyContent(abilities: _getAbilities(user))
+        ? _MyContent(user: user)
         : const Center(child: CircularProgressIndicator());
-  }
-
-  List<double> _getAbilities(User user) {
-    return List.generate(10, (i) => user.getAbility(i).toDouble());
   }
 }
 
 class _MyContent extends StatelessWidget {
-  final List<double> abilities;
+  final User user;
 
-  const _MyContent({required this.abilities});
+  const _MyContent({required this.user});
 
-  double get _average =>
-      abilities.isEmpty ? 0 : abilities.reduce((a, b) => a + b) / abilities.length;
+  double get _average {
+    double sum = 0;
+    for (int i = 0; i < 10; i++) {
+      sum += user.getAbility(i);
+    }
+    return sum / 10;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +113,7 @@ class _MyContent extends StatelessWidget {
           child: SizedBox(
             width: sz,
             height: sz,
-            child: RadarChart(targetValues: abilities),
+            child: RadarChart(targetValues: List.generate(10, (i) => user.getAbility(i).toDouble())),
           ),
         );
       },
@@ -153,7 +154,7 @@ class _MyContent extends StatelessWidget {
   }
 
   Widget _buildDimBar(BuildContext context, int idx, bool isDark) {
-    final val = abilities[idx].clamp(0.0, 1.0);
+    final val = user.getAbility(idx).toDouble().clamp(0.0, 1.0);
     final pct = (val * 100).toStringAsFixed(0);
 
     return Padding(
@@ -193,13 +194,14 @@ class _MyContent extends StatelessWidget {
           ),
           SizedBox(width: context.gapMedium),
           SizedBox(
-            width: 36,
+            width: 48,
             child: Text(
               '$pct%',
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

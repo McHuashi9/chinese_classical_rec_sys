@@ -1,6 +1,7 @@
 #include "models/Text.h"
 
 Text::Text() : id(0), title(""), author(""), dynasty(""), content(""),
+               charCount(0),
                f1AvgSentenceLength(0.0), f3SentenceCount(0.0),
                f5FunctionWordRatio(0.0), f6AvgCharLogFreq(0.0),
                f8TongjiaziDensity(0.0), f9PplAncient(0.0),
@@ -45,6 +46,30 @@ void Text::setContent(const std::string& content) {
 
 std::string Text::getContent() const {
     return content;
+}
+
+void Text::setBackground(const std::string& bg) {
+    this->background = bg;
+}
+
+std::string Text::getBackground() const {
+    return background;
+}
+
+void Text::setSource(const std::string& s) {
+    this->source = s;
+}
+
+std::string Text::getSource() const {
+    return source;
+}
+
+void Text::setCharCount(int count) {
+    this->charCount = count;
+}
+
+int Text::getCharCount() const {
+    return charCount;
 }
 
 double Text::getDifficulty(int index) const {

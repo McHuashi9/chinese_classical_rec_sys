@@ -41,6 +41,15 @@ public:
     void setContent(const std::string& content);
     std::string getContent() const;
     
+    void setBackground(const std::string& bg);
+    std::string getBackground() const;
+    
+    void setSource(const std::string& s);
+    std::string getSource() const;
+    
+    void setCharCount(int count);
+    int getCharCount() const;
+    
     /**
      * @brief 统一接口：通过索引访问难度值 (0-9 对应 d1-d10)
      * @param index 维度索引 (0-9)
@@ -58,7 +67,10 @@ private:
     std::string title;
     std::string author;
     std::string dynasty;
+    std::string background;
+    std::string source;
     std::string content;
+    int charCount;
     
     // 10维特征
     double f1AvgSentenceLength;    // d1

@@ -17,7 +17,10 @@ bool TextRepository::initTable() {
         "title TEXT, "
         "author TEXT, "
         "dynasty TEXT, "
+        "background TEXT DEFAULT '', "
+        "source TEXT DEFAULT '', "
         "content TEXT NOT NULL, "
+        "char_count INTEGER DEFAULT 0, "
         "f1_avg_sentence_length REAL DEFAULT 0.0, "
         "f3_sentence_count REAL DEFAULT 0.0, "
         "f5_function_word_ratio REAL DEFAULT 0.0, "
@@ -44,7 +47,10 @@ static void populateTextFromRow(Text& text, int argc, char** argv, char** azColN
         {"title", [](Text* t, const char* v) { t->setTitle(v); }},
         {"author", [](Text* t, const char* v) { t->setAuthor(v); }},
         {"dynasty", [](Text* t, const char* v) { t->setDynasty(v); }},
+        {"background", [](Text* t, const char* v) { t->setBackground(v); }},
+        {"source", [](Text* t, const char* v) { t->setSource(v); }},
         {"content", [](Text* t, const char* v) { t->setContent(v); }},
+        {"char_count", [](Text* t, const char* v) { t->setCharCount(std::atoi(v)); }},
         {"f1_avg_sentence_length", [](Text* t, const char* v) { t->setDifficulty(0, std::atof(v)); }},
         {"f3_sentence_count", [](Text* t, const char* v) { t->setDifficulty(1, std::atof(v)); }},
         {"f5_function_word_ratio", [](Text* t, const char* v) { t->setDifficulty(2, std::atof(v)); }},
@@ -88,7 +94,7 @@ bool TextRepository::getTextById(int id, Text& text) {
     
     // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, content, "
+        "SELECT id, title, author, dynasty, background, source, content, char_count, "
         "f1_avg_sentence_length, f3_sentence_count, "
         "f5_function_word_ratio, f6_avg_char_log_freq, "
         "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
@@ -114,7 +120,7 @@ std::vector<Text> TextRepository::getAllTexts() {
     
     // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, content, "
+        "SELECT id, title, author, dynasty, background, source, content, char_count, "
         "f1_avg_sentence_length, f3_sentence_count, "
         "f5_function_word_ratio, f6_avg_char_log_freq, "
         "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
@@ -133,22 +139,25 @@ bool TextRepository::saveText(const Text& text) {
         text.getTitle(),
         text.getAuthor(),
         text.getDynasty(),
+        text.getBackground(),
+        text.getSource(),
         text.getContent()
     };
     
-    // 10维特征参数
     std::vector<double> realParams;
+    realParams.push_back(static_cast<double>(text.getCharCount()));
     for (int i = 0; i < 10; i++) {
         realParams.push_back(text.getDifficulty(i));
     }
     
     return db->executeSQL(
-        "INSERT INTO classical_text (title, author, dynasty, content, "
+        "INSERT INTO classical_text "
+        "(title, author, dynasty, background, source, content, char_count, "
         "f1_avg_sentence_length, f3_sentence_count, "
         "f5_function_word_ratio, f6_avg_char_log_freq, "
         "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
         "f11_mattr, f12_allusion_density, f13_semantic_complexity) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         textParams,
         realParams
     );
@@ -159,11 +168,13 @@ bool TextRepository::updateText(const Text& text) {
         text.getTitle(),
         text.getAuthor(),
         text.getDynasty(),
+        text.getBackground(),
+        text.getSource(),
         text.getContent()
     };
     
-    // 10维特征参数 + id
     std::vector<double> realParams;
+    realParams.push_back(static_cast<double>(text.getCharCount()));
     for (int i = 0; i < 10; i++) {
         realParams.push_back(text.getDifficulty(i));
     }
@@ -171,7 +182,8 @@ bool TextRepository::updateText(const Text& text) {
     
     return db->executeSQL(
         "UPDATE classical_text SET "
-        "title = ?, author = ?, dynasty = ?, content = ?, "
+        "title = ?, author = ?, dynasty = ?, background = ?, source = ?, content = ?, "
+        "char_count = ?, "
         "f1_avg_sentence_length = ?, f3_sentence_count = ?, "
         "f5_function_word_ratio = ?, f6_avg_char_log_freq = ?, "
         "f8_tongjiazi_density = ?, f9_ppl_ancient = ?, f10_ppl_modern = ?, "
@@ -231,7 +243,7 @@ std::vector<Text> TextRepository::getTextsByIdRange(int startId, int endId) {
     
     // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, content, "
+        "SELECT id, title, author, dynasty, background, source, content, char_count, "
         "f1_avg_sentence_length, f3_sentence_count, "
         "f5_function_word_ratio, f6_avg_char_log_freq, "
         "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
