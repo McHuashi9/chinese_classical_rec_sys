@@ -146,7 +146,7 @@ jobs:
           rm -rf flutter_app/ios
           cd flutter_app && flutter create --platforms=ios .
       - name: Build libchinese_core.a
-        run: bash scripts/build_ios_core.sh
+        run: bash scripts/project/build_ios_core.sh
       - name: Copy static lib into Runner
         run: cp build/ios/libchinese_core.a flutter_app/ios/Runner/
       - name: Build unsigned IPA

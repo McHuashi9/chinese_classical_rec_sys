@@ -141,7 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: context.gapSmall),
             Row(
               children: [
-                Text('古典文学阅读推荐系统',
+                Text('文言文推荐系统',
                     style: theme.textTheme.labelLarge
                         ?.copyWith(color: secondaryColor)),
                 const Spacer(),

@@ -6,7 +6,7 @@ SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
 ARCH="arm64"
 MIN_IOS="15.0"
 OUT_DIR="build/ios"
-SOURCES=$(cat scripts/core_sources.txt)
+SOURCES=$(cat scripts/project/core_sources.txt)
 
 mkdir -p "$OUT_DIR"
 
