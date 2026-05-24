@@ -71,18 +71,33 @@ CI 每次发版自动构建未签名 `.ipa`，需用户自行签名安装：
 ## 架构
 
 ```
-bridge/          C FFI 桥接层
-src/core/        推荐引擎 · 知识追踪
-src/database/    SQLite 访问层
+CMakeLists.txt    C++ 顶层构建（SQLite3 + spdlog）
+include/          C++ 头文件（引擎 · 知识追踪）
+bridge/           C FFI 导出层
+src/core/         推荐引擎 · 知识追踪
+src/database/     SQLite 访问层
+tests/            Catch2 单元测试
+third_party/      供应商库（sqlite3 · spdlog · Catch2）
+scripts/          Python 数据管线（特征提取 · 实验）
+assets/           字体 · 内置数据库
+data/             字频表 · 权重 · 典故索引
+packaging/        AppImage / iOS 打包脚本
+processed_classical/  预处理缓存（特征 · 通假字 · 困惑度）
 flutter_app/lib/
-  bridge/        dart:ffi 绑定
-  engine/        FFI 封装
-  models/        User · ChineseText · RecommendResult
-  state/         AppState (ChangeNotifier + Provider)
-  theme/         AppTheme — 颜色 · 字体 Token
-  pages/         library · recommend · read · ability · settings
-  widgets/       library_card · recommend_card · radar_chart
+  main.dart       引导入口
+  bridge/         dart:ffi 绑定
+  engine/         FFI 封装
+  models/         User · ChineseText · RecommendResult
+  service/        历史记录
+  state/          AppState (ChangeNotifier + Provider)
+  theme/          AppTheme — 颜色 · 字体 Token
+  pages/          read_hub · my · settings · article_detail
+  widgets/        reading_frame · radar_chart · stats_card · dialogs
 ```
+
+## 论文复现
+
+论文全文因保密暂未公开。数据准备、特征提取、实验对比等完整复现步骤见根目录下的 [`论文复现指南.md`](论文复现指南.md)。
 
 ## 许可证
 
