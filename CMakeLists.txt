@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
-project(chinese_classical_rec_sys VERSION 0.3.0)
+# 从 pubspec.yaml 读取版本号，唯一源
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter_app/pubspec.yaml" _PUBSPEC)
+string(REGEX MATCH "version: ([0-9]+\\.[0-9]+\\.[0-9]+)" _ ${_PUBSPEC})
+set(APP_VERSION ${CMAKE_MATCH_1})
+project(chinese_classical_rec_sys VERSION ${APP_VERSION})
 
 # 全局启用所有日志级别。运行时通过 spdlog::set_level 控制输出。
 add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
@@ -70,42 +74,20 @@ target_link_libraries(chinese_classical_lib PUBLIC sqlite3_static)
 
 # 为静态库提供版本宏（供 Logger.cpp session 标记使用）
 target_compile_definitions(chinese_classical_lib PUBLIC APP_VERSION="${CMAKE_PROJECT_VERSION}")
+set_target_properties(chinese_classical_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Windows 平台链接 nowide（包含 cin/cout/cerr 全局对象定义）
 if(WIN32)
     target_link_libraries(chinese_classical_lib PUBLIC nowide_static)
 endif()
 
-# ─── Flutter FFI 共享库 (chinese_core_shared) ──────────────────────────────────
+# ─── Flutter FFI 共享库 (chinese_core) ──────────────────────────────────────────
 
-file(GLOB_RECURSE CORE_SOURCES "src/*.cpp")
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
-list(APPEND CORE_SOURCES "bridge/bridge.cpp")
-
-add_library(chinese_core SHARED ${CORE_SOURCES})
+add_library(chinese_core SHARED "bridge/bridge.cpp")
 target_include_directories(chinese_core PUBLIC
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/third_party/spdlog-1.17.0/include
-    ${CMAKE_SOURCE_DIR}/third_party/sqlite3
     ${CMAKE_SOURCE_DIR}/bridge
 )
-if(WIN32)
-    target_include_directories(chinese_core PUBLIC
-        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
-        ${CMAKE_SOURCE_DIR}/third_party/nowide/src
-    )
-    target_compile_definitions(chinese_core PRIVATE SPDLOG_WCHAR_FILENAMES)
-    target_link_libraries(chinese_core PRIVATE nowide_static)
-else()
-    target_include_directories(chinese_core PUBLIC
-        ${CMAKE_SOURCE_DIR}/third_party/nowide/include
-    )
-endif()
-
-target_link_libraries(chinese_core PRIVATE sqlite3_static)
+target_link_libraries(chinese_core PRIVATE chinese_classical_lib)
 
 # Linux: 确保 SQLite3 以 -fPIC 编译（共享库必需）
 set_target_properties(sqlite3_static PROPERTIES POSITION_INDEPENDENT_CODE ON)

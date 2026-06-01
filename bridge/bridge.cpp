@@ -13,6 +13,7 @@
 
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
@@ -30,6 +31,7 @@ static struct {
     std::unique_ptr<std::unordered_map<int, size_t>> textIndex;
     bool initialized = false;
 } g_state;
+static std::mutex g_mtx;
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ static void c_to_user(const UserData* src, User& dst)
 
 extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     Logger::getInstance().init();
     LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
 
@@ -104,6 +107,7 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
 
 extern "C" CHINESE_CORE_EXPORT void db_close()
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     g_state = {};
     LOG_INFO("bridge: db_close 完成");
 }
@@ -112,6 +116,7 @@ extern "C" CHINESE_CORE_EXPORT void db_close()
 
 extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     user_to_c(*g_state.user, out);
     return BRIDGE_OK;
@@ -119,6 +124,7 @@ extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 
 extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     c_to_user(in, *g_state.user);
     if (g_state.userRepo->saveUser(*g_state.user)) {
@@ -130,6 +136,7 @@ extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 
 extern "C" CHINESE_CORE_EXPORT int user_init_default()
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     g_state.user->initializeDefault();
     if (g_state.userRepo->saveUser(*g_state.user)) {
@@ -142,12 +149,14 @@ extern "C" CHINESE_CORE_EXPORT int user_init_default()
 
 extern "C" CHINESE_CORE_EXPORT int text_get_count()
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     return static_cast<int>(g_state.texts->size());
 }
 
 extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized || !out) return;
     int n = std::min(max_count, static_cast<int>(g_state.texts->size()));
     for (int i = 0; i < n; i++) {
@@ -161,11 +170,14 @@ extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
         out[i].dynasty[63] = '\0';
         std::strncpy(out[i].source, t.getSource().c_str(), 63);
         out[i].source[63] = '\0';
+        std::strncpy(out[i].source_detail, t.getSourceDetail().c_str(), 127);
+        out[i].source_detail[127] = '\0';
     }
 }
 
 extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
 
@@ -184,8 +196,13 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
     out->dynasty[63] = '\0';
     std::strncpy(out->source, text.getSource().c_str(), 63);
     out->source[63] = '\0';
+    std::strncpy(out->source_detail, text.getSourceDetail().c_str(), 127);
+    out->source_detail[127] = '\0';
     std::strncpy(out->background, text.getBackground().c_str(), 2047);
     out->background[2047] = '\0';
+    if (text.getContent().size() > 65535) {
+        LOG_WARN("bridge: text_id={} 内容截断 ({} > 65535 字节)", id, text.getContent().size());
+    }
     std::strncpy(out->content, text.getContent().c_str(), 65535);
     out->content[65535] = '\0';
     out->char_count = text.getCharCount();
@@ -198,8 +215,10 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
 // ─── recommend ─────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
-                           int* out_ids, double* out_probs)
+                           int* out_ids, double* out_probs,
+                           int out_ids_capacity, int out_probs_capacity)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!user || !out_ids || !out_probs) return BRIDGE_ERR_GENERIC;
 
@@ -208,7 +227,10 @@ extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
 
     auto results = g_state.engine->recommend(cpp_user, *g_state.texts, top_k);
 
-    for (size_t i = 0; i < results.size(); i++) {
+    size_t n = results.size();
+    if (static_cast<int>(n) > out_ids_capacity) n = out_ids_capacity;
+    if (static_cast<int>(n) > out_probs_capacity) n = out_probs_capacity;
+    for (size_t i = 0; i < n; i++) {
         out_ids[i] = results[i].first;
         out_probs[i] = results[i].second;
     }
@@ -222,6 +244,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
                                    double read_time, int64_t timestamp,
                                    UserData* out_user)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
     auto it = g_state.textIndex->find(text_id);
@@ -230,12 +253,13 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
     User cpp_user;
     c_to_user(user, cpp_user);
 
+    time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
     g_state.tracker->applyReadEffect(cpp_user, (*g_state.texts)[it->second], read_time,
-                                     static_cast<time_t>(timestamp));
+                                     effective_ts);
     user_to_c(cpp_user, out_user);
 
     g_state.historyRepo->markAsTracked(text_id);
-    g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
+    g_state.historyRepo->addRecord(text_id, read_time, effective_ts);
     LOG_INFO("bridge: 知识追踪完成 — text_id={}, read_time={:.1f}s, avg_ability={:.3f}→{:.3f}",
              text_id, read_time, g_state.user->getAverageAbility(), cpp_user.getAverageAbility());
 
@@ -248,6 +272,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
 extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user, int64_t now,
                                          UserData* out_user)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
     User cpp_user;
@@ -260,6 +285,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user
 
 extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t now, UserData* out_user)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
 
     User cpp_user;
@@ -278,6 +304,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
 
 extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_time, int64_t timestamp)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     bool ok = g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
     if (ok) {
@@ -288,6 +315,7 @@ extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_t
 
 extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordData* out, int max_count)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized || !out) return BRIDGE_ERR_NOT_INIT;
 
     auto records = g_state.historyRepo->getRecentRecords(limit);
@@ -304,12 +332,14 @@ extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordDa
 
 extern "C" CHINESE_CORE_EXPORT int history_get_total_count()
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return 0;
     return g_state.historyRepo->getTotalReadCount();
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int max_count)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized || !out) return 0;
 
     auto ids = g_state.historyRepo->getTrackedTextIds();
@@ -325,6 +355,7 @@ extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int ma
 
 extern "C" CHINESE_CORE_EXPORT void log_write(int level, const char* message)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     switch (level) {
         case 0: LOG_DEBUG("{}", message); break;
         case 1: LOG_INFO("{}", message);  break;
@@ -336,6 +367,7 @@ extern "C" CHINESE_CORE_EXPORT void log_write(int level, const char* message)
 
 extern "C" CHINESE_CORE_EXPORT void log_set_level(const char* level)
 {
+    std::lock_guard<std::mutex> lock(g_mtx);
     Logger::getInstance().setLevel(level);
     LOG_INFO("bridge: 日志级别切换为 {}", level);
 }

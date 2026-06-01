@@ -3,10 +3,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
+import 'package:chinese_classical_rec_sys/engine/github_config.dart';
 
 class UpdateChecker {
-  static const _releaseUrl =
-      'https://api.github.com/repos/McHuashi9/chinese_classical_rec_sys/releases/latest';
+  static final _releaseUrl = GithubConfig.releaseApiLatest;
   static const _autoCheckInterval = Duration(hours: 24);
   static const _minManualInterval = Duration(minutes: 5);
   static const _rateLimitBackoff = Duration(hours: 1);

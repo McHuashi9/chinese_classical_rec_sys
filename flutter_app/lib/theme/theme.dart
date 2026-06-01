@@ -265,19 +265,19 @@ extension SpacingScale on BuildContext {
         ScreenSize.large => 8,
       };
 
-  double get gapHuge => switch (_screenSize) {
+  double get gapLg => switch (_screenSize) {
         ScreenSize.small => 10,
         ScreenSize.medium => 14,
         ScreenSize.large => 16,
       };
 
-  double get gapXHuge => switch (_screenSize) {
+  double get gapXl => switch (_screenSize) {
         ScreenSize.small => 16,
         ScreenSize.medium => 20,
         ScreenSize.large => 24,
       };
 
-  double get gapXXHuge => switch (_screenSize) {
+  double get gapXxl => switch (_screenSize) {
         ScreenSize.small => 24,
         ScreenSize.medium => 28,
         ScreenSize.large => 32,

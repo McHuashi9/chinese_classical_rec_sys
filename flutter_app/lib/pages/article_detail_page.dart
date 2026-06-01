@@ -1,9 +1,20 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/user.dart';
+import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
+
+const _deltaStar = 0.13;
+const _sigma = 0.25;
+
+double _learningGain(double dJ, double uJ) {
+  final x = dJ - uJ - _deltaStar;
+  return exp(-(x * x) / (2 * _sigma * _sigma));
+}
 
 class ArticleDetailPage extends StatelessWidget {
   final int textId;
@@ -56,10 +67,12 @@ class ArticleDetailPage extends StatelessWidget {
             ),
             SizedBox(height: context.gapSmall),
             Text(
-              '${text.author} · ${text.dynasty}',
+              text.dynasty.isEmpty ? text.author : '${text.author} · ${text.dynasty}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             if (text.source.isNotEmpty) ...[
               SizedBox(height: context.gapMedium),
@@ -69,7 +82,7 @@ class ArticleDetailPage extends StatelessWidget {
                 side: BorderSide(color: isDark ? AppTheme.borderLight : AppTheme.border),
               ),
             ],
-            SizedBox(height: context.gapHuge),
+            SizedBox(height: context.gapLg),
             const Divider(color: AppTheme.border, height: 1),
             SizedBox(height: context.gapMedium),
             Row(
@@ -85,7 +98,13 @@ class ArticleDetailPage extends StatelessWidget {
                 ),
               ],
             ),
-            SizedBox(height: context.gapHuge),
+            SizedBox(height: context.gapLg),
+            if (app.user != null && text.difficulties.length == abilityCount) ...[
+              _buildDifficultyMatchSection(context, text, app.user!, isDark),
+              SizedBox(height: context.gapLg),
+              _buildEstimatedGainSection(context, text, app.user!, isDark),
+              SizedBox(height: context.gapLg),
+            ],
             if (text.background.isNotEmpty) ...[
               Row(
                 children: [
@@ -107,7 +126,7 @@ class ArticleDetailPage extends StatelessWidget {
                   height: 1.6,
                 ),
               ),
-              SizedBox(height: context.gapXHuge),
+              SizedBox(height: context.gapXl),
             ],
             SizedBox(
               width: double.infinity,
@@ -130,9 +149,156 @@ class ArticleDetailPage extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(height: context.gapXXHuge),
+            SizedBox(height: context.gapXxl),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDifficultyMatchSection(
+      BuildContext context, ChineseText text, User user, bool isDark) {
+    final abilities = List.generate(abilityCount, (i) => user.getAbility(i).toDouble());
+    final difficulties = text.difficulties;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.radar, size: 16,
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+            SizedBox(width: context.gapSmall),
+            Text(
+              '难度匹配',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: context.gapMedium),
+        Center(
+          child: SizedBox(
+            width: min(400, MediaQuery.sizeOf(context).width * 0.85),
+            height: 250,
+            child: RadarChart(
+              targetValues: abilities,
+              overlayValues: difficulties,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEstimatedGainSection(
+      BuildContext context, ChineseText text, User user, bool isDark) {
+    final gains = <double>[];
+    for (int i = 0; i < abilityCount; i++) {
+      gains.add(_learningGain(text.difficulties[i], user.getAbility(i)));
+    }
+    final total = gains.reduce((a, b) => a + b) / gains.length;
+    final totalPct = (total * 100).toStringAsFixed(1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.trending_up, size: 16,
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+            SizedBox(width: context.gapSmall),
+            Text(
+              '预计阅读收益',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: context.gapSmall),
+        Row(
+          children: [
+            Text(
+              '综合收益 ',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+            ),
+            Text(
+              '$totalPct%',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontFamily: AppTheme.fontUI,
+                color: AppTheme.stoneGreen,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '  ·  $abilityCount 维平均',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: context.gapMedium),
+        ...List.generate(abilityCount, (i) => _buildGainBar(context, i, gains[i], isDark)),
+      ],
+    );
+  }
+
+  Widget _buildGainBar(BuildContext context, int idx, double gain, bool isDark) {
+    final pct = (gain * 100).toStringAsFixed(0);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.cardPaddingV),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              abilityLabels[idx],
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(width: context.gapMedium),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: Container(
+                height: 10,
+                color: AppTheme.stoneGreen.withAlpha(31),
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: gain.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppTheme.stoneGreen,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: context.gapMedium),
+          SizedBox(
+            width: 48,
+            child: Text(
+              '$pct%',
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

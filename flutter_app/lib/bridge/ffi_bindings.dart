@@ -28,6 +28,8 @@ final class NativeBridge {
     int topK,
     Pointer<Int32> outIds,
     Pointer<Double> outProbs,
+    int outIdsCapacity,
+    int outProbsCapacity,
   ) recommend;
 
   // ─── 知识追踪 ────────────────────────────────────────────────
@@ -103,8 +105,8 @@ final class NativeBridge {
         int Function(int, Pointer<TextDetail>)>('text_get_detail');
 
     recommend = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>),
-        int Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>)>(
+        Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>, Int32, Int32),
+        int Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>, int, int)>(
             'recommend');
 
     trackerApplyRead = _lib.lookupFunction<

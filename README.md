@@ -11,94 +11,117 @@
 <h1 align="center">古文推荐系统</h1>
 
 <p align="center">
-  <strong>基于 Flutter Desktop 的古文个性化学习推荐系统</strong><br>
+  <strong>基于知识追踪模型的文言文个性化学习推荐系统</strong><br>
+  Flutter Desktop (Linux/Windows) + Android/iOS · C++ 引擎 · Python 数据管线
 </p>
-
->  **诚征 macOS 贡献者 / Help Wanted: macOS Contributor**
->
-> 项目维护者没有 Mac，也没有 $99 开发者账号。iOS 代码适配正在进行，但没有 macOS 环境无法完成构建。对苹果生态不熟悉，有意者欢迎邮件细聊。
->
-> The maintainer has no Mac or $99 Apple developer account. iOS code adaptation is in progress, but building requires macOS. Not familiar with the Apple ecosystem — feel free to email me for details.
->
-> 联系方式 / Contact：3407131764@qq.com
 
 ---
 
-## 功能
+## 目录
 
-| 页面 | 能力 |
+- [项目简介](#项目简介)
+- [算法与论文](#算法与论文)
+- [功能特性](#功能特性)
+- [快速开始](#快速开始)
+- [项目架构](#项目架构)
+- [贡献](#贡献)
+- [许可](#许可)
+
+---
+
+## 项目简介
+
+这是是一个面向文言文学习者的个性化阅读推荐工具。它不依赖简单的规则或标签分类，而是通过**知识追踪模型**建模学习者的古文能力状态，结合**多维文本特征**（字频、通假字密度、典故密度、语义复杂度等），实现"i+1"难度递进推荐。
+
+---
+
+## 算法与论文
+
+本项目基于一篇暂未公开的论文，将古文能力分解为字词、语法、典故、修辞等维度。旨在为读者推荐难度略高于当前能力水平的文章。
+
+完整的数据准备、特征提取、实验对比步骤见 [`论文复现指南.md`](论文复现指南.md)。
+
+---
+
+## 功能特性
+
+| 功能 | 说明 |
 |------|------|
-| 📚 古文库 | 268 篇分页浏览、搜索作者/标题 |
-| 🎯 个性推荐 | 高斯 i+1 算法、数量可调 |
-| 📖 阅读页 |乌丝栏版框、计时器、键盘翻页 |
-| 🕸️ 能力雷达 | 10 维雷达图 + 综合评分 |
-| ⚙️ 设置 | 亮/暗主题、版本更新检测、DB 自动同步 |
+| 古文库 | 268 篇古文分页浏览，搜索作者/标题，已读/未读标记 |
+| 个性推荐 | 高斯 i+1 推荐引擎，推荐数量可调 |
+| 阅读器 | 乌丝栏版框、8 档字号、计时器、键盘翻页、阅读锁定 |
+| 能力雷达 | 10 维能力雷达图 + 综合评分，追踪学习成长 |
+| 亮/暗主题 | 清爽开关切换，全局统一 |
+| 版本更新 | GitHub Release 检查，一键跳转下载 |
+| 学习统计 | 阅读时长、篇数、日均统计、连续天数 |
+
+---
 
 ## 快速开始
 
 ```bash
-# 1. 数据初始化
-python scripts/init_data.py
+# 1. 数据初始化（生成 classical.db）
+python3 scripts/init_data.py
 
 # 2. 编译 C++ 引擎
-mkdir -p build && cd build && cmake .. && make chinese_core -j$(nproc)
+cmake -B build && cmake --build build -j$(nproc) --target chinese_core
 
-# 3. 启动 Flutter
-cd ../flutter_app && flutter pub get && flutter run -d linux
+# 3. 启动 Flutter 应用
+cd flutter_app && flutter pub get && flutter run -d linux
 ```
+
+Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。iOS 见下方。
 
 ### 运行测试
 
 ```bash
-cd build && make test_runner && ./tests/test_runner   # C++ 测试
-cd ../flutter_app && flutter analyze                    # Dart 静态分析
+cmake --build build -j$(nproc) --target test_runner
+./build/tests/test_runner                     # C++ 单元测试 (Catch2)
+
+cd flutter_app && flutter analyze              # Dart 静态分析
 ```
 
-## iOS 安装（侧载）
+### iOS 侧载
 
-CI 每次发版自动构建未签名 `.ipa`，需用户自行签名安装：
+CI 自动构建未签名 `.ipa`，可使用 SideStore / AltStore 自签安装。详细步骤见 [`SIDELOAD_IOS.md`](SIDELOAD_IOS.md)。
 
-| 工具 | 说明 |
-|------|------|
-| **SideStore** ⭐⭐⭐ | 手机无线自签续签，无需电脑 |
-| AltStore ⭐⭐ | 需电脑 AltServer 后台自动续签 |
-| Sideloadly ⭐ | 每 7 天手动重拖 |
+> **诚征 macOS 贡献者** — CI 已能构建出未签名 `.ipa`，但维护者没有 Mac / 开发者账号，无法本地测试或签名。对苹果生态不熟悉，有意者欢迎邮件：3407131764@qq.com
 
-步骤：下载 CI Release 的 `Runner.ipa` → SideStore 导入 → 用免费 Apple ID 签名安装 → `设置 → VPN与设备管理` 信任证书。
+---
 
-> 构建由 `macos-14` runner 执行，产物始终未签名。无 Mac 贡献者时 CI 注入占位 Team ID。
-
-## 架构
+## 项目架构
 
 ```
-CMakeLists.txt    C++ 顶层构建（SQLite3 + spdlog）
-include/          C++ 头文件（引擎 · 知识追踪）
-bridge/           C FFI 导出层
-src/core/         推荐引擎 · 知识追踪
-src/database/     SQLite 访问层
-tests/            Catch2 单元测试
-third_party/      供应商库（sqlite3 · spdlog · Catch2）
-scripts/          Python 数据管线（特征提取 · 实验）
-assets/           字体 · 内置数据库
-data/             字频表 · 权重 · 典故索引
-packaging/        AppImage / iOS 打包脚本
-processed_classical/  预处理缓存（特征 · 通假字 · 困惑度）
-flutter_app/lib/
-  main.dart       引导入口
-  bridge/         dart:ffi 绑定
-  engine/         FFI 封装
-  models/         User · ChineseText · RecommendResult
-  service/        历史记录
-  state/          AppState (ChangeNotifier + Provider)
-  theme/          AppTheme — 颜色 · 字体 Token
-  pages/          read_hub · my · settings · article_detail
-  widgets/        reading_frame · radar_chart · stats_card · dialogs
+CMakeLists.txt         C++ 顶层构建（C++17 · SQLite3 · spdlog）
+include/               C++ 头文件（引擎 · 知识追踪）
+bridge/                C FFI 导出函数 -> libchinese_core.so
+src/core/              推荐引擎 · 知识追踪（公式 19/20/14/15/17/18）
+src/database/          SQLite 访问封装
+tests/                 Catch2 单元测试
+third_party/           供应商库（sqlite3.c · spdlog · Catch2 · Boost.Nowide）
+scripts/               Python 数据管线（特征提取 · ML 训练 · 实验）
+assets/                字体（SourceHanSerifSC）· 内置 classical.db
+data/                  字频表 · 权重 · 典故索引
+packaging/             AppImage / iOS 打包脚本
+flutter_app/
+  lib/main.dart        入口 · MainShell (NavigationRail + IndexedStack)
+  lib/bridge/          dart:ffi 绑定
+  lib/engine/          FFI 封装
+  lib/models/          User · ChineseText · RecommendResult
+  lib/state/           AppState (ChangeNotifier + Provider)
+  lib/theme/           AppTheme —— 颜色/字体 Token
+  lib/pages/           read_hub · my · settings · article_detail
+  lib/widgets/         reading_frame · radar_chart · stats_card · dialogs
 ```
 
-## 论文复现
+---
 
-论文全文因保密暂未公开。数据准备、特征提取、实验对比等完整复现步骤见根目录下的 [`论文复现指南.md`](论文复现指南.md)。
+## 贡献
 
-## 许可证
+见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
-MIT
+---
+
+## 许可
+
+[MIT](LICENSE)

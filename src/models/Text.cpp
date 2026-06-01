@@ -1,7 +1,7 @@
 #include "models/Text.h"
 
 Text::Text() : id(0), title(""), author(""), dynasty(""), content(""),
-               charCount(0),
+               sourceDetail(""), charCount(0),
                f1AvgSentenceLength(0.0), f3SentenceCount(0.0),
                f5FunctionWordRatio(0.0), f6AvgCharLogFreq(0.0),
                f8TongjiaziDensity(0.0), f9PplAncient(0.0),
@@ -62,6 +62,14 @@ void Text::setSource(const std::string& s) {
 
 std::string Text::getSource() const {
     return source;
+}
+
+void Text::setSourceDetail(const std::string& s) {
+    this->sourceDetail = s;
+}
+
+std::string Text::getSourceDetail() const {
+    return sourceDetail;
 }
 
 void Text::setCharCount(int count) {

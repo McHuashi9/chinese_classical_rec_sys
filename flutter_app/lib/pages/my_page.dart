@@ -45,20 +45,20 @@ class _MyContent extends StatelessWidget {
         children: [
           // header
           _buildHeader(context, isDark),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           const Divider(color: AppTheme.border, height: 1),
-          SizedBox(height: context.gapXHuge),
+          SizedBox(height: context.gapXl),
 
           // radar
           _buildRadar(context),
-          SizedBox(height: context.gapXXHuge),
+          SizedBox(height: context.gapXxl),
 
           // 2x2 stats
           _buildStats(context, app),
 
           // dimension bars
           ...List.generate(10, (i) => _buildDimBar(context, i, isDark)),
-          SizedBox(height: context.gapXXHuge),
+          SizedBox(height: context.gapXxl),
 
           // recent reading list
           _buildRecentList(context, app),
@@ -127,7 +127,7 @@ class _MyContent extends StatelessWidget {
         Text('阅读统计', style: Theme.of(context).textTheme.titleLarge),
         SizedBox(height: context.gapMedium),
         StatsCard(stats: app.getReadingStats()),
-        SizedBox(height: context.gapXXHuge),
+        SizedBox(height: context.gapXxl),
       ],
     );
   }

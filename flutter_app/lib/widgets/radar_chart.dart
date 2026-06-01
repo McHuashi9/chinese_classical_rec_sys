@@ -5,9 +5,13 @@ import 'package:chinese_classical_rec_sys/models/user.dart';
 
 class RadarChart extends StatefulWidget {
   final List<double> targetValues;
+  final List<double>? overlayValues;
 
-  const RadarChart({super.key, required this.targetValues})
-      : assert(targetValues.length == abilityCount);
+  const RadarChart({
+    super.key,
+    required this.targetValues,
+    this.overlayValues,
+  }) : assert(targetValues.length == abilityCount);
 
   @override
   State<RadarChart> createState() => _RadarChartState();
@@ -32,7 +36,8 @@ class _RadarChartState extends State<RadarChart>
   @override
   void didUpdateWidget(RadarChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.targetValues != widget.targetValues) {
+    if (oldWidget.targetValues != widget.targetValues ||
+        oldWidget.overlayValues != widget.overlayValues) {
       _animCtrl.forward(from: 0);
     }
   }
@@ -55,7 +60,10 @@ class _RadarChartState extends State<RadarChart>
             return CustomPaint(
               size: Size(w, h),
               painter: _RadarChartPainter(
-                values: _interpolateValues(),
+                values: _interpolateValues(widget.targetValues),
+                overlayValues: widget.overlayValues != null
+                    ? _interpolateValues(widget.overlayValues!)
+                    : null,
                 labels: abilityLabels,
                 progress: _anim.value,
               ),
@@ -66,24 +74,21 @@ class _RadarChartState extends State<RadarChart>
     );
   }
 
-  List<double> _interpolateValues() {
+  List<double> _interpolateValues(List<double> source) {
     final t = _anim.value;
-    final result = <double>[];
-    for (int i = 0; i < abilityCount; i++) {
-      final target = widget.targetValues[i].clamp(0.0, 1.0);
-      result.add(target * t);
-    }
-    return result;
+    return [for (final v in source) (v.clamp(0.0, 1.0) * t)];
   }
 }
 
 class _RadarChartPainter extends CustomPainter {
   final List<double> values;
+  final List<double>? overlayValues;
   final List<String> labels;
   final double progress;
 
   _RadarChartPainter({
     required this.values,
+    this.overlayValues,
     required this.labels,
     required this.progress,
   });
@@ -132,7 +137,49 @@ class _RadarChartPainter extends CustomPainter {
       );
     }
 
-    // data polygon fill
+    // overlay data polygon (difficulty — drawn first so it's behind)
+    if (overlayValues != null) {
+      final overlayPath = Path();
+      for (int i = 0; i < abilityCount; i++) {
+        final angle = startAngle + i * angleStep;
+        final r = radius * overlayValues![i].clamp(0.0, 1.0);
+        final p = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        if (i == 0) {
+          overlayPath.moveTo(p.dx, p.dy);
+        } else {
+          overlayPath.lineTo(p.dx, p.dy);
+        }
+      }
+      overlayPath.close();
+
+      canvas.drawPath(
+        overlayPath,
+        Paint()
+          ..color = AppTheme.stoneGreen.withAlpha(38)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawPath(
+        overlayPath,
+        Paint()
+          ..color = AppTheme.stoneGreen
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0,
+      );
+
+      // overlay data points
+      final overlayPointPaint = Paint()..color = AppTheme.stoneGreen;
+      for (int i = 0; i < abilityCount; i++) {
+        final angle = startAngle + i * angleStep;
+        final r = radius * overlayValues![i].clamp(0.0, 1.0);
+        canvas.drawCircle(
+          Offset(center.dx + r * cos(angle), center.dy + r * sin(angle)),
+          3,
+          overlayPointPaint,
+        );
+      }
+    }
+
+    // main data polygon (ability — drawn on top)
     final dataPath = Path();
     for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
@@ -198,9 +245,54 @@ class _RadarChartPainter extends CustomPainter {
         Offset(lx - tp.width / 2, ly - tp.height / 2),
       );
     }
+
+    // legend
+    if (overlayValues != null) {
+      _drawLegend(canvas, size);
+    }
+  }
+
+  void _drawLegend(Canvas canvas, Size size) {
+    const legendX = 12.0;
+    final legendY = size.height - 20;
+    const dotSize = 6.0;
+
+    // ability dot
+    canvas.drawCircle(
+      Offset(legendX, legendY),
+      dotSize / 2,
+      Paint()..color = AppTheme.vermilion,
+    );
+    _drawLegendText(canvas, '你的能力', legendX + 14, legendY, 0);
+
+    // difficulty dot
+    canvas.drawCircle(
+      Offset(legendX + 90, legendY),
+      dotSize / 2,
+      Paint()..color = AppTheme.stoneGreen,
+    );
+    _drawLegendText(canvas, '文章难度', legendX + 104, legendY, 0);
+  }
+
+  void _drawLegendText(Canvas canvas, String text, double x, double y, int _) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          fontSize: 11,
+          fontFamily: AppTheme.fontUI,
+          color: AppTheme.inkSecondary,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset(x, y - tp.height / 2));
   }
 
   @override
   bool shouldRepaint(covariant _RadarChartPainter old) =>
-      old.progress != progress || old.values != values || old.labels != labels;
+      old.progress != progress ||
+      old.values != values ||
+      old.overlayValues != overlayValues ||
+      old.labels != labels;
 }

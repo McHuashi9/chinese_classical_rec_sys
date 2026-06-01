@@ -30,6 +30,7 @@ typedef struct {
     char author[128];            ///< 作者 (UTF-8)
     char dynasty[64];            ///< 朝代 (UTF-8)
     char source[64];             ///< 来源 (UTF-8)
+    char source_detail[128];     ///< 细粒度来源 (UTF-8)
 } TextInfo;
 
 /**
@@ -41,6 +42,7 @@ typedef struct {
     char author[128];            ///< 作者 (UTF-8)
     char dynasty[64];            ///< 朝代 (UTF-8)
     char source[64];             ///< 来源 (UTF-8)
+    char source_detail[128];     ///< 细粒度来源 (UTF-8)
     char background[2048];       ///< 背景介绍 (UTF-8)
     char content[65536];         ///< 正文 (UTF-8, 64KB)
     int char_count;              ///< 纯字数（去空白后）

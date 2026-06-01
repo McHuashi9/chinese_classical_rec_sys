@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.22)
 project(chinese_core_android)
 set(CMAKE_CXX_STANDARD 17)
 
+# 从 pubspec.yaml 读取版本号，唯一源
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../../flutter_app/pubspec.yaml" _PUBSPEC)
+string(REGEX MATCH "version: ([0-9]+\\.[0-9]+\\.[0-9]+)" _ ${_PUBSPEC})
+set(APP_VERSION ${CMAKE_MATCH_1})
+
 # SQLite3 static library (NDK: must define SQLITE_OS_ANDROID)
 add_library(sqlite3_android STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/sqlite3/sqlite3.c
@@ -30,4 +35,4 @@ target_include_directories(chinese_core PRIVATE
 target_link_libraries(chinese_core PRIVATE sqlite3_android log)
 add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 target_compile_definitions(chinese_core PRIVATE __ANDROID__)
-target_compile_definitions(chinese_core PRIVATE APP_VERSION="0.4.0")
+target_compile_definitions(chinese_core PRIVATE APP_VERSION="${APP_VERSION}")

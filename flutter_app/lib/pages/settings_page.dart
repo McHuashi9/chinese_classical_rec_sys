@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/engine/github_config.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -29,13 +30,13 @@ class _SettingsPageState extends State<SettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('设置', style: Theme.of(context).textTheme.headlineLarge),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           const Divider(color: AppTheme.border, height: 1),
-          SizedBox(height: context.gapXHuge),
+          SizedBox(height: context.gapXl),
           _buildAppearanceCard(context, isDark, fontScale),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           _buildLoggingCard(context, isSmall, logLevel, fontScale),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           _buildAboutCard(isDark, fontScale),
         ],
       ),
@@ -94,7 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Text('日志级别',
                     style: Theme.of(context).textTheme.labelLarge),
-                SizedBox(width: isSmall ? context.gapXHuge : 0),
+                SizedBox(width: isSmall ? context.gapXl : 0),
                 if (!isSmall) const Spacer(),
                 SizedBox(
                   width: isSmall ? 150.0 : 220.0,
@@ -156,7 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _AboutLinkRow(
               icon: Icons.code,
               label: 'GitHub 仓库',
-              url: 'https://github.com/McHuashi9/chinese_classical_rec_sys',
+              url: GithubConfig.repoUrl,
               fontScale: fontScale,
               color: secondaryColor,
             ),
@@ -273,7 +274,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () {
               _launch(
                 ctx,
-                'https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v$latestVersion',
+                GithubConfig.releaseTagUrl(latestVersion),
               );
               Navigator.of(ctx).pop();
             },
@@ -337,7 +338,7 @@ class _AboutLinkRow extends StatelessWidget {
 class _FontScaleSelector extends StatelessWidget {
   const _FontScaleSelector();
 
-  static const _values = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5];
+  static const _values = AppState.fontScaleSteps;
   static const _labels = [
     '0.75x', '1.0x', '1.25x', '1.5x', '1.75x', '2.0x', '2.25x', '2.5x',
   ];

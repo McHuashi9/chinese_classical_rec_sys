@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-01
+
+文库新增作者来源分组折叠，文章详情页集成难度雷达图叠加与阅读收益预测，大量稳定性修复。
+
+### Added
+
+- **文库按来源和作者双层分组**：外层按 `source`（《古文观止》/语文教科书），内层按 `author`（韩愈 26 篇、苏轼 20 篇、欧阳修 16 篇……），一目了然按人找文。涉及全栈 9 层（Python→SQLite→C++→FFI→Dart），新增 `source_detail` 列
+- **文章详情页新增难度匹配雷达图**：将文章 10 维难度与自身 10 维能力叠在同一雷达图上，朱砂红（能力）与石绿（难度）双色对比，一眼看出哪些维度需要加强。`RadarChart` 新增 `overlayValues` 参数支持双层绘制与图例
+- **文章详情页新增预计阅读收益**：基于学习增益公式 `g_j = exp(-(d_j - u_j - 0.13)² / 2σ²)` 计算每维收益，顶部突出综合收益百分比，下方 10 条迷你进度条展示各维度详细收益
+
+### Fixed
+
+- **文章详情页作者信息显示为空白**：数据管线 `parse_text_file` 按行号硬取，文件格式为「标题→空行→作者」，第 1 行为空行导致 `author` 被赋值空白，真·作者被误存到 `source_detail`。现已改为跳过空行解析，INSERT 中 dynasty 不再硬编码为空，后端 268 篇全部补回作者，130 篇自动提取到朝代
+- **FFI 多 isolate 线程竞争**：全局共享状态无保护，多 isolate 并行调用时数据崩溃。现已为全部 18 个 C 导出函数加互斥锁保护
+- **推荐接口缓冲区溢出风险**：输出数组缺少容量限制，调用方分配不足时造成堆内存损坏。现已补上容量参数，写入前做边界检查
+- **阅读历史时间戳始终为 0**：`tracker_apply_read` 将 `timestamp=0` 传给历史记录而非实际时间，导致遗忘曲线计算偏差。现已确保时间戳正确传递
+- **知识追踪失败路径危险**：`prune` 和 `applyForgetting` 丢弃 FFI 返回码，失败时可能返回未初始化数据。现已检查返回码，失败时释放资源并以旧数据兜底
+- **远程数据库同步重开失败无回退**：同步后重开数据库失败时桥接持有关闭句柄，后续所有操作崩溃。现已检查重开结果，失败时自动恢复旧连接并提示用户
+- **超长文章内容静默截断**：超过 65535 字节的文章被 `strncpy` 无声截断，读者看到不完整内容。现已添加截断日志以便排查
+- **负时间差掩盖时钟异常**：时间差小于 0 时静默返回遗忘因子 1.0，时钟回拨或脏数据被掩盖。现已添加警告日志
+- **`0.0001` 魔法数字**：增量过滤阈值以字面量散落，含义不明难以维护。现已提取为 `Config::MIN_DELTA_THRESHOLD` 具名常量
+- **空断言运行时崩溃风险**：`TextStyle.fontSize` 等可空字段用 `!` 断言，未设置时抛出异常。现已改用 `??` 提供安全默认值
+- **异常捕获吞掉致命错误**：`readCString` 的 `catch(_)` 连 `OutOfMemoryError` 一并吃掉。现已移除多余 try-catch，由 `allowMalformed: true` 处理格式异常
+- **后台异步错误静默丢失**：`_silentCheckForUpdates` 等异步异常被 `unawaited` 丢弃，不经过 `AppLogger`。现已加 `.catchError` 记录日志
+- **重复数学函数维护隐患**：`calculateLearningGain` 和 `calculateDynamicLearningRate` 在两个类中重复实现，改一处漏另一处。现已提取到 `MathUtils.h` 共享
+- **测试硬编码版本号导致 CI 失败**：`page_widget_test.dart` 写死 `0.3.0`，每次发版需手动更新，遗漏则 CI 永久失败。现已改为动态读取 `AppState.currentVersion`
+- **`groupBy` 依赖版本过低**：`collection ^1.18.0` 可能解析到 extension 写法版本，而代码已用顶层函数调用。现已锁定 `^1.19.1`
+- **字号候选列表重复定义**：`AppState` 和 `SettingsPage` 各维护一份 `[0.75,...,2.5]`，修改一处另一处不一致。现已提取为 `AppState.fontScaleSteps` 单一来源
+- **页面实例静态泄漏**：`static final _pages` 在 shell 重建时重用旧实例，`StatefulWidget` 的旧状态可能跨生命周期残留。现已改为实例变量并在 `initState` 中初始化
+
+### Changed
+
+- **搜索防抖 150ms→300ms**：减少快速打字时的列表重建频率
+- **推荐列表缺错误状态**：推荐失败时显示"推荐失败，请稍后重试"而非"能力变化时将自动生成推荐"
+- **fontScale 离散值 clamp**：字号缩放值自动回落到最近可用档位，保证 SegmentedButton 始终高亮正确选项
+- **gap 命名语义化**：`gapHuge`→`gapLg`、`gapXHuge`→`gapXl`、`gapXXHuge`→`gapXxl`，覆盖 6 文件 25 处
+- **作者朝代 overflow 保护**：阅读页、详情页、卡片 subtitle 均加 `overflow: ellipsis, maxLines: 1`
+- **CMakeLists 消除重复编译**：10 个 `.cpp` 在静态库和共享库中各编译一次，浪费约 30% 编译时间。现已改为共享库只编译桥接代码并链接静态库
+### Known Issues
+
+- **朝代提取可能不准确**：朝代信息从背景介绍的题解文本中自动匹配，存在两种误判：一是背景文中作为对比参照的朝代（如"汉代疏广"）被误取为本文朝代；二是长尾作者/典籍的背景文中朝代表述不明确时提取为空。推荐页和详情页已对空朝代做隐藏处理，不影响使用。后续将想方法呈现更精确的朝代
+
 ## [0.5.1] - 2026-05-15
 
 ### Fixed
@@ -110,7 +152,10 @@ C++ CLI 原型。
 - 知识追踪（IRT 模型）
 - SQLite 本地存储
 
+[0.5.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.1
+[0.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.0
 [0.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.4.0
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
 [0.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.1.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
+[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0

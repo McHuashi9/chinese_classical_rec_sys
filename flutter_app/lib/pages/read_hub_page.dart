@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/state/app_state.dart';
@@ -72,7 +73,7 @@ class _ReadHubPageState extends State<ReadHubPage>
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 150), () {
+    _debounce = Timer(const Duration(milliseconds: 300), () {
       setState(() => _filter = value.toLowerCase());
     });
   }
@@ -183,7 +184,7 @@ class _ReadHubPageState extends State<ReadHubPage>
               );
             },
           ),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           const Divider(color: AppTheme.border, height: 1),
           SizedBox(height: context.gapMedium),
           Expanded(
@@ -194,14 +195,16 @@ class _ReadHubPageState extends State<ReadHubPage>
                           color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
                         )),
                   )
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (ctx, i) => TextCard(
-                      title: filtered[i].title,
-                      trailing: _ReadStatusLabel(textId: filtered[i].id),
-                      onTap: () => _onSelectText(filtered[i]),
-                    ),
-                  ),
+                : _filter.isNotEmpty
+                    ? ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (ctx, i) => TextCard(
+                          title: filtered[i].title,
+                          trailing: _ReadStatusLabel(textId: filtered[i].id),
+                          onTap: () => _onSelectText(filtered[i]),
+                        ),
+                      )
+                    : _buildGroupedList(filtered),
           ),
         ],
       ),
@@ -211,6 +214,7 @@ class _ReadHubPageState extends State<ReadHubPage>
   Widget _buildRecommendTab() {
     final recs = context.select((AppState a) => a.recommendations);
     final isDark = context.select((AppState a) => a.darkMode);
+    final error = context.select((AppState a) => a.error);
 
     return Padding(
       padding: EdgeInsets.all(context.pagePadding),
@@ -246,16 +250,18 @@ class _ReadHubPageState extends State<ReadHubPage>
               );
             },
           ),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           const Divider(color: AppTheme.border, height: 1),
-          SizedBox(height: context.gapHuge),
+          SizedBox(height: context.gapLg),
           Expanded(
             child: recs.isEmpty && !_initialLoad
                 ? Center(
-                    child: Text('能力变化时将自动生成推荐',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                        )),
+                    child: Text(
+                      error != null ? '推荐失败，请稍后重试' : '能力变化时将自动生成推荐',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                      ),
+                    ),
                   )
                 : ListView.builder(
                     itemCount: recs.length,
@@ -324,6 +330,40 @@ class _ReadHubPageState extends State<ReadHubPage>
   void _refreshRecommend() {
     _app?.getRecommendations(_topK);
     _initialLoad = false;
+  }
+
+  Widget _buildGroupedList(List<ChineseText> filtered) {
+    final grouped = groupBy(filtered, (ChineseText t) =>
+        t.source.isEmpty ? '未分类' : t.source);
+    return ListView(
+      children: [
+        for (final entry in grouped.entries)
+          _buildOuterGroup(entry.key, entry.value),
+      ],
+    );
+  }
+
+  Widget _buildOuterGroup(String source, List<ChineseText> texts) {
+    final innerGrouped = groupBy(texts, (ChineseText t) =>
+        t.author.isEmpty ? '未分类' : t.author);
+    return ExpansionTile(
+      title: Text('$source（${texts.length}篇）'),
+      initiallyExpanded: false,
+      children: [
+        for (final entry in innerGrouped.entries)
+          ExpansionTile(
+            title: Text('${entry.key}（${entry.value.length}篇）'),
+            initiallyExpanded: false,
+            tilePadding: const EdgeInsetsDirectional.only(start: 48),
+            childrenPadding: const EdgeInsetsDirectional.only(start: 48),
+            children: entry.value.map((t) => TextCard(
+              title: t.title,
+              trailing: _ReadStatusLabel(textId: t.id),
+              onTap: () => _onSelectText(t),
+            )).toList(),
+          ),
+      ],
+    );
   }
 
   void _onSelectText(ChineseText text) {

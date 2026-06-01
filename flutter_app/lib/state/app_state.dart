@@ -25,7 +25,8 @@ class _TextReadState {
 
 /// 全局应用状态 — 等价于 QML AppViewModel
 class AppState extends ChangeNotifier {
-  static const currentVersion = '0.5.1';
+  static const currentVersion = '0.6.0';
+  static const fontScaleSteps = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5];
 
   NativeBridge? _bridge;
   late RecommendationEngine _engine;
@@ -244,7 +245,7 @@ class AppState extends ChangeNotifier {
     tp.layout(maxWidth: pageWidth);
     final lineMetrics = tp.computeLineMetrics();
 
-    final lineHeight = bodyStyle.fontSize! * bodyStyle.height!;
+    final lineHeight = (bodyStyle.fontSize ?? 16.0) * (bodyStyle.height ?? 1.8);
     final linesPerPage = (pageHeight / lineHeight).floor();
     if (linesPerPage <= 0 || lineMetrics.isEmpty) {
       _pages = [content];
@@ -348,8 +349,13 @@ class AppState extends ChangeNotifier {
           _tracker.applyRead(_user!, _readingText!.id, _elapsedSeconds.toDouble());
       if (updated != null) {
         _user!.dispose();
-        _user = _tracker.prune(updated);
-        updated.dispose();
+        final pruned = _tracker.prune(updated);
+        if (pruned != null) {
+          _user = pruned;
+          updated.dispose();
+        } else {
+          _user = updated;
+        }
       }
     }
   }
@@ -391,8 +397,13 @@ class AppState extends ChangeNotifier {
     final updated = _tracker.applyRead(_user!, textId, seconds);
     if (updated != null) {
       _user!.dispose();
-      _user = _tracker.prune(updated);
-      updated.dispose();
+      final pruned = _tracker.prune(updated);
+      if (pruned != null) {
+        _user = pruned;
+        updated.dispose();
+      } else {
+        _user = updated;
+      }
       _textReadStates.putIfAbsent(textId, () => _TextReadState());
       _textReadStates[textId]!.effectApplied = true;
       notifyListeners();
@@ -407,8 +418,8 @@ class AppState extends ChangeNotifier {
   }
 
   void setFontScale(double value) {
-    _fontScale = value;
-    _prefs?.setDouble('fontScale', value);
+    _fontScale = fontScaleSteps.reduce((a, b) => (value - a).abs() < (value - b).abs() ? a : b);
+    _prefs?.setDouble('fontScale', _fontScale);
     notifyListeners();
   }
 
@@ -455,16 +466,30 @@ class AppState extends ChangeNotifier {
       downloadUrl: downloadUrl,
     );
     if (ok && _bridge != null && _initialized) {
+      final originalPath = _dbPathAfterSync;
       _bridge!.dbClose();
-      final cPath = _dbPathAfterSync?.toNativeUtf8(allocator: calloc);
-      if (cPath != null) {
-        _bridge!.dbOpen(cPath);
-        calloc.free(cPath);
-        _engine.loadTextCache();
-        _loadUser();
-        _loadTextTrackedStates();
-        notifyListeners();
+      final cPath = originalPath?.toNativeUtf8(allocator: calloc);
+      if (cPath == null) {
+        AppLogger().error('remoteSyncDb: toNativeUtf8 分配失败');
+        setError('数据库同步失败：内存不足。请重启应用。');
+        return;
       }
+      final rc = _bridge!.dbOpen(cPath);
+      calloc.free(cPath);
+      if (rc != BridgeError.ok) {
+        AppLogger().error('remoteSyncDb: dbOpen 返回错误码 $rc，尝试恢复旧连接');
+        final oldPath = originalPath?.toNativeUtf8(allocator: calloc);
+        if (oldPath != null) {
+          _bridge!.dbOpen(oldPath);
+          calloc.free(oldPath);
+        }
+        setError('数据库同步后无法打开新文件，已恢复旧数据库。');
+        return;
+      }
+      _engine.loadTextCache();
+      _loadUser();
+      _loadTextTrackedStates();
+      notifyListeners();
     }
   }
 

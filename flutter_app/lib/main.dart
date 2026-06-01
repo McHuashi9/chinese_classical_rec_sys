@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'state/app_state.dart';
 import 'engine/update_checker.dart';
+import 'engine/github_config.dart';
 import 'theme/theme.dart';
 import 'engine/app_logger.dart';
 import 'pages/read_hub_page.dart';
@@ -57,11 +58,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
-  static final _pages = <Widget>[
-    const RepaintBoundary(child: ReadHubPage()),   // 0 阅读
-    const RepaintBoundary(child: MyPage()),         // 1 我的
-    const RepaintBoundary(child: SettingsPage()),   // 2 设置
-  ];
+  late final List<Widget> _pages;
 
   bool _initialized = false;
   int _pageIndex = 0;
@@ -78,6 +75,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _pages = <Widget>[
+      const RepaintBoundary(child: ReadHubPage()),   // 0 阅读
+      const RepaintBoundary(child: MyPage()),         // 1 我的
+      const RepaintBoundary(child: SettingsPage()),   // 2 设置
+    ];
     _ctrl = AnimationController(
       duration: const Duration(milliseconds: 250),
       vsync: this,
@@ -126,8 +128,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   void _postInit(AppState app) {
-    unawaited(_silentCheckForUpdates(app));
-    unawaited(_silentRemoteDbSync(app));
+    _silentCheckForUpdates(app).catchError((e, st) {
+      AppLogger().error('silent check for updates failed: $e\n$st');
+    });
+    _silentRemoteDbSync(app).catchError((e, st) {
+      AppLogger().error('silent remote DB sync failed: $e\n$st');
+    });
   }
 
   Future<void> _silentCheckForUpdates(AppState app) async {
@@ -161,8 +167,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final latestVersion = await checker.checkSilently(AppState.currentVersion);
     if (latestVersion == null) return null;
 
-    final releaseUrl = 'https://api.github.com/repos/McHuashi9/'
-        'chinese_classical_rec_sys/releases/tags/v$latestVersion';
+    final releaseUrl = GithubConfig.releaseApiByVersion(latestVersion.toString());
     final resp = await http.get(Uri.parse(releaseUrl), headers: {
       'Accept': 'application/vnd.github.v3+json',
     });

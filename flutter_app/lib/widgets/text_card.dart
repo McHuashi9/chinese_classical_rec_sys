@@ -39,7 +39,9 @@ class TextCard extends StatelessWidget {
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
                       SizedBox(height: context.gapTiny),
                       Text(subtitle!,
-                          style: theme.textTheme.bodyMedium),
+                          style: theme.textTheme.bodyMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                     ],
                   ],
                 ),

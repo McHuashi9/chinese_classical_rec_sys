@@ -111,7 +111,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
       child: Padding(
         padding: EdgeInsets.symmetric(
             horizontal: context.pagePadding,
-            vertical: context.gapHuge),
+            vertical: context.gapLg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -122,8 +122,10 @@ class _ReadingFrameState extends State<ReadingFrame> {
             ),
             SizedBox(height: context.gapSmall),
             Text('${widget.text.author} · ${widget.text.dynasty}',
-                style: Theme.of(context).textTheme.bodyMedium),
-            SizedBox(height: context.gapHuge),
+                style: Theme.of(context).textTheme.bodyMedium,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1),
+            SizedBox(height: context.gapLg),
             Expanded(
                 child: _buildReadingFrame(context, framePadding, fontScale)),
             SizedBox(height: context.cardPaddingV),

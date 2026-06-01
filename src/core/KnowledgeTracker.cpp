@@ -1,4 +1,5 @@
 #include "core/KnowledgeTracker.h"
+#include "core/MathUtils.h"
 #include "utils/FeatureExtractor.h"
 #include "utils/Logger.h"
 #include <cmath>
@@ -9,22 +10,23 @@ KnowledgeTracker::KnowledgeTracker(LearningIncrementRepository* incrementRepo)
     : incrementRepo(incrementRepo) {}
 
 double KnowledgeTracker::gaussian(double x) const {
-    return std::exp(-x * x / (2.0 * Config::SIGMA * Config::SIGMA));
+    return math_utils::gaussian(x);
 }
 
 double KnowledgeTracker::calculateDynamicLearningRate(double avgAbility) const {
-    // 公式13: η(t) = η · (1 - ū(t))^γ
-    return Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
+    return math_utils::calculateDynamicLearningRate(avgAbility);
 }
 
 double KnowledgeTracker::calculateLearningGain(double d_j, double u_j) const {
-    // 公式14: g_j = exp(-(d̂_j - u_j - δ*)² / 2σ²)
-    return gaussian(d_j - u_j - Config::DELTA_STAR);
+    return math_utils::calculateLearningGain(d_j, u_j);
 }
 
 double KnowledgeTracker::calculateForgettingFactor(double deltaDays) const {
     // 公式18: ψ(Δt) = (1 + Δt/τ)^(-c)
     if (deltaDays <= 0) {
+        if (deltaDays < 0) {
+            LOG_WARN("负时间差 {:.4f} 天，可能是时钟回拨或脏数据", deltaDays);
+        }
         return 1.0;
     }
     return std::pow(1.0 + deltaDays / Config::TAU, -Config::C);
@@ -69,7 +71,7 @@ void KnowledgeTracker::applyReadEffect(User& user, const Text& text, double read
         user.setAbility(j, newAbility);
         
         // 记录增量到数据库（如果 Repository 可用）
-        if (incrementRepo && delta > 0.0001) {  // 只记录有意义的增量
+        if (incrementRepo && delta > Config::MIN_DELTA_THRESHOLD) {
             incrementRepo->addIncrement(1, j + 1, delta, timestamp, "read");
         }
     }

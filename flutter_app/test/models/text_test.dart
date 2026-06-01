@@ -16,7 +16,7 @@ void main() {
 
     test('fromDetail creates full record', () {
       final text = ChineseText.fromDetail(
-        1, '论语', '孔子', '春秋', '《论语》', '背景介绍',
+        1, '论语', '孔子', '春秋', '《论语》', '儒家经典', '背景介绍',
         '子曰：学而时习之',
         8,
         [0.3, 0.2, 0.4, 0.1, 0.5, 0.6, 0.7, 0.8, 0.9, 0.0],
@@ -24,6 +24,7 @@ void main() {
       expect(text.id, 1);
       expect(text.content, '子曰：学而时习之');
       expect(text.source, '《论语》');
+      expect(text.sourceDetail, '儒家经典');
       expect(text.background, '背景介绍');
       expect(text.charCount, 8);
       expect(text.difficulties.length, 10);
@@ -32,7 +33,7 @@ void main() {
 
     test('averageDifficulty computes correctly', () {
       final text = ChineseText.fromDetail(
-        1, 'test', 'author', '唐', '', '',
+        1, 'test', 'author', '唐', '', '', '',
         '', 0,
         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
       );
@@ -47,6 +48,7 @@ void main() {
       expect(a.id, b.id);
       expect(a.title, b.title);
       expect(a.source, b.source);
+      expect(a.sourceDetail, b.sourceDetail);
       expect(a.background, b.background);
     });
   });

@@ -26,6 +26,9 @@ struct Config {
     
     // 最小阅读时间阈值（秒）
     static constexpr int MIN_READ_TIME = 30;
+    
+    // 增量过滤阈值（低于此值的有意义增量记录将被忽略）
+    static constexpr double MIN_DELTA_THRESHOLD = 0.0001;
 };
 
 #endif

@@ -1,4 +1,5 @@
 #include "core/RecommendationEngine.h"
+#include "core/MathUtils.h"
 #include "utils/FeatureExtractor.h"
 #include "utils/Logger.h"
 #include <cmath>
@@ -24,7 +25,7 @@ static constexpr double WEIGHTS[10] = {
 RecommendationEngine::RecommendationEngine() {}
 
 double RecommendationEngine::gaussian(double x) const {
-    return std::exp(-x * x / (2.0 * Config::SIGMA * Config::SIGMA));
+    return math_utils::gaussian(x);
 }
 
 double RecommendationEngine::calculateDifficultyGap(const User& user, const Text& text) const {
@@ -49,13 +50,11 @@ double RecommendationEngine::calculateProbability(const User& user, const Text& 
 }
 
 double RecommendationEngine::calculateLearningGain(double d_j, double u_j) const {
-    // 公式14: g_j = exp(-(d̂_j - u_j - δ*)² / 2σ²)
-    return gaussian(d_j - u_j - Config::DELTA_STAR);
+    return math_utils::calculateLearningGain(d_j, u_j);
 }
 
 double RecommendationEngine::calculateDynamicLearningRate(double avgAbility) const {
-    // 公式13: η(t) = η · (1 - ū(t))^γ
-    return Config::ETA * std::pow(1.0 - avgAbility, Config::GAMMA);
+    return math_utils::calculateDynamicLearningRate(avgAbility);
 }
 
 std::vector<std::pair<int, double>> RecommendationEngine::recommend(
