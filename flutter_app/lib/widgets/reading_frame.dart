@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 class ReadingFrame extends StatefulWidget {
@@ -92,7 +92,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
   @override
   Widget build(BuildContext context) {
-    final fontScale = context.select((AppState a) => a.fontScale);
+    final fontScale = context.select((SettingsController s) => s.fontScale);
     if (fontScale != _lastFontScale) {
       _lastFontScale = fontScale;
       _needsPaginate = true;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/stats_card.dart';
@@ -12,7 +14,7 @@ class MyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.select((AppState a) => a.user);
+    final user = context.select((UserController u) => u.user);
 
     return user != null
         ? _MyContent(user: user)
@@ -35,8 +37,8 @@ class _MyContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.read<AppState>().darkMode;
-    final app = context.read<AppState>();
+    final isDark = context.read<SettingsController>().darkMode;
+    final coord = context.read<AppCoordinator>();
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(context.pagePadding),
@@ -54,14 +56,14 @@ class _MyContent extends StatelessWidget {
           SizedBox(height: context.gapXxl),
 
           // 2x2 stats
-          _buildStats(context, app),
+          _buildStats(context, coord),
 
           // dimension bars
           ...List.generate(10, (i) => _buildDimBar(context, i, isDark)),
           SizedBox(height: context.gapXxl),
 
           // recent reading list
-          _buildRecentList(context, app),
+          _buildRecentList(context, coord),
         ],
       ),
     );
@@ -120,20 +122,20 @@ class _MyContent extends StatelessWidget {
     );
   }
 
-  Widget _buildStats(BuildContext context, AppState app) {
+  Widget _buildStats(BuildContext context, AppCoordinator coord) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('阅读统计', style: Theme.of(context).textTheme.titleLarge),
         SizedBox(height: context.gapMedium),
-        StatsCard(stats: app.getReadingStats()),
+        StatsCard(stats: coord.getReadingStats()),
         SizedBox(height: context.gapXxl),
       ],
     );
   }
 
-  Widget _buildRecentList(BuildContext context, AppState app) {
-    final records = app.getRecentHistory();
+  Widget _buildRecentList(BuildContext context, AppCoordinator coord) {
+    final records = coord.getRecentHistory();
     if (records.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,9 +145,9 @@ class _MyContent extends StatelessWidget {
         RecentReadingList(
           records: records.take(10).toList(),
           onTap: (textId) {
-            final ok = app.loadTextForReading(textId);
+            final ok = coord.loadTextForReading(textId);
             if (ok && context.mounted) {
-              app.switchPage(0);
+              coord.navCtrl.switchPage(0);
             }
           },
         ),

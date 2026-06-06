@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-07
+
+底层状态管理全面重构，应用更流畅稳定，修复阅读卡顿与知识追踪性能问题。
+
+### Changed
+
+- **应用底层状态管理重构**：原先的单一 AppState 拆分为四个独立模块（导航、阅读、设置、用户），各模块职责清晰互不干扰，应用启动和页面切换更流畅，后续功能迭代也更容易
+- **推荐引擎核心逻辑增强**：阅读状态追踪新增自动清理机制，长时间连续使用后推荐质量保持稳定；新增推荐引擎、知识追踪、数据模型共 31 条自动测试，每次改动可自动验证算法不退化
+
+### Fixed
+
+- **修复阅读页每秒不必要刷新**：计时器每 1 秒触发整页重建导致阅读过程偶有卡顿、耗电增加，现改为仅在能力值变化时更新界面
+- **修复知识追踪遗忘效应性能问题**：原先对每个维度分别扫描全部数据，效率低下，现已优化为单次遍历，长时间阅读更流畅
+
 ## [0.6.0] - 2026-06-01
 
 文库新增作者来源分组折叠，文章详情页集成难度雷达图叠加与阅读收益预测，大量稳定性修复。
@@ -28,7 +42,7 @@
 - **后台异步错误静默丢失**：`_silentCheckForUpdates` 等异步异常被 `unawaited` 丢弃，不经过 `AppLogger`。现已加 `.catchError` 记录日志
 - **重复数学函数维护隐患**：`calculateLearningGain` 和 `calculateDynamicLearningRate` 在两个类中重复实现，改一处漏另一处。现已提取到 `MathUtils.h` 共享
 - **测试硬编码版本号导致 CI 失败**：`page_widget_test.dart` 写死 `0.3.0`，每次发版需手动更新，遗漏则 CI 永久失败。现已改为动态读取 `AppState.currentVersion`
-- **`groupBy` 依赖版本过低**：`collection ^1.18.0` 可能解析到 extension 写法版本，而代码已用顶层函数调用。现已锁定 `^1.19.1`
+- **`groupBy` 分组功能因依赖版本匹配错误导致编译失败**：`collection` 包版本约束过松，构建时可能解析到不兼容的 `groupBy` 写法。尝试锁定高版本后又与测试环境冲突，最终调整为 `^1.19.0`，在保证功能正确的同时确保各环境构建一致
 - **字号候选列表重复定义**：`AppState` 和 `SettingsPage` 各维护一份 `[0.75,...,2.5]`，修改一处另一处不一致。现已提取为 `AppState.fontScaleSteps` 单一来源
 - **页面实例静态泄漏**：`static final _pages` 在 shell 重建时重用旧实例，`StatefulWidget` 的旧状态可能跨生命周期残留。现已改为实例变量并在 `initState` 中初始化
 
@@ -40,9 +54,12 @@
 - **gap 命名语义化**：`gapHuge`→`gapLg`、`gapXHuge`→`gapXl`、`gapXXHuge`→`gapXxl`，覆盖 6 文件 25 处
 - **作者朝代 overflow 保护**：阅读页、详情页、卡片 subtitle 均加 `overflow: ellipsis, maxLines: 1`
 - **CMakeLists 消除重复编译**：10 个 `.cpp` 在静态库和共享库中各编译一次，浪费约 30% 编译时间。现已改为共享库只编译桥接代码并链接静态库
+
 ### Known Issues
 
 - **朝代提取可能不准确**：朝代信息从背景介绍的题解文本中自动匹配，存在两种误判：一是背景文中作为对比参照的朝代（如"汉代疏广"）被误取为本文朝代；二是长尾作者/典籍的背景文中朝代表述不明确时提取为空。推荐页和详情页已对空朝代做隐藏处理，不影响使用。后续将想方法呈现更精确的朝代
+
+[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
 
 ## [0.5.1] - 2026-05-15
 
@@ -158,4 +175,4 @@ C++ CLI 原型。
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
 [0.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.1.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
-[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
+[0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0

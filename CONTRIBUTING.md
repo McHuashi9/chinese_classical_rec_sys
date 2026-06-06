@@ -27,7 +27,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 ```bash
 # 1. 数据初始化
-python scripts/init_data.py
+python3 scripts/project/init_data.py
 
 # 2. 编译 C++ 共享库
 mkdir -p build && cd build && cmake .. && make chinese_core -j$(nproc)
@@ -42,7 +42,7 @@ Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。
 
 ```bash
 # C++ 单元测试
-cd build && make test_runner && ./tests/test_runner
+cmake --build build -j$(nproc) --target test_runner && ./build/tests/test_runner
 
 # Dart 静态分析
 cd flutter_app && flutter analyze
@@ -90,6 +90,8 @@ cd flutter_app && flutter analyze
 - `flutter_app/lib/state/app_state.dart` → `currentVersion`
 - `CHANGELOG.md` → 将 `[Unreleased]` 整理为正式发布条目
 
+发版时运行 `bash scripts/project/bump_version.sh X.Y.Z` 自动完成以上同步。
+
 ## 注意事项
 
 项目 `.gitignore` 未纳入 Git 管理。
@@ -97,8 +99,20 @@ cd flutter_app && flutter analyze
 ## 维护者专有：发版
 
 ```bash
-git switch main && git merge --squash dev && git tag v0.x.0 && git push --follow-tags
-git switch dev && git reset --hard main && git push --force
+bash scripts/project/bump_version.sh X.Y.Z
+# 手动整理 CHANGELOG.md 的 release 描述
+git add flutter_app/pubspec.yaml \
+      flutter_app/lib/state/app_state.dart \
+      CHANGELOG.md \
+      scripts/project/bump_version.sh
+git commit -m "release: vX.Y.Z"
+git push origin dev
+
+git switch main && git merge --squash dev
+# 解决冲突后:
+git commit -m "release: vX.Y.Z"
+git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
+git switch dev && git reset --hard main && git push --force origin dev
 ```
 
 `--force` 会重写 dev 历史，仅维护者操作，贡献者不要在自己 fork 里执行。

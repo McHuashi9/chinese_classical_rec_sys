@@ -4,6 +4,7 @@
 #include "utils/Logger.h"
 #include <cmath>
 #include <algorithm>
+#include <array>
 #include <ctime>
 
 KnowledgeTracker::KnowledgeTracker(LearningIncrementRepository* incrementRepo)
@@ -91,11 +92,6 @@ double KnowledgeTracker::calculateCurrentAbility(const User& user, int dimension
     double sumDelta = 0.0;
     
     for (const auto& inc : increments) {
-        // inc.dimension 是 1-10，需要与 dimension 匹配
-        if (inc.dimension != dimension + 1) {
-            continue;
-        }
-        
         // 计算时间差（天数）
         double deltaSeconds = static_cast<double>(currentTime - inc.timestamp);
         double deltaDays = deltaSeconds / 86400.0;
@@ -128,18 +124,17 @@ void KnowledgeTracker::applyForgettingEffect(User& user, time_t currentTime) con
         return;
     }
     
+    // 单次遍历按维度分区（O(n) 替代原 O(10*n)）
+    std::array<std::vector<LearningIncrement>, 10> dimGroups;
+    for (const auto& inc : allIncrements) {
+        if (inc.dimension >= 1 && inc.dimension <= 10) {
+            dimGroups[inc.dimension - 1].push_back(inc);
+        }
+    }
+    
     // 对每个维度计算当前能力
     for (int j = 0; j < 10; j++) {
-        // 获取该维度的增量
-        std::vector<LearningIncrement> dimIncrements;
-        for (const auto& inc : allIncrements) {
-            if (inc.dimension == j + 1) {
-                dimIncrements.push_back(inc);
-            }
-        }
-        
-        // 计算当前能力
-        double currentAbility = calculateCurrentAbility(user, j, dimIncrements, currentTime);
+        double currentAbility = calculateCurrentAbility(user, j, dimGroups[j], currentTime);
         user.setAbility(j, currentAbility);
     }
     

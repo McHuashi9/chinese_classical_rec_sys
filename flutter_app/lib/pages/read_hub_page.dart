@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
@@ -32,17 +35,17 @@ class _ReadHubPageState extends State<ReadHubPage>
   int _topK = 10;
   bool _initialLoad = true;
   double _lastAverageAbility = -1;
-  AppState? _app;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
-    _app = context.read<AppState>();
-    _app!.addListener(_onAppChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_tabIndex == 1) _refreshRecommend();
+      if (mounted) {
+        _lastAverageAbility = context.read<UserController>().averageAbility;
+        if (_tabIndex == 1) _refreshRecommend();
+      }
     });
   }
 
@@ -55,20 +58,9 @@ class _ReadHubPageState extends State<ReadHubPage>
   @override
   void dispose() {
     _tabController.dispose();
-    _app?.removeListener(_onAppChanged);
     _searchController.dispose();
     _debounce?.cancel();
     super.dispose();
-  }
-
-  void _onAppChanged() {
-    if (!mounted) return;
-    setState(() {});
-    final avg = _app!.averageAbility;
-    if (avg != _lastAverageAbility) {
-      _lastAverageAbility = avg;
-      if (_tabIndex == 1) _refreshRecommend();
-    }
   }
 
   void _onSearchChanged(String value) {
@@ -80,8 +72,16 @@ class _ReadHubPageState extends State<ReadHubPage>
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppState>();
-    if (app.isReading && app.readingText != null) {
+    final avgAbility = context.select((UserController u) => u.averageAbility);
+    if (avgAbility != _lastAverageAbility) {
+      _lastAverageAbility = avgAbility;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_tabIndex == 1) _refreshRecommend();
+      });
+    }
+
+    final readingCtrl = context.read<ReadingController>();
+    if (readingCtrl.isReading && readingCtrl.readingText != null) {
       return _buildReadingMode();
     }
     return _buildBrowsingMode();
@@ -109,8 +109,8 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   Widget _buildLibraryTab() {
-    final allTexts = context.select((AppState a) => a.texts);
-    final isDark = context.select((AppState a) => a.darkMode);
+    final allTexts = context.select((AppCoordinator c) => c.texts);
+    final isDark = context.select((SettingsController s) => s.darkMode);
     final filtered = allTexts.where((t) {
       if (_filter.isEmpty) return true;
       return t.title.toLowerCase().contains(_filter) ||
@@ -212,9 +212,9 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   Widget _buildRecommendTab() {
-    final recs = context.select((AppState a) => a.recommendations);
-    final isDark = context.select((AppState a) => a.darkMode);
-    final error = context.select((AppState a) => a.error);
+    final recs = context.select((UserController u) => u.recommendations);
+    final isDark = context.select((SettingsController s) => s.darkMode);
+    final error = context.select((SettingsController s) => s.error);
 
     return Padding(
       padding: EdgeInsets.all(context.pagePadding),
@@ -328,7 +328,7 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   void _refreshRecommend() {
-    _app?.getRecommendations(_topK);
+    context.read<AppCoordinator>().getRecommendations(_topK);
     _initialLoad = false;
   }
 
@@ -375,13 +375,14 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   Widget _buildReadingMode() {
-    final app = context.read<AppState>();
-    final text = app.readingText;
-    final isDark = app.darkMode;
-    final pages = app.pages;
-    final currentPage = app.currentPage;
-    final totalPages = app.totalPages;
-    final timer = app.formattedReadingTime;
+    final readingCtrl = context.read<ReadingController>();
+    final settingsCtrl = context.read<SettingsController>();
+    final text = readingCtrl.readingText;
+    final isDark = settingsCtrl.darkMode;
+    final pages = readingCtrl.pages;
+    final currentPage = readingCtrl.currentPage;
+    final totalPages = readingCtrl.totalPages;
+    final timer = readingCtrl.formattedReadingTime;
 
     if (text == null) return _buildBrowsingMode();
 
@@ -392,14 +393,15 @@ class _ReadHubPageState extends State<ReadHubPage>
       totalPages: totalPages,
       formattedTime: timer,
       isDark: isDark,
-      elapsedSeconds: app.elapsedSeconds,
-      alreadyTracked: !app.hasUnrecordedReading,
-      onPaginate: (w, h) => app.paginate(
+      elapsedSeconds: readingCtrl.elapsedSeconds,
+      alreadyTracked: !readingCtrl.hasUnrecordedReading,
+      onPaginate: (w, h) => readingCtrl.paginate(
         w.toDouble(), h.toDouble(),
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
+        settingsCtrl.fontScale,
       ),
-      onNextPage: app.nextPage,
-      onPrevPage: app.prevPage,
+      onNextPage: readingCtrl.nextPage,
+      onPrevPage: readingCtrl.prevPage,
       onComplete: _completeReading,
       onAbandon: _confirmAbandon,
       onExit: _exitReading,
@@ -407,38 +409,41 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   void _completeReading() {
-    final app = context.read<AppState>();
-    app.applyReadingEffect();
-    app.stopReadingTimer();
-    app.discardCurrentReading();
+    final readingCtrl = context.read<ReadingController>();
+    final coord = context.read<AppCoordinator>();
+    coord.applyReadingEffect();
+    readingCtrl.stopTimer();
+    readingCtrl.discardReading();
   }
 
   void _confirmAbandon() async {
-    final app = context.read<AppState>();
-    if (app.hasUnrecordedReading) {
-      app.pauseReadingTimer();
-      final over30 = app.elapsedSeconds >= 30;
+    final readingCtrl = context.read<ReadingController>();
+    final coord = context.read<AppCoordinator>();
+    if (readingCtrl.hasUnrecordedReading) {
+      readingCtrl.pauseTimer();
+      final over30 = readingCtrl.elapsedSeconds >= 30;
       final discard = await showConfirmDialog(context,
         title: '放弃阅读？',
         content: over30
-            ? '已阅读 ${app.formattedReadingTime}，将保存阅读记录。确定放弃？'
+            ? '已阅读 ${readingCtrl.formattedReadingTime}，将保存阅读记录。确定放弃？'
             : '当前阅读未满30秒，记录将不会保存。',
         confirmLabel: '放弃',
       );
-      if (!discard) { app.resumeReadingTimer(); return; }
+      if (!discard) { readingCtrl.resumeTimer(); return; }
     }
-    app.stopReadingTimer();
-    if (app.elapsedSeconds >= 30) {
-      app.applyReadingEffect();
+    readingCtrl.stopTimer();
+    if (readingCtrl.elapsedSeconds >= 30) {
+      coord.applyReadingEffect();
     }
-    app.discardCurrentReading();
+    readingCtrl.discardReading();
   }
 
   void _exitReading() {
-    final app = context.read<AppState>();
-    app.stopReadingTimer();
-    app.applyReadingEffect();
-    app.discardCurrentReading();
+    final readingCtrl = context.read<ReadingController>();
+    final coord = context.read<AppCoordinator>();
+    readingCtrl.stopTimer();
+    coord.applyReadingEffect();
+    readingCtrl.discardReading();
   }
 }
 
@@ -448,7 +453,7 @@ class _ReadStatusLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRead = context.select((AppState a) => a.isTextRead(textId));
+    final isRead = context.select((ReadingController r) => r.isTextRead(textId));
     return Text(
       isRead ? '已读' : '未读',
       style: Theme.of(context).textTheme.labelSmall?.copyWith(

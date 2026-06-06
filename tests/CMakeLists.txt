@@ -9,6 +9,9 @@ set(TEST_SOURCES
     test_main.cpp
     test_math_functions.cpp
     test_bridge.cpp
+    test_recommendation_engine.cpp
+    test_knowledge_tracker.cpp
+    test_models.cpp
     ${CMAKE_SOURCE_DIR}/bridge/bridge.cpp
 )
 

@@ -1,17 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
 import 'package:chinese_classical_rec_sys/pages/my_page.dart';
 import 'package:chinese_classical_rec_sys/pages/read_hub_page.dart';
 
-Widget _wrap(AppState app, Widget child) {
-  return ChangeNotifierProvider.value(
-    value: app,
-    child: MaterialApp(
-      home: Scaffold(body: child),
-    ),
+Widget _wrap(Widget child) {
+  final navCtrl = NavigationController();
+  final settingsCtrl = SettingsController();
+  final readTracker = ReadTracker();
+  final readingCtrl = ReadingController(readTracker);
+  final userCtrl = UserController(readTracker);
+  final coord = AppCoordinator(
+    navCtrl: navCtrl,
+    settingsCtrl: settingsCtrl,
+    readingCtrl: readingCtrl,
+    userCtrl: userCtrl,
+    readTracker: readTracker,
+  );
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider.value(value: navCtrl),
+      ChangeNotifierProvider.value(value: settingsCtrl),
+      ChangeNotifierProvider.value(value: readingCtrl),
+      ChangeNotifierProvider.value(value: userCtrl),
+      Provider.value(value: coord),
+    ],
+    child: MaterialApp(home: Scaffold(body: child)),
   );
 }
 
@@ -24,16 +45,14 @@ void main() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
-      final app = AppState();
-      await tester.pumpWidget(_wrap(app, const SettingsPage()));
+      await tester.pumpWidget(_wrap(const SettingsPage()));
       await tester.pumpAndSettle();
 
       expect(find.text('设置'), findsOneWidget);
       expect(find.text('外观'), findsOneWidget);
       expect(find.text('日志'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
-      expect(find.text('版本 ${AppState.currentVersion}'), findsOneWidget);
-      app.dispose();
+      expect(find.text('版本 ${AppCoordinator.currentVersion}'), findsOneWidget);
     });
 
     testWidgets('dark mode toggle switches theme', (tester) async {
@@ -43,19 +62,37 @@ void main() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
-      final app = AppState();
-      await tester.pumpWidget(ChangeNotifierProvider.value(
-        value: app,
-        child: MaterialApp(
-          themeMode: app.darkMode ? ThemeMode.dark : ThemeMode.light,
-          home: const Scaffold(body: SettingsPage()),
+      final settingsCtrl = SettingsController();
+      final navCtrl = NavigationController();
+      final readTracker = ReadTracker();
+      final readingCtrl = ReadingController(readTracker);
+      final userCtrl = UserController(readTracker);
+      final coord = AppCoordinator(
+        navCtrl: navCtrl,
+        settingsCtrl: settingsCtrl,
+        readingCtrl: readingCtrl,
+        userCtrl: userCtrl,
+        readTracker: readTracker,
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: navCtrl),
+            ChangeNotifierProvider.value(value: settingsCtrl),
+            ChangeNotifierProvider.value(value: readingCtrl),
+            ChangeNotifierProvider.value(value: userCtrl),
+            Provider.value(value: coord),
+          ],
+          child: MaterialApp(
+            themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+            home: const Scaffold(body: SettingsPage()),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
-      expect(app.darkMode, false);
+      expect(settingsCtrl.darkMode, false);
       expect(find.text('暗色'), findsOneWidget);
-      app.dispose();
     });
   });
 
@@ -67,12 +104,10 @@ void main() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
-      final app = AppState();
-      await tester.pumpWidget(_wrap(app, const ReadHubPage()));
+      await tester.pumpWidget(_wrap(const ReadHubPage()));
       await tester.pumpAndSettle();
 
       expect(find.text('文库'), findsOneWidget);
-      app.dispose();
     });
   });
 
@@ -84,12 +119,10 @@ void main() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
-      final app = AppState();
-      await tester.pumpWidget(_wrap(app, const MyPage()));
+      await tester.pumpWidget(_wrap(const MyPage()));
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      app.dispose();
     });
   });
 }

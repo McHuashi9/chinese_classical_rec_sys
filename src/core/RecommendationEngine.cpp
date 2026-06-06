@@ -5,22 +5,7 @@
 #include <cmath>
 #include <algorithm>
 
-// CRITIC法权重（来自 data/critic_weights.json）
-// 替代熵权法，避免稀疏特征权重过高的问题
-// d1=f1, d2=f3, d3=f5, d4=f6, d5=f8, d6=f9, d7=f10, d8=f11, d9=f12, d10=f13
-// 权重已归一化（∑ w_j = 1），符合论文公式定义
-static constexpr double WEIGHTS[10] = {
-    0.09215147849158459,   // d1 平均句长
-    0.09381903520884108,   // d2 句子数
-    0.13107376305655005,   // d3 虚词比例
-    0.09247110185289635,   // d4 字平均对数频次
-    0.10340632494506398,   // d5 通假字密度
-    0.11624060937033848,   // d6 古汉语困惑度
-    0.08774914762423046,   // d7 今汉语困惑度
-    0.08543906673127047,   // d8 MATTR词汇多样性
-    0.10087872345819664,   // d9 典故密度
-    0.09677074926102798    // d10 语义复杂度
-};
+// CRITIC权重定义移入 Config.h
 
 RecommendationEngine::RecommendationEngine() {}
 
@@ -37,7 +22,7 @@ double RecommendationEngine::calculateDifficultyGap(const User& user, const Text
     for (int j = 0; j < 10; j++) {
         double d_j = features[j];
         double u_j = user.getAbility(j);  // 用户能力已在[0,1]范围
-        delta += WEIGHTS[j] * (d_j - u_j);
+        delta += Config::CRITIC_WEIGHTS[j] * (d_j - u_j);
     }
     
     return delta;

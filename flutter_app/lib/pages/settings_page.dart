@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/engine/github_config.dart';
@@ -19,9 +20,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.select((AppState a) => a.darkMode);
-    final fontScale = context.select((AppState a) => a.fontScale);
-    final logLevel = context.select((AppState a) => a.logLevel);
+    final isDark = context.select((SettingsController s) => s.darkMode);
+    final fontScale = context.select((SettingsController s) => s.fontScale);
+    final logLevel = context.select((SettingsController s) => s.logLevel);
     final isSmall = MediaQuery.sizeOf(context).width < 480;
 
     return SingleChildScrollView(
@@ -45,7 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildAppearanceCard(
       BuildContext context, bool isDark, double fontScale) {
-    final app = context.read<AppState>();
+    final settingsCtrl = context.read<SettingsController>();
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -64,7 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: const Text('暗色模式'),
               secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
               value: isDark,
-              onChanged: (v) => app.setDarkMode(v),
+              onChanged: (v) => settingsCtrl.setDarkMode(v),
               contentPadding: EdgeInsets.zero,
             ),
             SizedBox(height: context.gapMedium),
@@ -107,7 +108,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         .toList(),
                     onChanged: (v) {
                       if (v != null) {
-                        context.read<AppState>().setLogLevel(v);
+                        context.read<SettingsController>().setLogLevel(v);
                       }
                     },
                   ),
@@ -146,7 +147,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: theme.textTheme.labelLarge
                         ?.copyWith(color: secondaryColor)),
                 const Spacer(),
-                Text('v${AppState.currentVersion}',
+                Text('v${AppCoordinator.currentVersion}',
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: secondaryColor)),
               ],
@@ -234,21 +235,21 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_checking) return;
     setState(() => _checking = true);
 
-    final app = context.read<AppState>();
+    final settingsCtrl = context.read<SettingsController>();
     final messenger = ScaffoldMessenger.of(context);
-    final current = Version.parse(AppState.currentVersion);
+    final current = Version.parse(AppCoordinator.currentVersion);
 
     try {
-      final latest = await app.manualCheckForUpdates();
+      final latest = await settingsCtrl.manualCheckForUpdates(AppCoordinator.currentVersion);
 
       if (!mounted) return;
 
       if (latest == null) {
-        final reason = app.updateCheckError ?? '网络不可用，请稍后重试';
+        final reason = settingsCtrl.updateCheckError ?? '网络不可用，请稍后重试';
         messenger.showSnackBar(SnackBar(content: Text(reason)));
       } else if (latest == current) {
         messenger.showSnackBar(
-          SnackBar(content: Text('已是最新版本 ${AppState.currentVersion}')),
+          SnackBar(content: Text('已是最新版本 ${AppCoordinator.currentVersion}')),
         );
       } else if (latest > current) {
         await _showUpdateDialog(context, latest.toString());
@@ -264,7 +265,7 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('发现新版本 v$latestVersion'),
-        content: Text('当前版本: ${AppState.currentVersion}'),
+        content: Text('当前版本: ${AppCoordinator.currentVersion}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -338,15 +339,15 @@ class _AboutLinkRow extends StatelessWidget {
 class _FontScaleSelector extends StatelessWidget {
   const _FontScaleSelector();
 
-  static const _values = AppState.fontScaleSteps;
+  static const _values = SettingsController.fontScaleSteps;
   static const _labels = [
     '0.75x', '1.0x', '1.25x', '1.5x', '1.75x', '2.0x', '2.25x', '2.5x',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final fontScale = context.select((AppState a) => a.fontScale);
-    final app = context.read<AppState>();
+    final fontScale = context.select((SettingsController s) => s.fontScale);
+    final settingsCtrl = context.read<SettingsController>();
     final isSmall = MediaQuery.sizeOf(context).width < 480;
 
     if (isSmall) {
@@ -362,7 +363,7 @@ class _FontScaleSelector extends StatelessWidget {
                 DropdownMenuItem(value: _values[i], child: Text(_labels[i])),
             ],
             onChanged: (v) {
-              if (v != null) app.setFontScale(v);
+              if (v != null) settingsCtrl.setFontScale(v);
             },
           ),
         ],
@@ -379,7 +380,7 @@ class _FontScaleSelector extends StatelessWidget {
           ],
           selected: {fontScale},
           onSelectionChanged: (Set<double> selection) {
-            app.setFontScale(selection.first);
+            settingsCtrl.setFontScale(selection.first);
           },
           style: ButtonStyle(
             textStyle: WidgetStateProperty.all(

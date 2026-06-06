@@ -2,7 +2,7 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
-import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
+import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 
 class ReadingRecord {
@@ -40,9 +40,9 @@ class ReadingStats {
 
 class HistoryService {
   final NativeBridge _bridge;
-  final RecommendationEngine _engine;
+  final TextRepository _textRepo;
 
-  HistoryService(this._bridge, this._engine);
+  HistoryService(this._bridge, this._textRepo);
 
   List<ReadingRecord> getRecent(int limit) {
     final ptr = calloc<ReadingRecordData>(limit);
@@ -50,7 +50,7 @@ class HistoryService {
     final records = <ReadingRecord>[];
     for (int i = 0; i < count; i++) {
       final r = ptr[i];
-      final text = _engine.texts.cast<ChineseText?>().firstWhere(
+      final text = _textRepo.texts.cast<ChineseText?>().firstWhere(
         (t) => t?.id == r.textId, orElse: () => null,
       );
       records.add(ReadingRecord(

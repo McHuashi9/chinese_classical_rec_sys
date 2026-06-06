@@ -1,19 +1,20 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/state/app_state.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
-
-const _deltaStar = 0.13;
-const _sigma = 0.25;
+import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
 
 double _learningGain(double dJ, double uJ) {
-  final x = dJ - uJ - _deltaStar;
-  return exp(-(x * x) / (2 * _sigma * _sigma));
+  final x = dJ - uJ - deltaStar;
+  return exp(-(x * x) / (2 * sigma * sigma));
 }
 
 class ArticleDetailPage extends StatelessWidget {
@@ -29,8 +30,10 @@ class ArticleDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppState>();
-    final text = app.getTextDetail(textId);
+    final coord = context.read<AppCoordinator>();
+    final settingsCtrl = context.read<SettingsController>();
+    final userCtrl = context.read<UserController>();
+    final text = coord.getTextDetail(textId);
     if (text == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('文章未找到')),
@@ -38,7 +41,7 @@ class ArticleDetailPage extends StatelessWidget {
       );
     }
 
-    final isDark = app.darkMode;
+    final isDark = settingsCtrl.darkMode;
     final estMinutes = _estimatedMinutes(text.charCount);
 
     return Scaffold(
@@ -99,10 +102,10 @@ class ArticleDetailPage extends StatelessWidget {
               ],
             ),
             SizedBox(height: context.gapLg),
-            if (app.user != null && text.difficulties.length == abilityCount) ...[
-              _buildDifficultyMatchSection(context, text, app.user!, isDark),
+            if (userCtrl.user != null && text.difficulties.length == abilityCount) ...[
+              _buildDifficultyMatchSection(context, text, userCtrl.user!, isDark),
               SizedBox(height: context.gapLg),
-              _buildEstimatedGainSection(context, text, app.user!, isDark),
+              _buildEstimatedGainSection(context, text, userCtrl.user!, isDark),
               SizedBox(height: context.gapLg),
             ],
             if (text.background.isNotEmpty) ...[
@@ -304,21 +307,22 @@ class ArticleDetailPage extends StatelessWidget {
   }
 
   void _startReading(BuildContext context, ChineseText text) async {
-    final app = context.read<AppState>();
-    if (app.hasUnrecordedReading && app.readingText?.id != text.id) {
-      app.pauseReadingTimer();
+    final readingCtrl = context.read<ReadingController>();
+    final coord = context.read<AppCoordinator>();
+    if (readingCtrl.hasUnrecordedReading && readingCtrl.readingText?.id != text.id) {
+      readingCtrl.pauseTimer();
       final discard = await showConfirmDialog(context,
         title: '确认切换',
         content: '当前文章阅读未满30秒，确定放弃？',
         confirmLabel: '放弃',
       );
       if (!discard) {
-        app.resumeReadingTimer();
+        readingCtrl.resumeTimer();
         return;
       }
-      app.discardCurrentReading();
+      readingCtrl.discardReading();
     }
-    app.loadTextForReading(text.id);
+    coord.loadTextForReading(text.id);
     if (context.mounted) {
       Navigator.of(context).pop();
     }

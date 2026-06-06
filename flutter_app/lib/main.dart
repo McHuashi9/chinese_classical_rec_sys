@@ -9,7 +9,12 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart' show getApplicationSupportDirectory;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'state/app_state.dart';
+import 'state/coordinator.dart';
+import 'state/navigation_controller.dart';
+import 'state/settings_controller.dart';
+import 'state/reading_controller.dart';
+import 'state/user_controller.dart';
+import 'engine/read_tracker.dart';
 import 'engine/update_checker.dart';
 import 'engine/github_config.dart';
 import 'theme/theme.dart';
@@ -20,9 +25,28 @@ import 'pages/settings_page.dart';
 import 'widgets/dialogs.dart';
 
 void main() {
+  final readTracker = ReadTracker();
+  final navCtrl = NavigationController();
+  final settingsCtrl = SettingsController();
+  final readingCtrl = ReadingController(readTracker);
+  final userCtrl = UserController(readTracker);
+  final coordinator = AppCoordinator(
+    navCtrl: navCtrl,
+    settingsCtrl: settingsCtrl,
+    readingCtrl: readingCtrl,
+    userCtrl: userCtrl,
+    readTracker: readTracker,
+  );
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppState(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: navCtrl),
+        ChangeNotifierProvider.value(value: settingsCtrl),
+        ChangeNotifierProvider.value(value: readingCtrl),
+        ChangeNotifierProvider.value(value: userCtrl),
+        Provider.value(value: coordinator),
+      ],
       child: const ChineseClassicalRecSysApp(),
     ),
   );
@@ -35,8 +59,8 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
-      final isDark = context.select((AppState a) => a.darkMode);
-      final fontScale = context.select((AppState a) => a.fontScale);
+      final isDark = context.select((SettingsController s) => s.darkMode);
+      final fontScale = context.select((SettingsController s) => s.fontScale);
 
       return MaterialApp(
         title: '文言文推荐系统',
@@ -65,7 +89,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   int _prevPageIndex = 0;
   bool _transitioning = false;
   bool _isReading = false;
-  AppState? _app;
+  AppCoordinator? _coord;
 
   late final AnimationController _ctrl;
   late Animation<Offset> _slideOut;
@@ -99,54 +123,57 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _app = context.read<AppState>();
-      _app!.addListener(_onAppStateChanged);
-      _initApp(_app!);
+      _coord = context.read<AppCoordinator>();
+      _coord!.initialized.addListener(_onInitChanged);
+      _coord!.settingsCtrl.addListener(_onSettingsError);
+      _coord!.readingCtrl.addListener(_onReadingChanged);
+      _coord!.navCtrl.addListener(_onNavChanged);
+      _initApp(_coord!);
     });
   }
 
-  Future<void> _initApp(AppState app) async {
+  Future<void> _initApp(AppCoordinator coord) async {
     final dbPath = await _resolveDbPath();
     try {
       final lib = _loadLibrary();
-      await app.initialize(dbPath, lib);
+      await coord.init(dbPath, lib);
     } catch (e) {
       AppLogger().error('FFI load failed: $e');
       if (!mounted) return;
-      app.setError('无法加载核心组件，请尝试重新安装。\n$e');
+      coord.settingsCtrl.setError('无法加载核心组件，请尝试重新安装。\n$e');
       return;
     }
     if (!mounted) return;
-    app.setDbPathAfterSync(dbPath);
-    app.getRecommendations(10);
+    coord.setDbPathAfterSync(dbPath);
+    coord.getRecommendations(10);
 
     final prefs = await SharedPreferences.getInstance();
     final dbDir = File(dbPath).parent.path;
-    app.initRemoteDbSync(prefs, dbDir);
-    await app.initUpdateChecker();
-    _postInit(app);
+    coord.initRemoteDbSync(prefs, dbDir);
+    await coord.settingsCtrl.init(prefs, null);
+    _postInit(coord);
   }
 
-  void _postInit(AppState app) {
-    _silentCheckForUpdates(app).catchError((e, st) {
+  void _postInit(AppCoordinator coord) {
+    _silentCheckForUpdates(coord).catchError((e, st) {
       AppLogger().error('silent check for updates failed: $e\n$st');
     });
-    _silentRemoteDbSync(app).catchError((e, st) {
+    _silentRemoteDbSync(coord).catchError((e, st) {
       AppLogger().error('silent remote DB sync failed: $e\n$st');
     });
   }
 
-  Future<void> _silentCheckForUpdates(AppState app) async {
-    final latest = await app.silentCheckForUpdates();
+  Future<void> _silentCheckForUpdates(AppCoordinator coord) async {
+    final latest = await coord.settingsCtrl.silentCheckForUpdates(AppCoordinator.currentVersion);
     if (latest != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('发现新版本 v$latest（当前 ${AppState.currentVersion}）'),
+          content: Text('发现新版本 v$latest（当前 ${AppCoordinator.currentVersion}）'),
           duration: const Duration(seconds: 8),
           action: SnackBarAction(
             label: '查看',
             onPressed: () {
-              app.switchPage(2);
+              coord.navCtrl.switchPage(2);
             },
           ),
         ),
@@ -154,17 +181,17 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _silentRemoteDbSync(AppState app) async {
+  Future<void> _silentRemoteDbSync(AppCoordinator coord) async {
     final asset = await _fetchLatestReleaseAsset();
     if (asset != null) {
-      await _syncIfNewer(app, asset.$1, asset.$2);
+      await _syncIfNewer(coord, asset.$1, asset.$2);
     }
   }
 
   Future<(String, String)?> _fetchLatestReleaseAsset() async {
     final prefs = await SharedPreferences.getInstance();
     final checker = UpdateChecker(prefs);
-    final latestVersion = await checker.checkSilently(AppState.currentVersion);
+    final latestVersion = await checker.checkSilently(AppCoordinator.currentVersion);
     if (latestVersion == null) return null;
 
     final releaseUrl = GithubConfig.releaseApiByVersion(latestVersion.toString());
@@ -188,9 +215,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     return null;
   }
 
-  Future<void> _syncIfNewer(AppState app, String version, String url) async {
+  Future<void> _syncIfNewer(AppCoordinator coord, String version, String url) async {
     try {
-      await app.remoteSyncDb(remoteVersion: 'v$version', downloadUrl: url);
+      await coord.remoteSyncDb(remoteVersion: 'v$version', downloadUrl: url);
     } catch (_) {}
   }
 
@@ -266,32 +293,41 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     );
   }
 
-  void _onAppStateChanged() {
-    final app = _app;
-    if (app == null) return;
-    if (app.error != null) {
-      final errorMsg = app.error!;
-      app.clearError();
+  void _onInitChanged() {
+    if (_coord!.initialized.value && !_initialized) {
+      setState(() => _initialized = true);
+    }
+  }
+
+  void _onSettingsError() {
+    final error = _coord!.settingsCtrl.error;
+    if (error != null) {
+      _coord!.settingsCtrl.clearError();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMsg),
+            content: Text(error),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
-    if (!_initialized && app.initialized) {
-      setState(() => _initialized = true);
-    }
-    if (app.isReading != _isReading) {
-      _isReading = app.isReading;
+  }
+
+  void _onReadingChanged() {
+    final isReading = _coord!.readingCtrl.isReading;
+    if (_isReading != isReading) {
+      _isReading = isReading;
       setState(() {});
     }
-    if (app.pageIndex != _pageIndex) {
+  }
+
+  void _onNavChanged() {
+    final pageIndex = _coord!.navCtrl.pageIndex;
+    if (_pageIndex != pageIndex) {
       _prevPageIndex = _pageIndex;
-      _pageIndex = app.pageIndex;
+      _pageIndex = pageIndex;
       _startTransition();
     }
   }
@@ -312,57 +348,60 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   void _onDestinationSelected(int index) {
     if (index == _pageIndex) return;
-    final app = _app;
-    if (app != null && app.isReading && index != 0) {
+    final coord = _coord;
+    if (coord != null && coord.readingCtrl.isReading && index != 0) {
       _showAbandonDialog(index);
       return;
     }
-    _app?.switchPage(index);
+    _coord?.navCtrl.switchPage(index);
   }
 
   Future<void> _showAbandonDialog(int targetIndex) async {
-    final app = _app!;
-    app.pauseReadingTimer();
+    final coord = _coord!;
+    coord.readingCtrl.pauseTimer();
     final discard = await showConfirmDialog(context,
       title: '放弃阅读？',
       content: '阅读中切换页面将放弃当前记录。确定吗？',
       confirmLabel: '放弃',
     );
     if (discard) {
-      app.stopReadingTimer();
-      app.applyReadingEffect();
-      app.discardCurrentReading();
-      app.switchPage(targetIndex);
+      coord.readingCtrl.stopTimer();
+      coord.applyReadingEffect();
+      coord.readingCtrl.discardReading();
+      coord.navCtrl.switchPage(targetIndex);
     } else {
-      app.resumeReadingTimer();
+      coord.readingCtrl.resumeTimer();
     }
   }
 
-  void _onBackground() => _app?.pauseReadingTimer();
-  void _onForeground() => _app?.resumeReadingTimer();
+  void _onBackground() => _coord?.readingCtrl.pauseTimer();
+  void _onForeground() => _coord?.readingCtrl.resumeTimer();
 
   Future<AppExitResponse> _onExitRequested() async {
-    final app = _app;
-    if (app == null) return AppExitResponse.exit;
+    final coord = _coord;
+    if (coord == null) return AppExitResponse.exit;
 
-    app.stopReadingTimer();
-    app.applyReadingEffect();
+    coord.readingCtrl.stopTimer();
+    coord.applyReadingEffect();
 
-    if (!app.hasUnrecordedReading) return AppExitResponse.exit;
+    if (!coord.readingCtrl.hasUnrecordedReading) return AppExitResponse.exit;
 
     final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
     if (!context.mounted) return AppExitResponse.exit;
     if (discard) {
-      app.discardCurrentReading();
+      coord.readingCtrl.discardReading();
     } else {
-      app.resumeReadingTimer();
+      coord.readingCtrl.resumeTimer();
     }
     return discard ? AppExitResponse.exit : AppExitResponse.cancel;
   }
 
   @override
   void dispose() {
-    _app?.removeListener(_onAppStateChanged);
+    _coord?.initialized.removeListener(_onInitChanged);
+    _coord?.settingsCtrl.removeListener(_onSettingsError);
+    _coord?.readingCtrl.removeListener(_onReadingChanged);
+    _coord?.navCtrl.removeListener(_onNavChanged);
     _ctrl.dispose();
     _lifecycleListener.dispose();
     super.dispose();
@@ -370,8 +409,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   Future<void> _onBackPressed(bool didPop, _) async {
     if (didPop) return;
-    final app = _app;
-    if (app == null || !app.isReading) {
+    final coord = _coord;
+    if (coord == null || !coord.readingCtrl.isReading) {
       final exit = await showConfirmDialog(context,
         title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
       );
@@ -379,17 +418,17 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return;
     }
 
-    app.stopReadingTimer();
-    app.applyReadingEffect();
+    coord.readingCtrl.stopTimer();
+    coord.applyReadingEffect();
 
-    if (!app.hasUnrecordedReading) {
+    if (!coord.readingCtrl.hasUnrecordedReading) {
       final exit = await showConfirmDialog(context,
         title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
       );
       if (exit && context.mounted) {
         SystemNavigator.pop();
       } else {
-        app.resumeReadingTimer();
+        coord.readingCtrl.resumeTimer();
       }
       return;
     }
@@ -401,10 +440,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     );
     if (!context.mounted) return;
     if (discard) {
-      app.discardCurrentReading();
+      coord.readingCtrl.discardReading();
       SystemNavigator.pop();
     } else {
-      app.resumeReadingTimer();
+      coord.readingCtrl.resumeTimer();
     }
   }
 
