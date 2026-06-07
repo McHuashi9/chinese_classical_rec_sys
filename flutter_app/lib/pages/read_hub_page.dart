@@ -395,6 +395,7 @@ class _ReadHubPageState extends State<ReadHubPage>
       isDark: isDark,
       elapsedSeconds: readingCtrl.elapsedSeconds,
       alreadyTracked: !readingCtrl.hasUnrecordedReading,
+      annotations: readingCtrl.annotations,
       onPaginate: (w, h) => readingCtrl.paginate(
         w.toDouble(), h.toDouble(),
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),

@@ -14,13 +14,14 @@ import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
+import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.7.1';
+  static const currentVersion = '0.7.2';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -132,7 +133,9 @@ class AppCoordinator {
   bool loadTextForReading(int textId) {
     final text = _textRepo.getTextDetail(textId);
     if (text == null) return false;
-    readingCtrl.loadText(text);
+    final raw = _textRepo.getAnnotations(textId);
+    final annotations = AnnotationParser.parse(raw);
+    readingCtrl.loadText(text, annotations: annotations);
     return true;
   }
 

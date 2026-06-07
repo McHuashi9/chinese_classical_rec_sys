@@ -14,6 +14,7 @@ class ReadingController extends ChangeNotifier {
   int _elapsedSeconds = 0;
   Timer? _readingTimer;
   int? _readingTextId;
+  Map<int, String> _annotations = {};
 
   ReadingController(this._readTracker);
 
@@ -24,6 +25,7 @@ class ReadingController extends ChangeNotifier {
   int get elapsedSeconds => _elapsedSeconds;
   bool get isReading => _readingText != null;
   int? get readingTextId => _readingTextId;
+  Map<int, String> get annotations => _annotations;
 
   String get formattedReadingTime {
     final m = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -41,7 +43,7 @@ class ReadingController extends ChangeNotifier {
   bool get hasUnrecordedReading =>
       _readTracker.hasUnrecordedReading(_readingTextId);
 
-  bool loadText(ChineseText text) {
+  bool loadText(ChineseText text, {Map<int, String> annotations = const {}}) {
     final textId = text.id;
 
     if (_readingTextId != null) {
@@ -55,6 +57,7 @@ class ReadingController extends ChangeNotifier {
     _readingTextId = textId;
     _currentPage = 0;
     _pages = [];
+    _annotations = annotations;
 
     _readTracker.ensureState(textId);
     _elapsedSeconds = 0;
@@ -144,6 +147,7 @@ class ReadingController extends ChangeNotifier {
     _pages = [];
     _currentPage = 0;
     _elapsedSeconds = 0;
+    _annotations = {};
     _readingTimer?.cancel();
     _readingTimer = null;
     notifyListeners();

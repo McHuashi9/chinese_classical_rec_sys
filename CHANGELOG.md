@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-06-08
+
+### Added
+
+- **内联注释阅读**：270 篇古文现保留原文中的 `〔n〕` 注释标记，阅读时以朱砂色高亮显示为可点击角标。点击弹出浮动卡片，展示该条注释原文。"数据管线已改造：init_data.py 不再剥离标记，新增 `annotations_raw` 列存储【注释】章节全文；C++ bridge 新增惰性查询函数 `text_get_annotations`；Dart 端新增 `AnnotationParser` 解析器、`AnnotatedTextBuilder` 构建器、`AnnotationPopup` 弹出卡片组件、`ReadingFrame` 集成了点击手势识别。（涉及 10 个文件）"
+
+### Known Issues
+
+- **注释格式异质性**：源文件【注释】章节存在六种格式混用（`[word]` 括号型 / `word：` 冒号型 / 纯说明型 / 引句型 / 含拼音标注型 / 一条多词混排型）。当前弹窗直接显示注释原文行不拆分，以保信息完整。后续可考虑基于 NLP 尝试结构化，但不保证 100% 准确。
+
 ## [0.7.1] - 2026-06-07
 
 文库扩至 270 篇，文章分类和朝代信息更准确，修复了阅读页空白和计时器失灵的 bug。
@@ -188,3 +198,4 @@ C++ CLI 原型。
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
 [0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
 [0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
+[0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2

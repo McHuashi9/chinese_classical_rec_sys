@@ -21,6 +21,7 @@ final class NativeBridge {
   late final int Function() textGetCount;
   late final void Function(Pointer<TextInfo> out, int maxCount) textGetAll;
   late final int Function(int id, Pointer<TextDetail> out) textGetDetail;
+  late final int Function(int id, Pointer<Utf8> out, int maxLen) textGetAnnotations;
 
   // ─── 推荐 ────────────────────────────────────────────────────
   late final int Function(
@@ -103,6 +104,10 @@ final class NativeBridge {
     textGetDetail = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<TextDetail>),
         int Function(int, Pointer<TextDetail>)>('text_get_detail');
+
+    textGetAnnotations = _lib.lookupFunction<
+        Int32 Function(Int32, Pointer<Utf8>, Int32),
+        int Function(int, Pointer<Utf8>, int)>('text_get_annotations');
 
     recommend = _lib.lookupFunction<
         Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>, Int32, Int32),

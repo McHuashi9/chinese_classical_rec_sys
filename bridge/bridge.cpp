@@ -208,6 +208,49 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
     return BRIDGE_OK;
 }
 
+// ─── annotations ──────────────────────────────────────────────────────────────
+
+extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int max_len)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
+
+    sqlite3* db = g_state.db->getConnection();
+    if (!db) return BRIDGE_ERR_GENERIC;
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT annotations_raw FROM classical_text WHERE id = ?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: text_get_annotations 准备失败: {}", sqlite3_errmsg(db));
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+    int rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const char* text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        int len = text ? static_cast<int>(strlen(text)) : 0;
+        if (len >= max_len) {
+            LOG_WARN("bridge: text_id={} annotations_raw 截断 ({} > {} 字节)", id, len, max_len - 1);
+            len = max_len - 1;
+        }
+        if (text && len > 0) {
+            std::strncpy(out, text, len);
+            out[len] = '\0';
+        } else {
+            out[0] = '\0';
+        }
+    } else {
+        out[0] = '\0';
+        sqlite3_finalize(stmt);
+        return BRIDGE_ERR_TEXT;
+    }
+
+    sqlite3_finalize(stmt);
+    return BRIDGE_OK;
+}
+
 // ─── recommend ─────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,

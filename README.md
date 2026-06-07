@@ -47,7 +47,7 @@
 
 | 功能 | 说明 |
 |------|------|
-| 古文库 | 268 篇古文分页浏览，搜索作者/标题，已读/未读标记 |
+| 古文库 | 270 篇古文分页浏览，搜索作者/标题，已读/未读标记 |
 | 个性推荐 | 高斯 i+1 推荐引擎，推荐数量可调 |
 | 阅读器 | 乌丝栏版框、8 档字号、计时器、键盘翻页、阅读锁定 |
 | 能力雷达 | 10 维能力雷达图 + 综合评分，追踪学习成长 |
@@ -99,6 +99,8 @@ src/core/              推荐引擎 · 知识追踪（公式 19/20/14/15/17/18�
 src/database/          SQLite 访问封装
 tests/                 Catch2 单元测试
 third_party/           供应商库（sqlite3.c · spdlog · Catch2 · Boost.Nowide）
+articles/              应用数据源 — 270 篇古文（anthology 202 + textbook 68）
+processed_classical/   论文实验数据（归档保留）
 scripts/               Python 数据管线（特征提取 · ML 训练 · 实验）
 assets/                字体（SourceHanSerifSC）· 内置 classical.db
 data/                  字频表 · 权重 · 典故索引

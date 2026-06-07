@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
+import 'package:chinese_classical_rec_sys/widgets/annotation_popup.dart';
 
 class ReadingFrame extends StatefulWidget {
   final ChineseText text;
@@ -14,6 +16,7 @@ class ReadingFrame extends StatefulWidget {
   final bool isDark;
   final int elapsedSeconds;
   final bool alreadyTracked;
+  final Map<int, String> annotations;
   final void Function(int innerWidth, int innerHeight) onPaginate;
   final VoidCallback onNextPage;
   final VoidCallback onPrevPage;
@@ -31,6 +34,7 @@ class ReadingFrame extends StatefulWidget {
     required this.isDark,
     required this.elapsedSeconds,
     required this.alreadyTracked,
+    required this.annotations,
     required this.onPaginate,
     required this.onNextPage,
     required this.onPrevPage,
@@ -49,11 +53,60 @@ class _ReadingFrameState extends State<ReadingFrame> {
   Size _frameSize = Size.zero;
   double _framePadding = 16;
   double _lastFontScale = 1.0;
+  final _textKey = GlobalKey();
+  OverlayEntry? _annotationOverlay;
 
   @override
   void dispose() {
+    _dismissAnnotation();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _dismissAnnotation() {
+    _annotationOverlay?.remove();
+    _annotationOverlay = null;
+  }
+
+  void _showAnnotation(int number) {
+    _dismissAnnotation();
+    final text = widget.annotations[number];
+    if (text == null || text.isEmpty) return;
+    _annotationOverlay = AnnotationPopup.show(
+      context, number, text,
+      onDismissed: () => _annotationOverlay = null,
+    );
+  }
+
+  void _handleTextTap(TapUpDetails details) {
+    _dismissAnnotation();
+    final current = widget.pages.isNotEmpty ? widget.pages[widget.currentPage] : '';
+    if (current.isEmpty) return;
+
+    final renderBox = _textKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final localPos = renderBox.globalToLocal(details.globalPosition);
+    final tp = TextPainter(
+      text: AnnotatedTextBuilder.build(
+        current, widget.annotations,
+        AppTheme.bodyReadingSize(
+          AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
+          _lastFontScale,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    final maxWidth = renderBox.size.width;
+    tp.layout(maxWidth: maxWidth);
+
+    final textPos = tp.getPositionForOffset(localPos);
+    final offset = textPos.offset;
+
+    final num = AnnotatedTextBuilder.findAnnotationAtOffset(
+      current, offset, widget.annotations,
+    );
+    if (num != null) _showAnnotation(num);
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
@@ -165,24 +218,30 @@ class _ReadingFrameState extends State<ReadingFrame> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(3),
             child: current.isNotEmpty
-                ? CustomPaint(
-                    painter: _TextRuledPainter(
-                      content: current,
-                      style: bodyStyle,
-                      maxWidth: constraints.maxWidth - framePadding * 2,
-                      lineColor: widget.isDark
-                          ? AppTheme.borderLight.withAlpha(60)
-                          : AppTheme.borderLight,
-                      padding: framePadding,
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(framePadding),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: double.infinity,
-                        child: Text(
-                          current,
-                          style: bodyStyle.copyWith(color: textColor),
+                ? GestureDetector(
+                    onTapUp: _handleTextTap,
+                    child: CustomPaint(
+                      painter: _TextRuledPainter(
+                        content: current,
+                        style: bodyStyle,
+                        maxWidth: constraints.maxWidth - framePadding * 2,
+                        lineColor: widget.isDark
+                            ? AppTheme.borderLight.withAlpha(60)
+                            : AppTheme.borderLight,
+                        padding: framePadding,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(framePadding),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: double.infinity,
+                          child: Text.rich(
+                            AnnotatedTextBuilder.build(
+                              current, widget.annotations,
+                              bodyStyle.copyWith(color: textColor),
+                            ),
+                            key: _textKey,
+                          ),
                         ),
                       ),
                     ),
@@ -209,42 +268,39 @@ class _ReadingFrameState extends State<ReadingFrame> {
     final hasNext = widget.currentPage < widget.totalPages - 1;
 
     return Row(
-        children: [
-          if (widget.alreadyTracked) const Spacer() else
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        if (!widget.alreadyTracked)
           TextButton(
             onPressed: widget.onAbandon,
             child: Text('放弃',
                 style: TextStyle(color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary)),
           ),
-          const Spacer(),
+        TextButton(
+          onPressed: hasPrev ? widget.onPrevPage : null,
+          child: const Text('◀ 上一页'),
+        ),
+        Text(
+          widget.formattedTime,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+          ),
+        ),
+        TextButton(
+          onPressed: hasNext ? widget.onNextPage : null,
+          child: const Text('下一页 ▶'),
+        ),
+        if (widget.alreadyTracked)
           TextButton(
-            onPressed: hasPrev ? widget.onPrevPage : null,
-            child: const Text('◀ 上一页'),
-          ),
-          const Spacer(),
-          Text(
-            widget.formattedTime,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-            ),
-          ),
-          const Spacer(),
+            onPressed: widget.onExit,
+            child: const Text('返回'),
+          )
+        else
           TextButton(
-            onPressed: hasNext ? widget.onNextPage : null,
-            child: const Text('下一页 ▶'),
+            onPressed: widget.elapsedSeconds >= 30 ? widget.onComplete : null,
+            child: Text(widget.elapsedSeconds >= 30 ? '完成' : '${30 - widget.elapsedSeconds}s'),
           ),
-          const Spacer(),
-          if (widget.alreadyTracked)
-            TextButton(
-              onPressed: widget.onExit,
-              child: const Text('返回'),
-            )
-          else
-            TextButton(
-              onPressed: widget.elapsedSeconds >= 30 ? widget.onComplete : null,
-              child: Text(widget.elapsedSeconds >= 30 ? '完成' : '${30 - widget.elapsedSeconds}s'),
-            ),
-        ],
+      ],
     );
   }
 }

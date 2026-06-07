@@ -101,7 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 SizedBox(
                   width: isSmall ? 150.0 : 220.0,
                   child: DropdownButtonFormField<String>(
-                    value: logLevel,
+                    key: ValueKey(logLevel),
+                    initialValue: logLevel,
                     items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
                         .map((l) =>
                             DropdownMenuItem(value: l, child: Text(l)))
@@ -249,23 +250,22 @@ class _SettingsPageState extends State<SettingsPage> {
         messenger.showSnackBar(SnackBar(content: Text(reason)));
       } else if (latest == current) {
         messenger.showSnackBar(
-          SnackBar(content: Text('已是最新版本 ${AppCoordinator.currentVersion}')),
+          const SnackBar(content: Text('已是最新版本 ${AppCoordinator.currentVersion}')),
         );
       } else if (latest > current) {
-        await _showUpdateDialog(context, latest.toString());
+        await _showUpdateDialog(latest.toString());
       }
     } finally {
       if (mounted) setState(() => _checking = false);
     }
   }
 
-  Future<void> _showUpdateDialog(
-      BuildContext context, String latestVersion) async {
+  Future<void> _showUpdateDialog(String latestVersion) async {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('发现新版本 v$latestVersion'),
-        content: Text('当前版本: ${AppCoordinator.currentVersion}'),
+        content: const Text('当前版本: ${AppCoordinator.currentVersion}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -288,11 +288,12 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 void _launch(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.of(context);
   try {
     await launchUrl(Uri.parse(url));
   } catch (_) {
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('无法打开浏览器，请手动访问: $url')),
       );
     } catch (_) {}
@@ -319,7 +320,7 @@ class _AboutLinkRow extends StatelessWidget {
     return InkWell(
       onTap: () => _launch(context, url),
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           children: [
             Icon(icon, size: 16 * fontScale, color: color),
