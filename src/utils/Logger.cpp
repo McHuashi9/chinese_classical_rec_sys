@@ -65,6 +65,9 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         initialized_ = true;
         
         // Session 标记 — 每次启动一条分隔线
+#ifndef APP_VERSION
+#define APP_VERSION ""
+#endif
         LOG_INFO("===== v{} 启动 =====", APP_VERSION);
         
         return true;

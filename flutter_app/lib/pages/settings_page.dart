@@ -102,7 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   width: isSmall ? 150.0 : 220.0,
                   child: DropdownButtonFormField<String>(
                     key: ValueKey(logLevel),
-                    initialValue: logLevel,
+                    value: logLevel,
                     items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
                         .map((l) =>
                             DropdownMenuItem(value: l, child: Text(l)))

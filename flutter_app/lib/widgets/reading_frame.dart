@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
@@ -55,6 +56,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
   double _lastFontScale = 1.0;
   final _textKey = GlobalKey();
   OverlayEntry? _annotationOverlay;
+  int? _currentAnnotationNumber;
 
   @override
   void dispose() {
@@ -63,50 +65,80 @@ class _ReadingFrameState extends State<ReadingFrame> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(ReadingFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPage != widget.currentPage) {
+      _dismissAnnotation();
+    }
+  }
+
   void _dismissAnnotation() {
     _annotationOverlay?.remove();
     _annotationOverlay = null;
+    _currentAnnotationNumber = null;
   }
 
-  void _showAnnotation(int number) {
-    _dismissAnnotation();
+  void _showAnnotation(int number, {required Offset markerCenterGlobal}) {
     final text = widget.annotations[number];
     if (text == null || text.isEmpty) return;
+    final fontScale = context.read<SettingsController>().fontScale;
+    _currentAnnotationNumber = number;
     _annotationOverlay = AnnotationPopup.show(
       context, number, text,
-      onDismissed: () => _annotationOverlay = null,
+      fontScale: fontScale,
+      isDark: widget.isDark,
+      markerCenterGlobal: markerCenterGlobal,
+      onDismissed: () {
+        _annotationOverlay = null;
+        _currentAnnotationNumber = null;
+      },
     );
   }
 
   void _handleTextTap(TapUpDetails details) {
-    _dismissAnnotation();
     final current = widget.pages.isNotEmpty ? widget.pages[widget.currentPage] : '';
     if (current.isEmpty) return;
 
-    final renderBox = _textKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
+    final renderParagraph = _textKey.currentContext?.findRenderObject();
+    if (renderParagraph is! RenderParagraph) return;
 
-    final localPos = renderBox.globalToLocal(details.globalPosition);
-    final tp = TextPainter(
-      text: AnnotatedTextBuilder.build(
-        current, widget.annotations,
-        AppTheme.bodyReadingSize(
-          AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
-          _lastFontScale,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    final maxWidth = renderBox.size.width;
-    tp.layout(maxWidth: maxWidth);
+    final localPos = renderParagraph.globalToLocal(details.globalPosition);
 
-    final textPos = tp.getPositionForOffset(localPos);
-    final offset = textPos.offset;
+    if (localPos.dx < 0 || localPos.dx > renderParagraph.size.width ||
+        localPos.dy < 0 || localPos.dy > renderParagraph.size.height) {
+      return;
+    }
 
+    final textPos = renderParagraph.getPositionForOffset(localPos);
     final num = AnnotatedTextBuilder.findAnnotationAtOffset(
-      current, offset, widget.annotations,
+      current, textPos.offset, widget.annotations,
     );
-    if (num != null) _showAnnotation(num);
+
+    if (num == null) {
+      _dismissAnnotation();
+      return;
+    }
+
+    if (_annotationOverlay != null) {
+      if (num == _currentAnnotationNumber) {
+        _dismissAnnotation();
+        return;
+      }
+      _dismissAnnotation();
+    }
+
+    final markerSel = AnnotatedTextBuilder.markerSelection(current, num);
+    final boxes = renderParagraph.getBoxesForSelection(markerSel);
+    if (boxes.isEmpty) return;
+    final markerRect = boxes.first.toRect();
+    if (!markerRect.inflate(8).contains(localPos)) return;
+
+    final markerCenterGlobal = renderParagraph.localToGlobal(
+      Offset(markerRect.center.dx, markerRect.bottom),
+    );
+
+    _showAnnotation(num, markerCenterGlobal: markerCenterGlobal);
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {

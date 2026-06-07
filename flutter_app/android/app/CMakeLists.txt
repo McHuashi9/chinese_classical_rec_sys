@@ -35,4 +35,4 @@ target_include_directories(chinese_core PRIVATE
 target_link_libraries(chinese_core PRIVATE sqlite3_android log)
 add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 target_compile_definitions(chinese_core PRIVATE __ANDROID__)
-target_compile_definitions(chinese_core PRIVATE APP_VERSION="${APP_VERSION}")
+add_compile_definitions(APP_VERSION="${APP_VERSION}")
