@@ -80,7 +80,7 @@ class _ReadHubPageState extends State<ReadHubPage>
       });
     }
 
-    final readingCtrl = context.read<ReadingController>();
+    final readingCtrl = context.watch<ReadingController>();
     if (readingCtrl.isReading && readingCtrl.readingText != null) {
       return _buildReadingMode();
     }
@@ -375,8 +375,8 @@ class _ReadHubPageState extends State<ReadHubPage>
   }
 
   Widget _buildReadingMode() {
-    final readingCtrl = context.read<ReadingController>();
-    final settingsCtrl = context.read<SettingsController>();
+    final readingCtrl = context.watch<ReadingController>();
+    final settingsCtrl = context.watch<SettingsController>();
     final text = readingCtrl.readingText;
     final isDark = settingsCtrl.darkMode;
     final pages = readingCtrl.pages;

@@ -5,7 +5,6 @@ class ChineseText {
   final String author;
   final String dynasty;
   final String source;
-  final String sourceDetail;
   final String background;
   final String content;
   final int charCount;
@@ -17,7 +16,6 @@ class ChineseText {
     required this.author,
     required this.dynasty,
     this.source = '',
-    this.sourceDetail = '',
     this.background = '',
     this.content = '',
     this.charCount = 0,
@@ -26,14 +24,13 @@ class ChineseText {
 
   /// 从 C [TextInfo] 创建摘要视图 (不含全文内容)
   factory ChineseText.fromInfo(int id, String title, String author, String dynasty,
-      {String source = '', String sourceDetail = ''}) {
+      {String source = ''}) {
     return ChineseText(
       id: id,
       title: title,
       author: author,
       dynasty: dynasty,
       source: source,
-      sourceDetail: sourceDetail,
     );
   }
 
@@ -44,7 +41,6 @@ class ChineseText {
     String author,
     String dynasty,
     String source,
-    String sourceDetail,
     String background,
     String content,
     int charCount,
@@ -56,7 +52,6 @@ class ChineseText {
       author: author,
       dynasty: dynasty,
       source: source,
-      sourceDetail: sourceDetail,
       background: background,
       content: content,
       charCount: charCount,

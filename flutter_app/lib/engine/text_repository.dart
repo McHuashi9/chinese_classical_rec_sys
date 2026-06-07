@@ -26,7 +26,6 @@ class TextRepository {
         readCString(info.author, 128),
         readCString(info.dynasty, 64),
         source: readCString(info.source, 64),
-        sourceDetail: readCString(info.sourceDetail, 128),
       ));
     }
     calloc.free(infos);
@@ -46,7 +45,6 @@ class TextRepository {
       readCString(d.author, 128),
       readCString(d.dynasty, 64),
       readCString(d.source, 64),
-      readCString(d.sourceDetail, 128),
       readCString(d.background, 2048),
       readCString(d.content, 65536),
       d.charCount,

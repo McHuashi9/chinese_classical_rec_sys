@@ -46,9 +46,6 @@ public:
     
     void setSource(const std::string& s);
     std::string getSource() const;
-
-    void setSourceDetail(const std::string& s);
-    std::string getSourceDetail() const;
     
     void setCharCount(int count);
     int getCharCount() const;
@@ -72,7 +69,6 @@ private:
     std::string dynasty;
     std::string background;
     std::string source;
-    std::string sourceDetail;
     std::string content;
     int charCount;
     

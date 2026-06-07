@@ -32,9 +32,6 @@ final class TextInfo extends Struct {
 
   @Array(64)
   external Array<Uint8> source;
-
-  @Array(128)
-  external Array<Uint8> sourceDetail;
 }
 
 /// C TextDetail struct — 含全文 + 难度向量
@@ -54,9 +51,6 @@ final class TextDetail extends Struct {
 
   @Array(64)
   external Array<Uint8> source;
-
-  @Array(128)
-  external Array<Uint8> sourceDetail;
 
   @Array(2048)
   external Array<Uint8> background;

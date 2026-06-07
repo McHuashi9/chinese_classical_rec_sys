@@ -170,8 +170,6 @@ extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
         out[i].dynasty[63] = '\0';
         std::strncpy(out[i].source, t.getSource().c_str(), 63);
         out[i].source[63] = '\0';
-        std::strncpy(out[i].source_detail, t.getSourceDetail().c_str(), 127);
-        out[i].source_detail[127] = '\0';
     }
 }
 
@@ -196,8 +194,6 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
     out->dynasty[63] = '\0';
     std::strncpy(out->source, text.getSource().c_str(), 63);
     out->source[63] = '\0';
-    std::strncpy(out->source_detail, text.getSourceDetail().c_str(), 127);
-    out->source_detail[127] = '\0';
     std::strncpy(out->background, text.getBackground().c_str(), 2047);
     out->background[2047] = '\0';
     if (text.getContent().size() > 65535) {

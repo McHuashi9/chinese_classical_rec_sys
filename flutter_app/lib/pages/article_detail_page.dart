@@ -79,10 +79,30 @@ class ArticleDetailPage extends StatelessWidget {
             ),
             if (text.source.isNotEmpty) ...[
               SizedBox(height: context.gapMedium),
-              Chip(
-                label: Text(text.source),
-                backgroundColor: isDark ? AppTheme.darkCard : AppTheme.cardBg,
-                side: BorderSide(color: isDark ? AppTheme.borderLight : AppTheme.border),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Chip(
+                    label: Text(text.source),
+                    backgroundColor: isDark ? AppTheme.darkCard : AppTheme.cardBg,
+                    side: BorderSide(color: isDark ? AppTheme.borderLight : AppTheme.border),
+                  ),
+                  if (text.background.startsWith('【特征待定】'))
+                    Chip(
+                      label: const Text('特征待定'),
+                      backgroundColor: isDark
+                          ? AppTheme.darkVermilion.withAlpha(40)
+                          : AppTheme.vermilion.withAlpha(20),
+                      side: BorderSide(
+                        color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                      ),
+                      labelStyle: TextStyle(
+                        color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
               ),
             ],
             SizedBox(height: context.gapLg),
