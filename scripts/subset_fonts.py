@@ -18,8 +18,6 @@ import sys
 import zipfile
 from pathlib import Path
 
-import requests
-
 try:
     from fontTools.subset import Subsetter, Options
     from fontTools.ttLib import TTFont
@@ -84,6 +82,15 @@ DOWNLOAD_SOURCES = [
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+
+_requests = None
+def _get_requests():
+    global _requests
+    if _requests is None:
+        import requests as _r
+        _requests = _r
+    return _requests
 
 
 def parse_args():
@@ -168,6 +175,7 @@ def collect_characters() -> set:
 
 
 def gh_latest_release(owner: str, repo: str, tag_override: str | None = None) -> dict:
+    requests = _get_requests()
     if tag_override:
         url = f"{GH_API}/repos/{owner}/{repo}/releases/tags/{tag_override}"
     else:
@@ -179,6 +187,7 @@ def gh_latest_release(owner: str, repo: str, tag_override: str | None = None) ->
 
 
 def download_file(url: str, dest: Path, desc: str = "") -> None:
+    requests = _get_requests()
     dest.parent.mkdir(parents=True, exist_ok=True)
     eprint(f"  下载 {desc or url} ...")
     r = requests.get(url, stream=True, timeout=600)

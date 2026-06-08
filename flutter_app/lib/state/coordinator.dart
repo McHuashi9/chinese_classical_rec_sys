@@ -21,7 +21,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.7.2';
+  static const currentVersion = '0.7.3';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;

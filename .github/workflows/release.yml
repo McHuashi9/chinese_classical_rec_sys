@@ -23,8 +23,8 @@ jobs:
 
       - name: Subset fonts
         run: |
-          pip install fonttools
-          python3 scripts/subset_fonts.py
+          python3 -m pip install fonttools
+          python3 scripts/subset_fonts.py --check-only
 
       - name: Build chinese_core
         run: |
@@ -91,8 +91,8 @@ jobs:
       - name: Subset fonts
         shell: bash
         run: |
-          pip install fonttools
-          python3 scripts/subset_fonts.py
+          python3 -m pip install fonttools
+          python3 scripts/subset_fonts.py --check-only
 
       - uses: actions/cache@v4
         with:
@@ -123,8 +123,8 @@ jobs:
           distribution: 'temurin'
       - name: Subset fonts
         run: |
-          pip install fonttools
-          python3 scripts/subset_fonts.py
+          python3 -m pip install fonttools
+          python3 scripts/subset_fonts.py --check-only
 
       - uses: actions/cache@v4
         with:
@@ -159,8 +159,8 @@ jobs:
           flutter-version: '3.27.x'
       - name: Subset fonts
         run: |
-          pip install fonttools
-          python3 scripts/subset_fonts.py
+          python3 -m pip install fonttools --break-system-packages
+          python3 scripts/subset_fonts.py --check-only
 
       - name: Generate ios/
         run: |
