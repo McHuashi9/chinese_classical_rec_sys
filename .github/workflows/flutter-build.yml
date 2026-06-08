@@ -16,6 +16,11 @@ jobs:
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config fuse
 
+      - name: Subset fonts
+        run: |
+          pip install fonttools
+          python3 scripts/subset_fonts.py
+
       - name: Build chinese_core
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release

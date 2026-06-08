@@ -38,6 +38,8 @@ cd flutter_app && flutter pub get && flutter run -d linux
 
 Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。
 
+> 字体已预置子集化版本（36MB）在仓库中。如需增删文章，先运行 `source venv/bin/activate && pip install fonttools && python3 scripts/subset_fonts.py` 更新字体。
+
 ## 运行测试
 
 ```bash
@@ -87,7 +89,7 @@ cd flutter_app && flutter analyze
 格式 `major.minor.patch`，Git tag 加 `v` 前缀。发版前同步：
 
 - `pubspec.yaml` → `version: X.Y.Z`
-- `flutter_app/lib/state/app_state.dart` → `currentVersion`
+- `flutter_app/lib/state/coordinator.dart` → `currentVersion`
 - `CHANGELOG.md` → 将 `[Unreleased]` 整理为正式发布条目
 
 发版时运行 `bash scripts/project/bump_version.sh X.Y.Z` 自动完成以上同步。
@@ -102,7 +104,7 @@ cd flutter_app && flutter analyze
 bash scripts/project/bump_version.sh X.Y.Z
 # 手动整理 CHANGELOG.md 的 release 描述
 git add flutter_app/pubspec.yaml \
-      flutter_app/lib/state/app_state.dart \
+      flutter_app/lib/state/coordinator.dart \
       CHANGELOG.md \
       scripts/project/bump_version.sh
 git commit -m "release: vX.Y.Z"

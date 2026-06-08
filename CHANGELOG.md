@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **字体子集化工具**：`scripts/subset_fonts.py` 自动扫描项目文章/Dart 源码/数据文件中的字符，从原版字体裁剪子集输出到 `flutter_app/assets/fonts/`。6 个字体总和从 114MB 降至 36MB。新增 `scripts/fonts_extra_chars.txt` 补充扫描遗漏字符。CI 构建前自动运行。
+
 ### Fixed
 
 - **测试 DB 路径硬编码修复**：`test_bridge.cpp` 中 `db_open("data/classical.db")` 指向不受 Git 跟踪的文件。改为 CMake 编译期拷贝 `flutter_app/assets/data/classical.db` 并通过 `TEST_DB_PATH` 宏传入，确保任何 clone 者都能运行测试且不污染源文件。
