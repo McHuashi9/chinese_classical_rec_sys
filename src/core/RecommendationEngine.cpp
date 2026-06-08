@@ -47,6 +47,8 @@ std::vector<std::pair<int, double>> RecommendationEngine::recommend(
     const std::vector<Text>& texts,
     int topK
 ) const {
+    if (topK <= 0) return {};
+
     LOG_DEBUG("开始推荐计算，文章数量: {}, topK: {}", texts.size(), topK);
     
     std::vector<std::pair<int, double>> scores;

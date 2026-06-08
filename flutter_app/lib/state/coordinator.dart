@@ -39,6 +39,10 @@ class AppCoordinator {
 
   String? _dbPathAfterSync;
 
+  ReadingStats? _cachedStats;
+  int _statsGeneration = 0;
+  int _statsEpoch = -1;
+
   AppCoordinator({
     required this.navCtrl,
     required this.settingsCtrl,
@@ -78,8 +82,6 @@ class AppCoordinator {
       _loadUser();
       _loadTextTrackedStates();
       _historyService = HistoryService(_bridge!, _textRepo);
-
-      readingCtrl.addListener(_onReadingChanged);
 
       initialized.value = true;
       settingsCtrl.clearError();
@@ -124,12 +126,6 @@ class AppCoordinator {
     }
   }
 
-  void _onReadingChanged() {
-    // Forward reading timer ticks to consumers via settingsCtrl (as a proxy)
-    // Consumers use select() which is unaffected by unrelated notifications.
-    // We notify via readingCtrl which is a ChangeNotifierProvider.
-  }
-
   bool loadTextForReading(int textId) {
     final text = _textRepo.getTextDetail(textId);
     if (text == null) return false;
@@ -156,12 +152,17 @@ class AppCoordinator {
         text != null &&
         !readTracker.isTextRead(textId)) {
       readTracker.markEffectApplied(textId);
-      userCtrl.applyReadEffect(text.id, seconds.toDouble());
+      if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
+        _statsGeneration++;
+      }
     }
   }
 
   void getRecommendations(int topK) {
-    if (!isInitialized) return;
+    if (!isInitialized) {
+      settingsCtrl.setError('系统尚未初始化');
+      return;
+    }
     try {
       userCtrl.getRecommendations(_engine, _textRepo.texts, topK);
       settingsCtrl.clearError();
@@ -174,7 +175,13 @@ class AppCoordinator {
 
   int getTotalReadCount() => history.getTotalCount();
 
-  ReadingStats getReadingStats() => history.computeStats(history.getRecent(9999));
+  ReadingStats getReadingStats() {
+    final cache = _cachedStats;
+    if (cache != null && _statsGeneration == _statsEpoch) return cache;
+    _cachedStats = history.computeStats(history.getRecent(9999));
+    _statsEpoch = _statsGeneration;
+    return _cachedStats!;
+  }
 
   Future<void> remoteSyncDb({String? remoteVersion, String? downloadUrl}) async {
     if (remoteVersion == null || downloadUrl == null) return;
@@ -219,7 +226,6 @@ class AppCoordinator {
   }
 
   void dispose() {
-    readingCtrl.removeListener(_onReadingChanged);
     readingCtrl.dispose();
     userCtrl.dispose();
     _bridge?.dbClose();

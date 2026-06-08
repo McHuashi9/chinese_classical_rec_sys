@@ -11,6 +11,7 @@ import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
 import 'package:chinese_classical_rec_sys/pages/article_detail_page.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
 import 'package:chinese_classical_rec_sys/widgets/text_card.dart';
 
 class ReadHubPage extends StatefulWidget {
@@ -254,7 +255,9 @@ class _ReadHubPageState extends State<ReadHubPage>
           const Divider(color: AppTheme.border, height: 1),
           SizedBox(height: context.gapLg),
           Expanded(
-            child: recs.isEmpty && !_initialLoad
+            child: recs.isEmpty && _initialLoad
+                ? const Center(child: CircularProgressIndicator())
+                : recs.isEmpty
                 ? Center(
                     child: Text(
                       error != null ? '推荐失败，请稍后重试' : '能力变化时将自动生成推荐',
@@ -386,7 +389,7 @@ class _ReadHubPageState extends State<ReadHubPage>
 
     if (text == null) return _buildBrowsingMode();
 
-    return ReadingFrame(
+    return ReadingFrame(viewData: ReadingViewData(
       text: text,
       pages: pages,
       currentPage: currentPage,
@@ -406,7 +409,7 @@ class _ReadHubPageState extends State<ReadHubPage>
       onComplete: _completeReading,
       onAbandon: _confirmAbandon,
       onExit: _exitReading,
-    );
+    ));
   }
 
   void _completeReading() {

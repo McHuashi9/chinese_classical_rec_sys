@@ -7,6 +7,28 @@
 #include <unordered_map>
 #include <functional>
 
+#define TEXT_SELECT_COLUMNS \
+    "id, title, author, dynasty, background, source, content, char_count, " \
+    "f1_avg_sentence_length, f3_sentence_count, " \
+    "f5_function_word_ratio, f6_avg_char_log_freq, " \
+    "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, " \
+    "f11_mattr, f12_allusion_density, f13_semantic_complexity"
+
+#define TEXT_INSERT_COLUMNS \
+    "title, author, dynasty, background, source, content, char_count, " \
+    "f1_avg_sentence_length, f3_sentence_count, " \
+    "f5_function_word_ratio, f6_avg_char_log_freq, " \
+    "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, " \
+    "f11_mattr, f12_allusion_density, f13_semantic_complexity"
+
+#define TEXT_UPDATE_SET \
+    "title = ?, author = ?, dynasty = ?, background = ?, source = ?, content = ?, " \
+    "char_count = ?, " \
+    "f1_avg_sentence_length = ?, f3_sentence_count = ?, " \
+    "f5_function_word_ratio = ?, f6_avg_char_log_freq = ?, " \
+    "f8_tongjiazi_density = ?, f9_ppl_ancient = ?, f10_ppl_modern = ?, " \
+    "f11_mattr = ?, f12_allusion_density = ?, f13_semantic_complexity = ?"
+
 TextRepository::TextRepository(DatabaseManager* dbManager) : db(dbManager) {}
 
 bool TextRepository::initTable() {
@@ -92,14 +114,8 @@ bool TextRepository::getTextById(int id, Text& text) {
         return false;
     }
     
-    // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, background, source, content, char_count, "
-        "f1_avg_sentence_length, f3_sentence_count, "
-        "f5_function_word_ratio, f6_avg_char_log_freq, "
-        "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
-        "f11_mattr, f12_allusion_density, f13_semantic_complexity "
-        "FROM classical_text WHERE id = ?;";
+        "SELECT " TEXT_SELECT_COLUMNS " FROM classical_text WHERE id = ?;";
     
     std::vector<double> params = {static_cast<double>(id)};
     
@@ -118,14 +134,8 @@ std::vector<Text> TextRepository::getAllTexts() {
         return texts;
     }
     
-    // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, background, source, content, char_count, "
-        "f1_avg_sentence_length, f3_sentence_count, "
-        "f5_function_word_ratio, f6_avg_char_log_freq, "
-        "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
-        "f11_mattr, f12_allusion_density, f13_semantic_complexity "
-        "FROM classical_text ORDER BY id;";
+        "SELECT " TEXT_SELECT_COLUMNS " FROM classical_text ORDER BY id;";
     
     if (!db->executeQuery(sql, std::vector<std::string>(), std::vector<double>(), textsCallback, &texts)) {
         LOG_ERROR("查询古文列表失败: {}", db->getLastError());
@@ -151,12 +161,7 @@ bool TextRepository::saveText(const Text& text) {
     }
     
     return db->executeSQL(
-        "INSERT INTO classical_text "
-        "(title, author, dynasty, background, source, content, char_count, "
-        "f1_avg_sentence_length, f3_sentence_count, "
-        "f5_function_word_ratio, f6_avg_char_log_freq, "
-        "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
-        "f11_mattr, f12_allusion_density, f13_semantic_complexity) "
+        "INSERT INTO classical_text (" TEXT_INSERT_COLUMNS ") "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         textParams,
         realParams
@@ -181,14 +186,7 @@ bool TextRepository::updateText(const Text& text) {
     realParams.push_back(static_cast<double>(text.getId()));
     
     return db->executeSQL(
-        "UPDATE classical_text SET "
-        "title = ?, author = ?, dynasty = ?, background = ?, source = ?, content = ?, "
-        "char_count = ?, "
-        "f1_avg_sentence_length = ?, f3_sentence_count = ?, "
-        "f5_function_word_ratio = ?, f6_avg_char_log_freq = ?, "
-        "f8_tongjiazi_density = ?, f9_ppl_ancient = ?, f10_ppl_modern = ?, "
-        "f11_mattr = ?, f12_allusion_density = ?, f13_semantic_complexity = ? "
-        "WHERE id = ?;",
+        "UPDATE classical_text SET " TEXT_UPDATE_SET " WHERE id = ?;",
         textParams,
         realParams
     );
@@ -241,14 +239,8 @@ std::vector<Text> TextRepository::getTextsByIdRange(int startId, int endId) {
         return texts;
     }
     
-    // 10维特征查询
     const char* sql = 
-        "SELECT id, title, author, dynasty, background, source, content, char_count, "
-        "f1_avg_sentence_length, f3_sentence_count, "
-        "f5_function_word_ratio, f6_avg_char_log_freq, "
-        "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, "
-        "f11_mattr, f12_allusion_density, f13_semantic_complexity "
-        "FROM classical_text WHERE id >= ? AND id <= ? ORDER BY id;";
+        "SELECT " TEXT_SELECT_COLUMNS " FROM classical_text WHERE id >= ? AND id <= ? ORDER BY id;";
     
     std::vector<double> params = {static_cast<double>(startId), static_cast<double>(endId)};
     

@@ -74,7 +74,7 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
     g_state.userRepo = std::make_unique<UserRepository>(g_state.db.get());
     g_state.textRepo = std::make_unique<TextRepository>(g_state.db.get());
     g_state.historyRepo = std::make_unique<ReadingHistoryRepository>(g_state.db.get());
-    g_state.historyRepo->initTable();
+    if (!g_state.historyRepo->initTable()) return BRIDGE_ERR_INIT;
     g_state.incrementRepo = std::make_unique<LearningIncrementRepository>(g_state.db.get());
 
     g_state.engine = std::make_unique<RecommendationEngine>();

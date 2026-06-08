@@ -1,9 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 void main() {
   group('NavigationController', () {
@@ -66,7 +69,10 @@ void main() {
       tracker = ReadTracker();
       ctrl = ReadingController(tracker);
     });
-    tearDown(() => ctrl.dispose());
+    tearDown(() {
+      ctrl.stopTimer();
+      ctrl.dispose();
+    });
 
     test('isReading starts false', () => expect(ctrl.isReading, false));
     test('readingText starts null', () => expect(ctrl.readingText, null));
@@ -85,6 +91,104 @@ void main() {
       ctrl.pauseTimer();
       ctrl.resumeTimer();
       ctrl.stopTimer();
+    });
+
+    void _withCleanup(VoidCallback fn) {
+      try {
+        fn();
+      } finally {
+        ctrl.stopTimer();
+      }
+    }
+
+    testWidgets('paginate 空内容返回空页', (tester) async {
+      _withCleanup(() {
+        final text = ChineseText(
+          id: 1, title: 't', author: 'a', dynasty: '唐',
+        );
+        ctrl.loadText(text);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        expect(ctrl.pages, isEmpty);
+        expect(ctrl.totalPages, 0);
+      });
+    });
+
+    testWidgets('paginate 短内容一页显示', (tester) async {
+      _withCleanup(() {
+        final text = ChineseText(
+          id: 1, title: 't', author: 'a', dynasty: '唐',
+          content: 'Hello World',
+        );
+        ctrl.loadText(text);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        expect(ctrl.pages.length, 1);
+        expect(ctrl.currentPage, 0);
+        expect(ctrl.totalPages, 1);
+      });
+    });
+
+    testWidgets('paginate 长内容分多页', (tester) async {
+      _withCleanup(() {
+        final longContent = 'Hello world, this is a test paragraph that should '
+            'wrap across multiple lines when laid out at a reasonable page width. '
+            'We repeat this several times to ensure enough content for multi-page '
+            'pagination behavior in the reading controller. ' * 30;
+        final text = ChineseText(
+          id: 2, title: 'long', author: 'a', dynasty: '唐',
+          content: longContent,
+        );
+        ctrl.loadText(text);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        expect(ctrl.pages.length, greaterThan(1));
+        expect(ctrl.totalPages, greaterThan(1));
+      });
+    });
+
+    testWidgets('paginate 后翻页/回翻', (tester) async {
+      _withCleanup(() {
+        final longContent = 'Page test content for navigation verification. ' * 50;
+        final text = ChineseText(
+          id: 3, title: 'nav', author: 'a', dynasty: '唐',
+          content: longContent,
+        );
+        ctrl.loadText(text);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        expect(ctrl.currentPage, 0);
+
+        ctrl.nextPage();
+        expect(ctrl.currentPage, 1);
+
+        ctrl.nextPage();
+        expect(ctrl.currentPage, 2);
+
+        ctrl.prevPage();
+        expect(ctrl.currentPage, 1);
+
+        ctrl.prevPage();
+        expect(ctrl.currentPage, 0);
+      });
+    });
+
+    testWidgets('paginate 末尾不越界', (tester) async {
+      _withCleanup(() {
+        final longContent = 'Boundary test. ' * 30;
+        final text = ChineseText(
+          id: 4, title: 'bnd', author: 'a', dynasty: '唐',
+          content: longContent,
+        );
+        ctrl.loadText(text);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        final last = ctrl.totalPages - 1;
+        for (int i = 0; i < last + 5; i++) {
+          ctrl.nextPage();
+        }
+        expect(ctrl.currentPage, last);
+
+        for (int i = 0; i < last + 5; i++) {
+          ctrl.prevPage();
+        }
+        expect(ctrl.currentPage, 0);
+      });
     });
   });
 

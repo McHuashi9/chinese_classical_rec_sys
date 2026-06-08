@@ -88,6 +88,7 @@ abstract class BridgeError {
   static const int errNotInit = -2;
   static const int errUser = -3;
   static const int errText = -4;
+  static const int errInit = -5;
 }
 
 /// 从 C 的 null-terminated Uint8 array 读取 Dart String

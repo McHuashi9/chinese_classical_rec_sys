@@ -227,6 +227,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       final dbPath = '${dir.path}/classical.db';
       final verPath = '${dir.path}/db_version.txt';
       final dbFile = File(dbPath);
+      final bakFile = File('${dir.path}/classical.db.bak');
+
+      if (!await dbFile.exists() && await bakFile.exists()) {
+        await bakFile.rename(dbPath);
+        AppLogger().info('DB 已从 .bak 恢复');
+      }
 
       if (!await dbFile.exists()) {
         final data = await rootBundle.load('assets/data/classical.db');

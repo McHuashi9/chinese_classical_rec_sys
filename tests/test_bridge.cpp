@@ -54,7 +54,7 @@ TEST_CASE("bridge - db_open 无效路径返回错误", "[bridge][smoke]") {
 TEST_CASE("bridge - 完整初始化链路 smoke test", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open("data/classical.db") == BRIDGE_OK);
+    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
 
     REQUIRE(text_get_count() > 0);
 

@@ -65,6 +65,7 @@ typedef struct {
 #define BRIDGE_ERR_NOT_INIT   -2   ///< 未初始化 (未调用 db_open)
 #define BRIDGE_ERR_USER       -3   ///< 用户不存在
 #define BRIDGE_ERR_TEXT       -4   ///< 文本不存在
+#define BRIDGE_ERR_INIT       -5   ///< 初始化失败 (initTable 等)
 
 #pragma pack(pop)
 

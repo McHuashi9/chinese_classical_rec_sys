@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **测试 DB 路径硬编码修复**：`test_bridge.cpp` 中 `db_open("data/classical.db")` 指向不受 Git 跟踪的文件。改为 CMake 编译期拷贝 `flutter_app/assets/data/classical.db` 并通过 `TEST_DB_PATH` 宏传入，确保任何 clone 者都能运行测试且不污染源文件。
+
+### Tests
+
+- **`AnnotationParser` + `AnnotatedTextBuilder` 单元测试**：新建 `annotation_parser_test.dart`，覆盖 parse 空/单条/多条、parseEntry 两种格式 + fallback、build marker 样式、findAnnotationAtOffset、markerSelection 等 24 个用例。
+- **`ReadingController.paginate` 测试**：在 `controllers_test.dart` 中补充 5 个 `testWidgets`，覆盖空内容、一页显示、多页分页、前后翻页、边界不越界场景。
+
+- **DB 文件旋转崩溃恢复**：启动时检测 `classical.db` 缺失但 `.bak` 存在，自动从 `.bak` 恢复用户数据，防止同步/更新中途崩溃导致数据被 asset 覆盖丢失。同步前不再清理 `.bak`，降低崩溃窗口风险。
+- **`getRecommendations` 静默返回修复**：`_user == null` 时不再直接 return，改为清空推荐列表并调用 `notifyListeners()` 通知 UI；`coordinator` 中 `!isInitialized` 时设置 error 状态，用户可感知推荐失败而非认为系统无响应。
+- **`getReadingStats` 增加缓存**：添加 `_cachedStats` + generation 计数缓存，仅在历史变更（`applyReadingEffect` 成功写入）时失效重算，消除 build 中重复 FFI 查询导致的帧丢失风险。
+- **TextRepository SQL 列列表 DRY**：提取 3 个宏常量 `TEXT_SELECT_COLUMNS`、`TEXT_INSERT_COLUMNS`、`TEXT_UPDATE_SET`，消除 5 处手写重复；新增列时仅需修改一处。
+- **`ReadingFrame` 14 参数聚合为 ViewModel**：新建 `ReadingViewData` 数据类，将 14 个构造参数聚合并传入；调用方 `read_hub_page.dart` 同步调整，消除脆弱耦合。
+- **`topK` 负值崩溃防护**：`RecommendationEngine::recommend` 开头添加 `if (topK <= 0) return {};`，防止 FFI 传入负数导致 `std::length_error` 崩溃。
+- **ReadingHistoryRepository 空指针防护**：`addRecord` 和 `markAsTracked` 添加 `if (!db || !db->getConnection())` 检查，对齐其他查询方法的防御风格。
+- **`db_open` initTable 返回值检查**：`bridge.cpp` 中 `initTable()` 失败时立即返回 `BRIDGE_ERR_INIT`，将错误提前到初始化阶段。
+- **CTest 注册名修正**：`MathFunctionsTests` → `AllUnitTests`，准确反映测试套件范围。
+- **`gen_db_version.sh` hash 警告**：添加未提交变更检测，防止生成错误的版本号。
+- **删除空监听器 `_onReadingChanged`**：移除 `addListener`/空方法体/`removeListener` 共 4 行死代码，消除每次 `readingCtrl` 通知时的空调用。
+- **推荐 Tab 首次加载显示加载指示器**：`_initialLoad` 为 true 时显示 `CircularProgressIndicator`，替代之前空白 ListView 的不良体验。
+
 ## [0.7.2] - 2026-06-08
 
 ### Added

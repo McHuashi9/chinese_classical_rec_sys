@@ -2,46 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/widgets/annotation_popup.dart';
 
 class ReadingFrame extends StatefulWidget {
-  final ChineseText text;
-  final List<String> pages;
-  final int currentPage;
-  final int totalPages;
-  final String formattedTime;
-  final bool isDark;
-  final int elapsedSeconds;
-  final bool alreadyTracked;
-  final Map<int, String> annotations;
-  final void Function(int innerWidth, int innerHeight) onPaginate;
-  final VoidCallback onNextPage;
-  final VoidCallback onPrevPage;
-  final VoidCallback onComplete;
-  final VoidCallback onAbandon;
-  final VoidCallback onExit;
+  final ReadingViewData viewData;
 
   const ReadingFrame({
     super.key,
-    required this.text,
-    required this.pages,
-    required this.currentPage,
-    required this.totalPages,
-    required this.formattedTime,
-    required this.isDark,
-    required this.elapsedSeconds,
-    required this.alreadyTracked,
-    required this.annotations,
-    required this.onPaginate,
-    required this.onNextPage,
-    required this.onPrevPage,
-    required this.onComplete,
-    required this.onAbandon,
-    required this.onExit,
+    required this.viewData,
   });
 
   @override
@@ -68,7 +40,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
   @override
   void didUpdateWidget(ReadingFrame oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentPage != widget.currentPage) {
+    if (oldWidget.viewData.currentPage != widget.viewData.currentPage) {
       _dismissAnnotation();
     }
   }
@@ -80,14 +52,14 @@ class _ReadingFrameState extends State<ReadingFrame> {
   }
 
   void _showAnnotation(int number, {required Offset markerCenterGlobal}) {
-    final text = widget.annotations[number];
+    final text = widget.viewData.annotations[number];
     if (text == null || text.isEmpty) return;
     final fontScale = context.read<SettingsController>().fontScale;
     _currentAnnotationNumber = number;
     _annotationOverlay = AnnotationPopup.show(
       context, number, text,
       fontScale: fontScale,
-      isDark: widget.isDark,
+      isDark: widget.viewData.isDark,
       markerCenterGlobal: markerCenterGlobal,
       onDismissed: () {
         _annotationOverlay = null;
@@ -97,7 +69,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
   }
 
   void _handleTextTap(TapUpDetails details) {
-    final current = widget.pages.isNotEmpty ? widget.pages[widget.currentPage] : '';
+    final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
     if (current.isEmpty) return;
 
     final renderParagraph = _textKey.currentContext?.findRenderObject();
@@ -112,7 +84,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
     final textPos = renderParagraph.getPositionForOffset(localPos);
     final num = AnnotatedTextBuilder.findAnnotationAtOffset(
-      current, textPos.offset, widget.annotations,
+      current, textPos.offset, widget.viewData.annotations,
     );
 
     if (num == null) {
@@ -144,15 +116,15 @@ class _ReadingFrameState extends State<ReadingFrame> {
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-        if (widget.currentPage > 0) {
-          widget.onPrevPage();
+        if (widget.viewData.currentPage > 0) {
+          widget.viewData.onPrevPage();
         } else {
           _boundaryFeedback('已到首页');
         }
         return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-        if (widget.currentPage < widget.totalPages - 1) {
-          widget.onNextPage();
+        if (widget.viewData.currentPage < widget.viewData.totalPages - 1) {
+          widget.viewData.onNextPage();
         } else {
           _boundaryFeedback('已到末页');
         }
@@ -183,7 +155,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
       _needsPaginate = true;
     }
 
-    if (widget.pages.isEmpty) {
+    if (widget.viewData.pages.isEmpty) {
       _needsPaginate = true;
     }
 
@@ -200,13 +172,13 @@ class _ReadingFrameState extends State<ReadingFrame> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.text.title,
+            Text(widget.viewData.text.title,
                 style: Theme.of(context).textTheme.headlineMedium,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
             ),
             SizedBox(height: context.gapSmall),
-            Text('${widget.text.author} · ${widget.text.dynasty}',
+            Text('${widget.viewData.text.author} · ${widget.viewData.text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1),
@@ -222,14 +194,14 @@ class _ReadingFrameState extends State<ReadingFrame> {
   }
 
   Widget _buildReadingFrame(BuildContext context, double framePadding, double fontScale) {
-    final bgColor = widget.isDark ? AppTheme.darkCard : AppTheme.cardBg;
+    final bgColor = widget.viewData.isDark ? AppTheme.darkCard : AppTheme.cardBg;
     final bodyStyle = AppTheme.bodyReadingSize(
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
         fontScale);
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final needsIt = (_needsPaginate && widget.pages.isEmpty)
+        final needsIt = (_needsPaginate && widget.viewData.pages.isEmpty)
             || (constraints.biggest != _frameSize && constraints.biggest != Size.zero);
         if (needsIt) {
           _needsPaginate = false;
@@ -238,8 +210,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }
 
-        final current = widget.pages.isNotEmpty ? widget.pages[widget.currentPage] : '';
-        final textColor = widget.isDark ? AppTheme.darkInk : AppTheme.ink;
+        final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
+        final textColor = widget.viewData.isDark ? AppTheme.darkInk : AppTheme.ink;
 
         return Container(
           decoration: BoxDecoration(
@@ -257,7 +229,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
                         content: current,
                         style: bodyStyle,
                         maxWidth: constraints.maxWidth - framePadding * 2,
-                        lineColor: widget.isDark
+                        lineColor: widget.viewData.isDark
                             ? AppTheme.borderLight.withAlpha(60)
                             : AppTheme.borderLight,
                         padding: framePadding,
@@ -269,7 +241,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
                           height: double.infinity,
                           child: Text.rich(
                             AnnotatedTextBuilder.build(
-                              current, widget.annotations,
+                              current, widget.viewData.annotations,
                               bodyStyle.copyWith(color: textColor),
                             ),
                             key: _textKey,
@@ -291,46 +263,46 @@ class _ReadingFrameState extends State<ReadingFrame> {
     final innerWidth = (_frameSize.width - pad2).clamp(100.0, double.infinity);
     final innerHeight = (_frameSize.height - pad2).clamp(50.0, double.infinity);
     if (innerWidth > 0 && innerHeight > 0) {
-      widget.onPaginate(innerWidth.toInt(), innerHeight.toInt());
+      widget.viewData.onPaginate(innerWidth.toInt(), innerHeight.toInt());
     }
   }
 
   Widget _buildNavigationBar(BuildContext context) {
-    final hasPrev = widget.currentPage > 0;
-    final hasNext = widget.currentPage < widget.totalPages - 1;
+    final hasPrev = widget.viewData.currentPage > 0;
+    final hasNext = widget.viewData.currentPage < widget.viewData.totalPages - 1;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        if (!widget.alreadyTracked)
+        if (!widget.viewData.alreadyTracked)
           TextButton(
-            onPressed: widget.onAbandon,
+            onPressed: widget.viewData.onAbandon,
             child: Text('放弃',
-                style: TextStyle(color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary)),
+                style: TextStyle(color: widget.viewData.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary)),
           ),
         TextButton(
-          onPressed: hasPrev ? widget.onPrevPage : null,
+          onPressed: hasPrev ? widget.viewData.onPrevPage : null,
           child: const Text('◀ 上一页'),
         ),
         Text(
-          widget.formattedTime,
+          widget.viewData.formattedTime,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: widget.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+            color: widget.viewData.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
           ),
         ),
         TextButton(
-          onPressed: hasNext ? widget.onNextPage : null,
+          onPressed: hasNext ? widget.viewData.onNextPage : null,
           child: const Text('下一页 ▶'),
         ),
-        if (widget.alreadyTracked)
+        if (widget.viewData.alreadyTracked)
           TextButton(
-            onPressed: widget.onExit,
+            onPressed: widget.viewData.onExit,
             child: const Text('返回'),
           )
         else
           TextButton(
-            onPressed: widget.elapsedSeconds >= 30 ? widget.onComplete : null,
-            child: Text(widget.elapsedSeconds >= 30 ? '完成' : '${30 - widget.elapsedSeconds}s'),
+            onPressed: widget.viewData.elapsedSeconds >= 30 ? widget.viewData.onComplete : null,
+            child: Text(widget.viewData.elapsedSeconds >= 30 ? '完成' : '${30 - widget.viewData.elapsedSeconds}s'),
           ),
       ],
     );

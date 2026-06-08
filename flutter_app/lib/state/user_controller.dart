@@ -21,7 +21,11 @@ class UserController extends ChangeNotifier {
   List<RecommendResult> get recommendations => _recommendations;
 
   void getRecommendations(RecommendationEngine engine, List<ChineseText> textCache, int topK) {
-    if (_user == null) return;
+    if (_user == null) {
+      _recommendations = [];
+      notifyListeners();
+      return;
+    }
     _recommendations = engine.getRecommendations(_user!, topK, textCache);
     notifyListeners();
   }

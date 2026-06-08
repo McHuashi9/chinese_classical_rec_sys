@@ -34,7 +34,18 @@ if(WIN32)
     target_link_libraries(run_tests PRIVATE shell32)
 endif()
 
+# 拷贝资产 DB 到构建目录（避免测试运行时修改源文件）
+configure_file(
+    ${CMAKE_SOURCE_DIR}/flutter_app/assets/data/classical.db
+    ${CMAKE_CURRENT_BINARY_DIR}/test_classical.db
+    COPYONLY
+)
+
+target_compile_definitions(run_tests PRIVATE
+    TEST_DB_PATH="${CMAKE_CURRENT_BINARY_DIR}/test_classical.db"
+)
+
 # 添加到 CTest（暂时绕过 Windows 平台路径问题）
 if(NOT WIN32)
-    add_test(NAME MathFunctionsTests COMMAND run_tests)
+    add_test(NAME AllUnitTests COMMAND run_tests)
 endif()

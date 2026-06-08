@@ -35,6 +35,7 @@ bool ReadingHistoryRepository::initTable() {
 }
 
 bool ReadingHistoryRepository::addRecord(int textId, double readTime, time_t timestamp) {
+    if (!db || !db->getConnection()) return false;
     return db->executeSQL(
         "INSERT INTO reading_history (user_id, text_id, read_time, read_timestamp) "
         "VALUES (1, ?, ?, ?);",
@@ -100,6 +101,7 @@ int ReadingHistoryRepository::getTotalReadCount() {
 }
 
 bool ReadingHistoryRepository::markAsTracked(int textId) {
+    if (!db || !db->getConnection()) return false;
     time_t now = time(nullptr);
     return db->executeSQL(
         "INSERT OR IGNORE INTO text_tracking (text_id, tracked_at) VALUES (?, ?);",

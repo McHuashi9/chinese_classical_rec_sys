@@ -38,7 +38,6 @@ class RemoteDbSync {
 
       await tmp.writeAsBytes(resp.bodyBytes);
 
-      if (await bak.exists()) await bak.delete();
       final dbFile = File(dbPath);
       if (await dbFile.exists()) {
         await dbFile.rename(bak.path);
