@@ -75,8 +75,8 @@ Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。i
 ### 运行测试
 
 ```bash
-cmake --build build -j$(nproc) --target test_runner
-./build/tests/test_runner                     # C++ 单元测试 (Catch2)
+cmake --build build -j$(nproc) --target run_tests
+./build/tests/run_tests                       # C++ 单元测试 (Catch2)
 
 cd flutter_app && flutter analyze              # Dart 静态分析
 ```

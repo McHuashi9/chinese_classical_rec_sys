@@ -30,7 +30,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 python3 scripts/project/init_data.py
 
 # 2. 编译 C++ 共享库
-mkdir -p build && cd build && cmake .. && make chinese_core -j$(nproc)
+cmake -B build && cmake --build build -j$(nproc) --target chinese_core
 
 # 3. 启动 Flutter 应用
 cd flutter_app && flutter pub get && flutter run -d linux
@@ -38,13 +38,13 @@ cd flutter_app && flutter pub get && flutter run -d linux
 
 Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。
 
-> 字体已预置子集化版本（36MB）在仓库中。如需增删文章，先运行 `source venv/bin/activate && pip install fonttools && python3 scripts/subset_fonts.py` 更新字体。
+> 字体已预置子集化版本（36MB）在仓库中。如需增删文章，先运行 `python3 scripts/subset_fonts.py`（需 `fonttools`）更新字体。
 
 ## 运行测试
 
 ```bash
 # C++ 单元测试
-cmake --build build -j$(nproc) --target test_runner && ./build/tests/test_runner
+cmake --build build -j$(nproc) --target run_tests && ./build/tests/run_tests
 
 # Dart 静态分析
 cd flutter_app && flutter analyze
