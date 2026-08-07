@@ -12,6 +12,7 @@
 #include "utils/Logger.h"
 
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -58,7 +59,9 @@ static void c_to_user(const UserData* src, User& dst)
 extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
 {
     std::lock_guard<std::mutex> lock(g_mtx);
-    Logger::getInstance().init();
+    // 日志目录跟随 DB 所在目录（App 数据目录），避免随 cwd 漂移
+    const std::filesystem::path dbDir = std::filesystem::path(db_path).parent_path();
+    Logger::getInstance().init((dbDir / "logs").string());
     LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
 
     // 关闭旧连接

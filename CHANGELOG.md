@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-07
+
+### Fixed
+
+- **日志统一写入应用数据目录**：日志不再随启动方式飘移（此前从不同位置启动会在不同目录留下日志文件，排查不便），统一固定到应用数据目录；数据同步时的失败原因也更清晰。
+- **数据同步失败时可追溯**：数据更新同步中途失败时，日志会明确记录失败环节（已是最新跳过 / 网络失败 / 服务器拒绝），便于确认"没有更新"到底是正常还是出错。
+
 ## [0.8.0] - 2026-08-07
 
 ### Added
@@ -262,3 +269,4 @@ C++ CLI 原型。
 [0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
 [0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
 [0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0
+[0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1

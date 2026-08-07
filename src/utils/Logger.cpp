@@ -72,13 +72,19 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         
         return true;
         
-    } catch (const spdlog::spdlog_ex& ex) {
+    } catch (const std::exception& ex) {
 #ifdef __ANDROID__
         __android_log_print(ANDROID_LOG_ERROR, "chinese_core", "日志初始化失败: %s", ex.what());
 #elif defined(__APPLE__)
         fprintf(stderr, "日志初始化失败: %s\n", ex.what());
 #else
+        // 文件日志不可用（如目录无写权限）时降级到 stderr，避免调用方异常
         nowide::cerr << "日志初始化失败: " << ex.what() << std::endl;
+        try {
+            logger_ = std::make_shared<spdlog::logger>(
+                "app", std::make_shared<spdlog::sinks::stderr_color_sink_mt>());
+            spdlog::set_default_logger(logger_);
+        } catch (...) {}
 #endif
         return false;
     }

@@ -20,7 +20,10 @@ class RemoteDbSync {
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
       final lastSync = _prefs.getInt('db_last_sync_ms') ?? 0;
-      if (now - lastSync < _syncInterval.inMilliseconds) return false;
+      if (now - lastSync < _syncInterval.inMilliseconds) {
+        AppLogger().debug('DB 同步跳过: 距上次同步不足 24h');
+        return false;
+      }
 
       final verPath = '$_dbDirPath/db_version.txt';
       String localVer = '';
@@ -28,11 +31,17 @@ class RemoteDbSync {
         localVer = (await File(verPath).readAsString()).trim();
       } catch (_) {}
 
-      if (remoteVersion == localVer) return false;
+      if (remoteVersion == localVer) {
+        AppLogger().debug('DB 同步跳过: 版本相同 ($remoteVersion)');
+        return false;
+      }
 
       final resp = await _client.get(Uri.parse(downloadUrl))
           .timeout(const Duration(seconds: 30));
-      if (resp.statusCode != 200) return false;
+      if (resp.statusCode != 200) {
+        AppLogger().error('DB 同步失败: 下载 HTTP ${resp.statusCode}');
+        return false;
+      }
 
       final dbPath = '$_dbDirPath/classical.db';
       final tmp = File('$_dbDirPath/classical.db.tmp');
