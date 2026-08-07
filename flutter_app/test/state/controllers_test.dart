@@ -93,7 +93,7 @@ void main() {
       ctrl.stopTimer();
     });
 
-    void _withCleanup(VoidCallback fn) {
+    void withCleanup(VoidCallback fn) {
       try {
         fn();
       } finally {
@@ -102,8 +102,8 @@ void main() {
     }
 
     testWidgets('paginate 空内容返回空页', (tester) async {
-      _withCleanup(() {
-        final text = ChineseText(
+      withCleanup(() {
+        const text = ChineseText(
           id: 1, title: 't', author: 'a', dynasty: '唐',
         );
         ctrl.loadText(text);
@@ -114,8 +114,8 @@ void main() {
     });
 
     testWidgets('paginate 短内容一页显示', (tester) async {
-      _withCleanup(() {
-        final text = ChineseText(
+      withCleanup(() {
+        const text = ChineseText(
           id: 1, title: 't', author: 'a', dynasty: '唐',
           content: 'Hello World',
         );
@@ -128,7 +128,7 @@ void main() {
     });
 
     testWidgets('paginate 长内容分多页', (tester) async {
-      _withCleanup(() {
+      withCleanup(() {
         final longContent = 'Hello world, this is a test paragraph that should '
             'wrap across multiple lines when laid out at a reasonable page width. '
             'We repeat this several times to ensure enough content for multi-page '
@@ -145,7 +145,7 @@ void main() {
     });
 
     testWidgets('paginate 后翻页/回翻', (tester) async {
-      _withCleanup(() {
+      withCleanup(() {
         final longContent = 'Page test content for navigation verification. ' * 50;
         final text = ChineseText(
           id: 3, title: 'nav', author: 'a', dynasty: '唐',
@@ -170,7 +170,7 @@ void main() {
     });
 
     testWidgets('paginate 末尾不越界', (tester) async {
-      _withCleanup(() {
+      withCleanup(() {
         final longContent = 'Boundary test. ' * 30;
         final text = ChineseText(
           id: 4, title: 'bnd', author: 'a', dynasty: '唐',

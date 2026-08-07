@@ -16,7 +16,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.x'
+          flutter-version: '3.41.x'
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config fuse
@@ -83,7 +83,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.x'
+          flutter-version: '3.41.x'
 
       - name: Extract version
         id: version
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.x'
+          flutter-version: '3.41.x'
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -160,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.x'
+          flutter-version: '3.41.x'
       - name: Subset fonts
         run: |
           python3 -m pip install fonttools --break-system-packages

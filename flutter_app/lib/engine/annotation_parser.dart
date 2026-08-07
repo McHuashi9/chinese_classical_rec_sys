@@ -43,6 +43,55 @@ class AnnotationParser {
 
     return ParsedEntry(headword: '', content: entry);
   }
+
+  static List<ParsedEntry> parseEntries(String entry) {
+    final chunks = entry
+        .split('\u3000')
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty)
+        .toList();
+    if (chunks.isEmpty) return const [];
+
+    final results = <ParsedEntry>[];
+    var pending = '';
+    for (final chunk in chunks) {
+      final parsed = parseEntry(chunk);
+      if (parsed.headword.isNotEmpty) {
+        if (pending.isNotEmpty) {
+          if (results.isNotEmpty) {
+            results[results.length - 1] = ParsedEntry(
+              headword: results.last.headword,
+              content: '${results.last.content}\u3000$pending',
+            );
+          } else {
+            results.add(ParsedEntry(
+              headword: parsed.headword,
+              content: '$pending\u3000${parsed.content}',
+            ));
+          }
+          pending = '';
+        }
+        results.add(parsed);
+      } else if (results.isNotEmpty) {
+        results[results.length - 1] = ParsedEntry(
+          headword: results.last.headword,
+          content: '${results.last.content}\u3000${parsed.content}',
+        );
+      } else {
+        pending += '$chunk\u3000';
+      }
+    }
+    if (pending.isNotEmpty && results.isNotEmpty) {
+      results[results.length - 1] = ParsedEntry(
+        headword: results.last.headword,
+        content: '${results.last.content}\u3000$pending',
+      );
+    }
+    if (results.isEmpty) {
+      results.add(ParsedEntry(headword: '', content: chunks.join('\u3000')));
+    }
+    return results;
+  }
 }
 
 class AnnotatedTextBuilder {

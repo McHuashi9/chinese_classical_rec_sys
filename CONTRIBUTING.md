@@ -25,30 +25,13 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 ## 本地构建
 
-```bash
-# 1. 数据初始化
-python3 scripts/project/init_data.py
+构建、运行与测试命令参见 [README.md 快速开始 / 运行测试](README.md#快速开始)。
 
-# 2. 编译 C++ 共享库
-cmake -B build && cmake --build build -j$(nproc) --target chinese_core
-
-# 3. 启动 Flutter 应用
-cd flutter_app && flutter pub get && flutter run -d linux
-```
-
-Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。
-
-> 字体已预置子集化版本（36MB）在仓库中。如需增删文章，先运行 `python3 scripts/subset_fonts.py`（需 `fonttools`）更新字体。
+> 字体已预置子集化版本（36MB）在仓库中。如需增删文章，先运行 `python3 scripts/subset_fonts.py`（需 `fonttools`；字体原文件来自 `fonts-v1` Release tag，勿删）更新字体。
 
 ## 运行测试
 
-```bash
-# C++ 单元测试
-cmake --build build -j$(nproc) --target run_tests && ./build/tests/run_tests
-
-# Dart 静态分析
-cd flutter_app && flutter analyze
-```
+见 [README.md#运行测试](README.md#运行测试)（C++ Catch2 + `flutter analyze` + `flutter test`）。
 
 ## 贡献代码流程
 
@@ -71,7 +54,7 @@ cd flutter_app && flutter analyze
 
 示例：`feat(gui): 搜索添加防抖`、`fix(engine): 知识追踪除零错误`
 
-常用 type：`feat` `fix` `docs` `refactor` `test` `chore`
+常用 type：`feat` `fix` `docs` `refactor` `test` `chore`；发版专用：`release: vX.Y.Z`（由 bump_version.sh 引导）
 
 ## 代码风格
 
@@ -84,37 +67,13 @@ cd flutter_app && flutter analyze
 
 颜色和字体从 `AppTheme` 取，不硬编码。
 
-## 版本号
+- `ChangeNotifier` 必须被 `context.watch` / `Selector` / `Consumer` 监听，否则不重建
+- 每次功能变更同时更新 `CHANGELOG.md`
 
-格式 `major.minor.patch`，Git tag 加 `v` 前缀。发版前同步：
+## 版本号与发版
 
-- `pubspec.yaml` → `version: X.Y.Z`
-- `flutter_app/lib/state/coordinator.dart` → `currentVersion`
-- `CHANGELOG.md` → 将 `[Unreleased]` 整理为正式发布条目
+版本号格式 `major.minor.patch`，Git tag 加 `v` 前缀。来源于`pubspec.yaml`。
 
-发版时运行 `bash scripts/project/bump_version.sh X.Y.Z` 自动完成以上同步。
+发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号与 CHANGELOG）。
 
-## 注意事项
-
-项目 `.gitignore` 未纳入 Git 管理。
-
-## 维护者专有：发版
-
-```bash
-bash scripts/project/bump_version.sh X.Y.Z
-# 手动整理 CHANGELOG.md 的 release 描述
-git add flutter_app/pubspec.yaml \
-      flutter_app/lib/state/coordinator.dart \
-      CHANGELOG.md \
-      scripts/project/bump_version.sh
-git commit -m "release: vX.Y.Z"
-git push origin dev
-
-git switch main && git merge --squash dev
-# 解决冲突后:
-git commit -m "release: vX.Y.Z"
-git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
-git switch dev && git reset --hard main && git push --force origin dev
-```
-
-`--force` 会重写 dev 历史，仅维护者操作，贡献者不要在自己 fork 里执行。
+发版仅维护者操作，贡献者不要在自己 fork 里执行。

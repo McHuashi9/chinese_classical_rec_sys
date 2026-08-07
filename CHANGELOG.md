@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-07
+
+### Added
+
+- **数据更新独立发布**：新增 `scripts/project/publish_data.sh`，数据维护者可单独发布文言文数据库更新，无需改动 App 版本号。
+
+### Changed
+
+- **数据管线脚本纳入版本管理**：`init_data.py`、`gen_db_version.sh`、`bump_version.sh` 随仓库提交，README 数据初始化步骤补全，新克隆者可自行重建数据库与发版。
+- **数据同步不再依赖 App 更新**：文言文库数据变更后，App 启动时自动同步最新数据，不需要等待 App 发布新版本。
+- **DB 下载支持压缩**：数据包以压缩形式下载，体积更小、更新更快。
+- **注释弹窗支持多条词头**：同一 `〔n〕` 标注内按全角空格分隔的多个词条（如「王：…　宰孔：…」）拆分为独立词条逐条展示；无词头续段并入前一条，原文与数据库数据零改动。
+
+### Fixed
+
+- **暗色模式持久化**：重启应用后保持暗色模式设置（此前仅本次会话内有效）。
+
+### Tests
+
+- **设置页 widget 测试修复**：版本号期望对齐 `vX.Y.Z` 格式，暗色模式文案对齐"暗色模式"，测试全部通过。
+- **`AnnotationParser.parseEntries` 单元测试**：覆盖单条、教材/文选双格式多段、注音括号与顿号词头、无词头续段合并等 9 个用例。
+- **`RemoteDbSync` 单元测试**：覆盖版本相同跳过下载、gzip 数据包解压落库并写回版本号 2 个用例。
+
 ## [0.7.3] - 2026-06-08
 
 ### Added
@@ -238,3 +261,4 @@ C++ CLI 原型。
 [0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
 [0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
 [0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
+[0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0

@@ -30,8 +30,10 @@ class AnnotationPopup extends StatelessWidget {
     final screenSize =
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width);
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final parsed = AnnotationParser.parseEntry(text);
-    final content = parsed.content.isNotEmpty ? parsed.content : text;
+    final entries = AnnotationParser.parseEntries(text);
+    final single = entries.length == 1 ? entries.single : null;
+    final headword =
+        single != null && single.headword.isNotEmpty ? single.headword : null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -93,13 +95,13 @@ class AnnotationPopup extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              if (parsed.headword.isNotEmpty)
+                              if (headword != null)
                                 Expanded(
                                   child: Row(
                                     children: [
                                       Flexible(
                                         child: Text(
-                                          parsed.headword,
+                                          headword,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontSize: bodyFontSize,
@@ -139,15 +141,49 @@ class AnnotationPopup extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          SelectableText(
-                            content,
-                            style: TextStyle(
-                              fontFamily: AppTheme.fontBody,
-                              fontSize: bodyFontSize,
-                              height: 1.7,
-                              color: textColor,
-                            ),
-                          ),
+                          if (single != null)
+                            SelectableText(
+                              single.content.isNotEmpty
+                                  ? single.content
+                                  : text,
+                              style: TextStyle(
+                                fontFamily: AppTheme.fontBody,
+                                fontSize: bodyFontSize,
+                                height: 1.7,
+                                color: textColor,
+                              ),
+                            )
+                          else
+                            for (final entry in entries)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                    bottom: entry == entries.last ? 0 : 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (entry.headword.isNotEmpty)
+                                      Text(
+                                        entry.headword,
+                                        style: TextStyle(
+                                          fontSize: bodyFontSize * 0.92,
+                                          fontWeight: FontWeight.w600,
+                                          color: accentColor,
+                                        ),
+                                      ),
+                                    SelectableText(
+                                      entry.content.isNotEmpty
+                                          ? entry.content
+                                          : text,
+                                      style: TextStyle(
+                                        fontFamily: AppTheme.fontBody,
+                                        fontSize: bodyFontSize,
+                                        height: 1.7,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                         ],
                       ),
                     ),

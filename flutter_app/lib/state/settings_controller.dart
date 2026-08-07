@@ -22,6 +22,7 @@ class SettingsController extends ChangeNotifier {
 
   void setDarkMode(bool value) {
     _darkMode = value;
+    _prefs?.setBool('darkMode', value);
     notifyListeners();
   }
 
@@ -56,6 +57,7 @@ class SettingsController extends ChangeNotifier {
     _prefs = prefs;
     _bridge = bridge;
     _fontScale = prefs.getDouble('fontScale') ?? 1.0;
+    _darkMode = prefs.getBool('darkMode') ?? false;
     final savedLevel = prefs.getString('logLevel') ?? 'INFO';
     _logLevel = savedLevel;
     final cLevel = savedLevel.toLowerCase();

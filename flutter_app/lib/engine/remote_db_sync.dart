@@ -8,8 +8,10 @@ class RemoteDbSync {
 
   final SharedPreferences _prefs;
   final String _dbDirPath;
+  final http.Client _client;
 
-  RemoteDbSync(this._prefs, this._dbDirPath);
+  RemoteDbSync(this._prefs, this._dbDirPath, {http.Client? client})
+      : _client = client ?? http.Client();
 
   Future<bool> trySyncFromRelease({
     required String remoteVersion,
@@ -28,7 +30,7 @@ class RemoteDbSync {
 
       if (remoteVersion == localVer) return false;
 
-      final resp = await http.get(Uri.parse(downloadUrl))
+      final resp = await _client.get(Uri.parse(downloadUrl))
           .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) return false;
 
@@ -36,7 +38,10 @@ class RemoteDbSync {
       final tmp = File('$_dbDirPath/classical.db.tmp');
       final bak = File('$_dbDirPath/classical.db.bak');
 
-      await tmp.writeAsBytes(resp.bodyBytes);
+      final bytes = resp.bodyBytes;
+      final body = _isGzip(bytes) ? _gunzip(bytes) : bytes;
+
+      await tmp.writeAsBytes(body);
 
       final dbFile = File(dbPath);
       if (await dbFile.exists()) {
@@ -52,4 +57,10 @@ class RemoteDbSync {
       return false;
     }
   }
+
+  static bool _isGzip(List<int> bytes) {
+    return bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
+  }
+
+  static List<int> _gunzip(List<int> bytes) => gzip.decode(bytes);
 }

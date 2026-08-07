@@ -52,7 +52,7 @@ void main() {
       expect(find.text('外观'), findsOneWidget);
       expect(find.text('日志'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
-      expect(find.text('版本 ${AppCoordinator.currentVersion}'), findsOneWidget);
+      expect(find.text('v${AppCoordinator.currentVersion}'), findsOneWidget);
     });
 
     testWidgets('dark mode toggle switches theme', (tester) async {
@@ -92,7 +92,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(settingsCtrl.darkMode, false);
-      expect(find.text('暗色'), findsOneWidget);
+      expect(find.text('暗色模式'), findsOneWidget);
     });
   });
 

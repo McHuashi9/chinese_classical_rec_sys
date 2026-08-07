@@ -19,7 +19,7 @@ void main() {
     });
 
     test('带换行', () {
-      final raw = '〔1〕第一行内容\n〔2〕第二行内容';
+      const raw = '〔1〕第一行内容\n〔2〕第二行内容';
       expect(AnnotationParser.parse(raw), {
         1: '第一行内容',
         2: '第二行内容',
@@ -72,6 +72,71 @@ void main() {
       final entry = AnnotationParser.parseEntry('');
       expect(entry.headword, '');
       expect(entry.content, '');
+    });
+  });
+
+  group('AnnotationParser.parseEntries', () {
+    test('单条（无全角空格）— 与 parseEntry 一致', () {
+      final result = AnnotationParser.parseEntries('字：释义内容');
+      expect(result.length, 1);
+      expect(result.single.headword, '字');
+      expect(result.single.content, '释义内容');
+    });
+
+    test('语文课本格式多段', () {
+      final result = AnnotationParser.parseEntries('[屠]屠户。\u3000[狼]狼犬。');
+      expect(result.length, 2);
+      expect(result[0].headword, '屠');
+      expect(result[1].headword, '狼');
+      expect(result[1].content, '狼犬。');
+    });
+
+    test('古文观止格式多词条', () {
+      final result = AnnotationParser.parseEntries(
+          '王：周襄王。\u3000宰孔：名孔，宰是官名。\u3000齐侯：齐桓公。');
+      expect(result.length, 3);
+      expect(result[0].headword, '王');
+      expect(result[1].headword, '宰孔');
+      expect(result[2].headword, '齐侯');
+    });
+
+    test('词头含注音括号', () {
+      final result = AnnotationParser.parseEntries('乘堙（yīn因）：登上土堆。');
+      expect(result.length, 1);
+      expect(result[0].headword, '乘堙（yīn因）');
+    });
+
+    test('词头含顿号', () {
+      final result =
+          AnnotationParser.parseEntries('文、武：周文王与周武王。');
+      expect(result.single.headword, '文、武');
+    });
+
+    test('无词头续段并入前一条', () {
+      final result = AnnotationParser.parseEntries(
+          '申：国名\u3000姜姓\u3000国土在今河南南阳市。');
+      expect(result.length, 1);
+      expect(result.single.headword, '申');
+      expect(result.single.content, '国名　姜姓　国土在今河南南阳市。');
+    });
+
+    test('逗号式词头段并入前一条', () {
+      final result = AnnotationParser.parseEntries(
+          '贰于虢：指偏信虢公。\u3000虢，指西虢公，仕于周。');
+      expect(result.length, 1);
+      expect(result.single.headword, '贰于虢');
+      expect(result.single.content, '指偏信虢公。　虢，指西虢公，仕于周。');
+    });
+
+    test('空字符串', () {
+      expect(AnnotationParser.parseEntries(''), isEmpty);
+    });
+
+    test('整段无格式', () {
+      final result = AnnotationParser.parseEntries('无格式内容');
+      expect(result.length, 1);
+      expect(result.single.headword, '');
+      expect(result.single.content, '无格式内容');
     });
   });
 

@@ -15,7 +15,6 @@ import 'state/settings_controller.dart';
 import 'state/reading_controller.dart';
 import 'state/user_controller.dart';
 import 'engine/read_tracker.dart';
-import 'engine/update_checker.dart';
 import 'engine/github_config.dart';
 import 'theme/theme.dart';
 import 'engine/app_logger.dart';
@@ -84,12 +83,15 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   late final List<Widget> _pages;
 
+  static const _dbSyncInterval = Duration(hours: 24);
+
   bool _initialized = false;
   int _pageIndex = 0;
   int _prevPageIndex = 0;
   bool _transitioning = false;
   bool _isReading = false;
   AppCoordinator? _coord;
+  String _dbDirPath = '';
 
   late final AnimationController _ctrl;
   late Animation<Offset> _slideOut;
@@ -149,6 +151,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     final prefs = await SharedPreferences.getInstance();
     final dbDir = File(dbPath).parent.path;
+    _dbDirPath = dbDir;
     coord.initRemoteDbSync(prefs, dbDir);
     await coord.settingsCtrl.init(prefs, null);
     _postInit(coord);
@@ -182,42 +185,79 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _silentRemoteDbSync(AppCoordinator coord) async {
-    final asset = await _fetchLatestReleaseAsset();
-    if (asset != null) {
-      await _syncIfNewer(coord, asset.$1, asset.$2);
+    final asset = await _fetchLatestDataAsset();
+    if (asset == null) return;
+    await _syncIfNewer(coord, asset.$1, asset.$2);
+  }
+
+  Future<String> _readLocalDbVersion() async {
+    try {
+      final f = File('$_dbDirPath/db_version.txt');
+      if (!await f.exists()) return 'unknown';
+      return (await f.readAsString()).trim();
+    } catch (_) {
+      return 'unknown';
     }
   }
 
-  Future<(String, String)?> _fetchLatestReleaseAsset() async {
+  Future<(String, String)?> _fetchLatestDataAsset() async {
     final prefs = await SharedPreferences.getInstance();
-    final checker = UpdateChecker(prefs);
-    final latestVersion = await checker.checkSilently(AppCoordinator.currentVersion);
-    if (latestVersion == null) return null;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastCheck = prefs.getInt('db_check_last_ms') ?? 0;
+    if (now - lastCheck < _dbSyncInterval.inMilliseconds) {
+      AppLogger().debug('DB 检查跳过: 距上次检查不足 24h');
+      return null;
+    }
+    await prefs.setInt('db_check_last_ms', now);
 
-    final releaseUrl = GithubConfig.releaseApiByVersion(latestVersion.toString());
-    final resp = await http.get(Uri.parse(releaseUrl), headers: {
+    final resp = await http.get(Uri.parse(GithubConfig.releaseApiList), headers: {
       'Accept': 'application/vnd.github.v3+json',
     });
-    if (resp.statusCode != 200) return null;
-
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    final assets = data['assets'] as List<dynamic>?;
-    if (assets == null) return null;
-
-    for (final a in assets) {
-      final map = a as Map<String, dynamic>;
-      final name = map['name'] as String?;
-      if (name == 'classical.db' || name == 'classical.db.gz') {
-        final url = map['browser_download_url'] as String?;
-        if (url != null) return (latestVersion.toString(), url);
-      }
+    if (resp.statusCode != 200) {
+      AppLogger().warn('DB 检查失败: release 列表 HTTP ${resp.statusCode}');
+      return null;
     }
+
+    final releases = jsonDecode(resp.body) as List<dynamic>;
+    for (final r in releases) {
+      final release = r as Map<String, dynamic>;
+      final assets = release['assets'] as List<dynamic>?;
+      if (assets == null) continue;
+
+      String? dbUrl;
+      String? verUrl;
+      for (final a in assets) {
+        final map = a as Map<String, dynamic>;
+        final name = map['name'] as String?;
+        final url = map['browser_download_url'] as String?;
+        if (name == 'classical.db.gz') dbUrl = url;
+        if (name == 'db_version.txt') verUrl = url;
+      }
+      if (dbUrl == null || verUrl == null) continue;
+
+      final verResp = await http.get(Uri.parse(verUrl));
+      if (verResp.statusCode != 200) {
+        AppLogger().warn('DB 检查: db_version.txt 下载失败 HTTP ${verResp.statusCode}');
+        continue;
+      }
+      final remoteVer = verResp.body.trim();
+
+      final localVer = await _readLocalDbVersion();
+      if (remoteVer == localVer) {
+        AppLogger().info('DB 检查: 已是最新 ($remoteVer)，跳过同步');
+        return null;
+      }
+
+      AppLogger().info('DB 检查: 发现新数据卷 $remoteVer (本地 $localVer)');
+      return (remoteVer, dbUrl);
+    }
+    AppLogger().info('DB 检查: 最近的 release 中未找到数据资产，跳过');
     return null;
   }
 
   Future<void> _syncIfNewer(AppCoordinator coord, String version, String url) async {
     try {
-      await coord.remoteSyncDb(remoteVersion: 'v$version', downloadUrl: url);
+      await coord.remoteSyncDb(remoteVersion: version, downloadUrl: url);
     } catch (_) {}
   }
 
