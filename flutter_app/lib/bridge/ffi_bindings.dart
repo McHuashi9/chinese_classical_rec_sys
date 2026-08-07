@@ -11,6 +11,7 @@ final class NativeBridge {
   // ─── 生命周期 ────────────────────────────────────────────────
   late final int Function(Pointer<Utf8> dbPath) dbOpen;
   late final void Function() dbClose;
+  late final int Function(Pointer<Utf8> newPath, Pointer<Utf8> curPath) dbReplace;
 
   // ─── 用户 ────────────────────────────────────────────────────
   late final int Function(Pointer<UserData> out) userLoad;
@@ -80,6 +81,10 @@ final class NativeBridge {
     dbClose = _lib.lookupFunction<
         Void Function(),
         void Function()>('db_close');
+
+    dbReplace = _lib.lookupFunction<
+        Int32 Function(Pointer<Utf8>, Pointer<Utf8>),
+        int Function(Pointer<Utf8>, Pointer<Utf8>)>('db_replace');
 
     userLoad = _lib.lookupFunction<
         Int32 Function(Pointer<UserData>),

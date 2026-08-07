@@ -85,6 +85,8 @@ cd flutter_app && flutter analyze              # Dart 静态分析
 cd flutter_app && flutter test                 # Dart 单元测试
 ```
 
+> `flutter test` 含真实加载核心引擎的 FFI 集成测试（`test/integration/db_replace_flow_test.dart`），需先执行上面的 `cmake --build`；未构建核心（或 CI 非 Linux 作业）时自动跳过，不影响通过。
+
 ### iOS 侧载
 
 CI 自动构建未签名 `.ipa`，可使用 SideStore / AltStore 自签安装。

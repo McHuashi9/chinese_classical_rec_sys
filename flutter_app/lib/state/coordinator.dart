@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:io' show File;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,7 +22,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.8.1';
+  static const currentVersion = '0.8.2';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -51,6 +52,7 @@ class AppCoordinator {
     required this.readTracker,
   });
 
+  NativeBridge? get bridge => _bridge;
   bool get isInitialized => initialized.value;
   List<ChineseText> get texts => isInitialized ? _textRepo.texts : [];
   HistoryService get history => _historyService!;
@@ -186,34 +188,107 @@ class AppCoordinator {
   Future<void> remoteSyncDb({String? remoteVersion, String? downloadUrl}) async {
     if (remoteVersion == null || downloadUrl == null) return;
     if (_remoteDbSync == null) return;
-    final ok = await _remoteDbSync!.trySyncFromRelease(
+
+    final tmpPath = await _remoteDbSync!.trySyncFromRelease(
       remoteVersion: remoteVersion,
       downloadUrl: downloadUrl,
     );
-    if (ok && _bridge != null && isInitialized) {
-      final originalPath = _dbPathAfterSync;
-      _bridge!.dbClose();
-      final cPath = originalPath?.toNativeUtf8(allocator: calloc);
-      if (cPath == null) {
-        AppLogger().error('remoteSyncDb: toNativeUtf8 分配失败');
-        settingsCtrl.setError('数据库同步失败：内存不足。请重启应用。');
+    if (tmpPath == null) return;
+    if (_bridge == null || !isInitialized || _dbPathAfterSync == null) {
+      _deleteFile(tmpPath);
+      return;
+    }
+
+    final dbPath = _dbPathAfterSync!;
+    final rc = _replaceDb(tmpPath, dbPath);
+    if (rc != BridgeError.ok) {
+      AppLogger().error('remoteSyncDb: db_replace 失败 rc=$rc，已保留旧库');
+      _deleteFile(tmpPath);
+      // db_replace 失败后引擎已关闭，必须重开旧库，否则本会话假死
+      if (_openDb(dbPath) != BridgeError.ok) {
+        AppLogger().error('remoteSyncDb: 失败后重开旧库失败，请重启');
+        settingsCtrl.setError('数据库同步失败，已保留当前数据。请重启应用。');
         return;
       }
-      final rc = _bridge!.dbOpen(cPath);
-      calloc.free(cPath);
-      if (rc != BridgeError.ok) {
-        AppLogger().error('remoteSyncDb: dbOpen 返回错误码 $rc，尝试恢复旧连接');
-        final oldPath = originalPath?.toNativeUtf8(allocator: calloc);
-        if (oldPath != null) {
-          _bridge!.dbOpen(oldPath);
-          calloc.free(oldPath);
-        }
-        settingsCtrl.setError('数据库同步后无法打开新文件，已恢复旧数据库。');
+      settingsCtrl.setError('数据库同步失败，已保留当前数据。');
+      return;
+    }
+
+    var restored = false;
+    var openRc = _openDb(dbPath);
+    if (openRc != BridgeError.ok) {
+      AppLogger().error('remoteSyncDb: 重开新库失败 rc=$openRc，尝试回滚 .bak');
+      await _restoreBak(dbPath);
+      restored = true;
+      openRc = _openDb(dbPath);
+      if (openRc != BridgeError.ok) {
+        _deleteFile(tmpPath);
+        settingsCtrl.setError('数据库同步后无法打开数据库，请重启应用。');
         return;
       }
-      _textRepo.loadTextCache();
-      _loadUser();
-      _loadTextTrackedStates();
+    }
+
+    _textRepo.loadTextCache();
+    _loadUser();
+    _loadTextTrackedStates();
+    if (restored) {
+      // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
+      AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');
+      settingsCtrl.setError('数据库同步失败，已恢复原数据。');
+      return;
+    }
+
+    // 先落版本号再写冷却：缩小"库已更新但版本文件未更新"的降级窗口
+    try {
+      await _remoteDbSync!.commitVersion(remoteVersion);
+    } catch (e) {
+      AppLogger().error('remoteSyncDb: 版本回写失败（下次启动可能被内置数据覆盖）: $e');
+    }
+    await _remoteDbSync!.markSynced();
+    // 检查失败/替换失败都不会走到这里：只有真正同步成功才冷却检查
+    await _remoteDbSync!.markChecked();
+    AppLogger().info('remoteSyncDb: 同步完成 $remoteVersion，用户数据已保留');
+    settingsCtrl.setNotice('数据已同步，学习进度已保留');
+  }
+
+  int _replaceDb(String newPath, String curPath) {
+    if (_bridge == null) return -1;
+    final np = newPath.toNativeUtf8(allocator: calloc);
+    final cp = curPath.toNativeUtf8(allocator: calloc);
+    final rc = _bridge!.dbReplace(np, cp);
+    calloc.free(np);
+    calloc.free(cp);
+    return rc;
+  }
+
+  int _openDb(String path) {
+    if (_bridge == null) return -1;
+    final cp = path.toNativeUtf8(allocator: calloc);
+    final rc = _bridge!.dbOpen(cp);
+    calloc.free(cp);
+    return rc;
+  }
+
+  Future<void> _restoreBak(String dbPath) async {
+    try {
+      final cur = File(dbPath);
+      final bak = File('$dbPath.bak');
+      if (await bak.exists()) {
+        if (await cur.exists()) await cur.delete();
+        await bak.rename(dbPath);
+        AppLogger().info('remoteSyncDb: 已从 .bak 回滚数据库');
+      }
+    } catch (e) {
+      AppLogger().error('remoteSyncDb: .bak 回滚失败: $e');
+    }
+  }
+
+  void _deleteFile(String path) {
+    try {
+      final f = File(path);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {
+      // 清理失败不影响主流程
     }
   }
 

@@ -9,6 +9,7 @@ set(TEST_SOURCES
     test_main.cpp
     test_math_functions.cpp
     test_bridge.cpp
+    test_db_replace.cpp
     test_recommendation_engine.cpp
     test_knowledge_tracker.cpp
     test_models.cpp

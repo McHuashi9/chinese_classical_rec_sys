@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse;
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator, rootBundle;
 import 'package:http/http.dart' as http;
@@ -10,14 +11,17 @@ import 'package:path_provider/path_provider.dart' show getApplicationSupportDire
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'state/coordinator.dart';
+import 'bridge/ffi_bindings.dart';
+import 'bridge/c_types.dart';
 import 'state/navigation_controller.dart';
 import 'state/settings_controller.dart';
 import 'state/reading_controller.dart';
 import 'state/user_controller.dart';
 import 'engine/read_tracker.dart';
 import 'engine/github_config.dart';
-import 'theme/theme.dart';
+import 'engine/db_version.dart';
 import 'engine/app_logger.dart';
+import 'theme/theme.dart';
 import 'pages/read_hub_page.dart';
 import 'pages/my_page.dart';
 import 'pages/settings_page.dart';
@@ -135,17 +139,28 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _initApp(AppCoordinator coord) async {
-    final dbPath = await _resolveDbPath();
+    DynamicLibrary lib;
     try {
-      final lib = _loadLibrary();
-      await coord.init(dbPath, lib);
+      lib = _loadLibrary();
     } catch (e) {
       AppLogger().error('FFI load failed: $e');
       if (!mounted) return;
       coord.settingsCtrl.setError('无法加载核心组件，请尝试重新安装。\n$e');
       return;
     }
+    final (dbPath, replaced) = await _resolveDbPath(NativeBridge.fromLib(lib));
+    try {
+      await coord.init(dbPath, lib);
+    } catch (e) {
+      AppLogger().error('数据库初始化失败: $e');
+      if (!mounted) return;
+      coord.settingsCtrl.setError('无法加载核心组件，请尝试重新安装。\n$e');
+      return;
+    }
     if (!mounted) return;
+    if (replaced) {
+      coord.settingsCtrl.setNotice('内容已更新，学习进度已保留');
+    }
     coord.setDbPathAfterSync(dbPath);
     coord.getRecommendations(10);
 
@@ -153,7 +168,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final dbDir = File(dbPath).parent.path;
     _dbDirPath = dbDir;
     coord.initRemoteDbSync(prefs, dbDir);
-    await coord.settingsCtrl.init(prefs, null);
+    await coord.settingsCtrl.init(prefs, coord.bridge);
     _postInit(coord);
   }
 
@@ -204,15 +219,16 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now().millisecondsSinceEpoch;
     final lastCheck = prefs.getInt('db_check_last_ms') ?? 0;
-    if (now - lastCheck < _dbSyncInterval.inMilliseconds) {
+    final since = now - lastCheck;
+    // 时钟回拨（负差）不阻塞检查；只有"真正成功检查/同步"才写冷却标记
+    if (since >= 0 && since < _dbSyncInterval.inMilliseconds) {
       AppLogger().debug('DB 检查跳过: 距上次检查不足 24h');
       return null;
     }
-    await prefs.setInt('db_check_last_ms', now);
 
     final resp = await http.get(Uri.parse(GithubConfig.releaseApiList), headers: {
       'Accept': 'application/vnd.github.v3+json',
-    });
+    }).timeout(const Duration(seconds: 30));
     if (resp.statusCode != 200) {
       AppLogger().warn('DB 检查失败: release 列表 HTTP ${resp.statusCode}');
       return null;
@@ -243,8 +259,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       final remoteVer = verResp.body.trim();
 
       final localVer = await _readLocalDbVersion();
-      if (remoteVer == localVer) {
-        AppLogger().info('DB 检查: 已是最新 ($remoteVer)，跳过同步');
+      if (!isDbNewer(remoteVer, localVer)) {
+        AppLogger().info('DB 检查: 远端 $remoteVer 不新于本地 $localVer，跳过');
+        // 已成功核实无更新：本次检查有效，写入冷却避免每次启动都请求 API
+        await prefs.setInt('db_check_last_ms', now);
         return null;
       }
 
@@ -252,6 +270,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return (remoteVer, dbUrl);
     }
     AppLogger().info('DB 检查: 最近的 release 中未找到数据资产，跳过');
+    // 检查本身成功（有可下载的 release 但无数据卷）：写入冷却
+    await prefs.setInt('db_check_last_ms', now);
     return null;
   }
 
@@ -261,7 +281,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     } catch (_) {}
   }
 
-  Future<String> _resolveDbPath() async {
+  Future<(String, bool)> _resolveDbPath(NativeBridge bridge) async {
+    var replaced = false;
     try {
       final dir = await getApplicationSupportDirectory();
       final dbPath = '${dir.path}/classical.db';
@@ -269,9 +290,20 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       final dbFile = File(dbPath);
       final bakFile = File('${dir.path}/classical.db.bak');
 
+      // 清理上次会话中断残留的同步中间文件（L4）
+      try {
+        final staleTmp = File('${dir.path}/classical.db.tmp');
+        if (await staleTmp.exists()) await staleTmp.delete();
+      } catch (_) {}
+
       if (!await dbFile.exists() && await bakFile.exists()) {
         await bakFile.rename(dbPath);
-        AppLogger().info('DB 已从 .bak 恢复');
+        // .bak 对应的版本无法确定：标记 unknown 交由方向判断自愈（宁可用资产升级，
+        // 也不让"旧内容挂着新版本号"阻塞后续同步）
+        try {
+          await File(verPath).writeAsString('unknown');
+        } catch (_) {}
+        AppLogger().info('DB 已从 .bak 恢复，版本标记 unknown');
       }
 
       if (!await dbFile.exists()) {
@@ -279,28 +311,37 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         await dbFile.writeAsBytes(data.buffer.asUint8List());
         final assetVer = await _readAssetDbVersion();
         await File(verPath).writeAsString(assetVer);
+        AppLogger().info('DB 首次安装: $assetVer');
       } else {
         final assetVer = await _readAssetDbVersion();
         String localVer = '';
         try {
           localVer = (await File(verPath).readAsString()).trim();
-        } catch (_) {}
-        if (localVer != assetVer) {
+        } catch (_) {
+          localVer = 'unknown';
+        }
+        // 方向判断：仅当内置数据比本地新才替换（D1 修复）
+        if (isDbNewer(assetVer, localVer)) {
           final tmp = File('${dir.path}/classical.db.tmp');
           final data = await rootBundle.load('assets/data/classical.db');
           await tmp.writeAsBytes(data.buffer.asUint8List());
-          final bak = File('${dir.path}/classical.db.bak');
-          if (await bak.exists()) await bak.delete();
-          await dbFile.rename(bak.path);
-          await tmp.rename(dbPath);
-          await File(verPath).writeAsString(assetVer);
-          AppLogger().info('DB 已更新: $localVer → $assetVer');
+          final rc = _callDbReplace(bridge, tmp.path, dbPath);
+          if (rc == BridgeError.ok) {
+            await File(verPath).writeAsString(assetVer);
+            replaced = true;
+            AppLogger().info('DB 已升级: $localVer → $assetVer（用户数据已保留）');
+          } else {
+            if (await tmp.exists()) await tmp.delete();
+            AppLogger().error('内置数据升级失败 rc=$rc，已保留旧库');
+          }
+        } else {
+          AppLogger().info('DB 检查: 内置数据 $assetVer 不新于本地 $localVer，跳过替换');
         }
       }
-      return dbPath;
+      return (dbPath, replaced);
     } catch (e) {
       AppLogger().warn('_resolveDbPath 失败: $e，回退到相对路径');
-      return '../data/classical.db';
+      return ('../data/classical.db', false);
     }
   }
 
@@ -311,6 +352,15 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     } catch (_) {
       return 'unknown';
     }
+  }
+
+  int _callDbReplace(NativeBridge bridge, String newPath, String curPath) {
+    final np = newPath.toNativeUtf8(allocator: calloc);
+    final cp = curPath.toNativeUtf8(allocator: calloc);
+    final rc = bridge.dbReplace(np, cp);
+    calloc.free(np);
+    calloc.free(cp);
+    return rc;
   }
 
   DynamicLibrary _loadLibrary() {
@@ -348,16 +398,27 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   void _onSettingsError() {
     final error = _coord!.settingsCtrl.error;
     if (error != null) {
+      if (!mounted) return;
       _coord!.settingsCtrl.clearError();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final notice = _coord!.settingsCtrl.notice;
+    if (notice != null) {
+      if (!mounted) return;
+      _coord!.settingsCtrl.clearNotice();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(notice),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

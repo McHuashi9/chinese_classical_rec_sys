@@ -59,7 +59,9 @@ class UserController extends ChangeNotifier {
   }
 
   void setUser(User? user) {
+    final old = _user;
     _user = user;
+    old?.dispose();
   }
 
   @override

@@ -15,6 +15,8 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
@@ -56,15 +58,10 @@ static void c_to_user(const UserData* src, User& dst)
 
 // ─── lifecycle ─────────────────────────────────────────────────────────────────
 
-extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
+// 全部生命周期共享的初始化逻辑：打开库 → 建表（幂等）→ 载入文本/用户 → 应用遗忘。
+// 返回 BRIDGE_OK 或错误码。调用方负责持有 g_mtx 与日志目录初始化。
+static int openDatabase(const char* db_path)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
-    // 日志目录跟随 DB 所在目录（App 数据目录），避免随 cwd 漂移
-    const std::filesystem::path dbDir = std::filesystem::path(db_path).parent_path();
-    Logger::getInstance().init((dbDir / "logs").string());
-    LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
-
-    // 关闭旧连接
     g_state = {};
 
     g_state.db = std::make_unique<DatabaseManager>();
@@ -77,8 +74,15 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
     g_state.userRepo = std::make_unique<UserRepository>(g_state.db.get());
     g_state.textRepo = std::make_unique<TextRepository>(g_state.db.get());
     g_state.historyRepo = std::make_unique<ReadingHistoryRepository>(g_state.db.get());
-    if (!g_state.historyRepo->initTable()) return BRIDGE_ERR_INIT;
     g_state.incrementRepo = std::make_unique<LearningIncrementRepository>(g_state.db.get());
+
+    // 四张表幂等建全；缺表时启用（防止远端/发布物缺表导致静默失败）
+    if (!g_state.userRepo->initTable() || !g_state.textRepo->initTable() ||
+        !g_state.historyRepo->initTable() || !g_state.incrementRepo->initTable()) {
+        LOG_ERROR("bridge: 表初始化失败");
+        g_state = {};
+        return BRIDGE_ERR_INIT;
+    }
 
     g_state.engine = std::make_unique<RecommendationEngine>();
     g_state.user = std::make_unique<User>();
@@ -108,11 +112,290 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
     return BRIDGE_OK;
 }
 
+extern "C" CHINESE_CORE_EXPORT int db_open(const char* db_path)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    // 日志目录跟随 DB 所在目录（App 数据目录），避免随 cwd 漂移
+    const std::filesystem::path dbDir = std::filesystem::path(db_path).parent_path();
+    Logger::getInstance().init((dbDir / "logs").string());
+    LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
+
+    return openDatabase(db_path);
+}
+
 extern "C" CHINESE_CORE_EXPORT void db_close()
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     g_state = {};
     LOG_INFO("bridge: db_close 完成");
+}
+
+// ─── db_replace（整库替换 + 用户数据合并） ─────────────────────────────────────
+
+namespace {
+
+struct ExportedTable {
+    std::string name;
+    std::vector<std::string> columns;  // 白名单 ∩ 源库实际列（保持白名单顺序）
+    std::vector<std::vector<std::optional<std::string>>> rows;  // 值按列对齐；null = SQL NULL
+};
+
+// 需要跨替换保留的用户数据表及其列白名单（未来 schema 漂移：未知列忽略、缺列取默认）
+const std::unordered_map<std::string, std::vector<std::string>> kUserTableColumns = {
+    {"user", {"id",
+              "d1_ability", "d2_ability", "d3_ability", "d4_ability", "d5_ability",
+              "d6_ability", "d7_ability", "d8_ability", "d9_ability", "d10_ability",
+              "d1_base_ability", "d2_base_ability", "d3_base_ability", "d4_base_ability",
+              "d5_base_ability", "d6_base_ability", "d7_base_ability", "d8_base_ability",
+              "d9_base_ability", "d10_base_ability", "last_read_time"}},
+    {"reading_history", {"id", "user_id", "text_id", "read_time", "read_timestamp"}},
+    {"text_tracking", {"text_id", "tracked_at"}},
+    {"learning_increments", {"id", "user_id", "dimension", "delta", "timestamp", "type"}},
+};
+
+static bool sqliteExec(sqlite3* db, const char* sql)
+{
+    char* err = nullptr;
+    if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK) {
+        LOG_ERROR("db_replace: SQL 失败: {} — {}", sql, err ? err : "unknown");
+        sqlite3_free(err);
+        return false;
+    }
+    return true;
+}
+
+static bool tableExists(sqlite3* db, const std::string& table)
+{
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
+    bool exists = (sqlite3_step(stmt) == SQLITE_ROW);
+    sqlite3_finalize(stmt);
+    return exists;
+}
+
+static std::set<std::string> tableColumns(sqlite3* db, const std::string& table)
+{
+    std::set<std::string> cols;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, ("PRAGMA table_info(" + table + ")").c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        return cols;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (name) cols.insert(name);
+    }
+    sqlite3_finalize(stmt);
+    return cols;
+}
+
+// 从已打开的源库导出用户数据表（列名白名单容错）
+static bool exportUserTables(sqlite3* db, std::vector<ExportedTable>& out)
+{
+    for (const auto& [table, whitelist] : kUserTableColumns) {
+        if (!tableExists(db, table)) {
+            LOG_WARN("db_replace: 源库无表 {}，跳过导出", table);
+            continue;
+        }
+        const std::set<std::string> present = tableColumns(db, table);
+        std::vector<std::string> cols;
+        for (const auto& c : whitelist) {
+            if (present.count(c)) cols.push_back(c);
+        }
+        if (cols.empty()) {
+            LOG_WARN("db_replace: 源表 {} 无可用白名单列，跳过导出", table);
+            continue;
+        }
+
+        std::string select = "SELECT ";
+        for (size_t i = 0; i < cols.size(); i++) {
+            select += (i ? ", " : "") + cols[i];
+        }
+        select += " FROM " + table;
+
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, select.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+            LOG_ERROR("db_replace: 导出 {} 失败: {}", table, sqlite3_errmsg(db));
+            return false;
+        }
+        ExportedTable t;
+        t.name = table;
+        t.columns = cols;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            std::vector<std::optional<std::string>> row;
+            row.reserve(cols.size());
+            for (int i = 0; i < static_cast<int>(cols.size()); i++) {
+                const char* v = reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
+                row.push_back(v ? std::optional<std::string>(v) : std::nullopt);
+            }
+            t.rows.push_back(std::move(row));
+        }
+        sqlite3_finalize(stmt);
+        out.push_back(std::move(t));
+        LOG_INFO("db_replace: 导出 {} 共 {} 行 / {} 列", t.name, t.rows.size(), t.columns.size());
+    }
+    return true;
+}
+
+// 导入到已打开的目标库（表幂等存在 + 清空默认 + 逐行按列名插入，事务由调用方包裹）
+static bool importUserTables(sqlite3* db, const std::vector<ExportedTable>& tables)
+{
+    for (const auto& t : tables) {
+        if (!tableExists(db, t.name)) {
+            LOG_WARN("db_replace: 目标库缺表 {}，跳过导入", t.name);
+            continue;
+        }
+        if (!sqliteExec(db, ("DELETE FROM " + t.name).c_str())) return false;
+        if (t.rows.empty()) continue;
+
+        // 只导入源列与目标列都存在的列（缺列取目标默认值），与导出侧的白名单容错对称
+        const std::set<std::string> targetCols = tableColumns(db, t.name);
+        std::vector<size_t> keepIdx;  // t.columns 中需要保留的列下标
+        std::vector<std::string> keepCols;
+        for (size_t i = 0; i < t.columns.size(); i++) {
+            if (targetCols.count(t.columns[i])) {
+                keepIdx.push_back(i);
+                keepCols.push_back(t.columns[i]);
+            }
+        }
+        if (keepCols.empty()) {
+            LOG_WARN("db_replace: 目标库表 {} 无可导入列，保留目标默认值", t.name);
+            continue;
+        }
+
+        std::string sql = "INSERT INTO " + t.name + " (";
+        for (size_t i = 0; i < keepCols.size(); i++) sql += (i ? ", " : "") + keepCols[i];
+        sql += ") VALUES (";
+        for (size_t i = 0; i < keepCols.size(); i++) sql += (i ? ", ?" : "?");
+        sql += ")";
+
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+            LOG_ERROR("db_replace: 导入 {} 准备失败: {}", t.name, sqlite3_errmsg(db));
+            return false;
+        }
+        for (const auto& row : t.rows) {
+            sqlite3_reset(stmt);
+            sqlite3_clear_bindings(stmt);
+            for (size_t k = 0; k < keepIdx.size(); k++) {
+                const size_t i = keepIdx[k];
+                if (i < row.size() && row[i]) {
+                    sqlite3_bind_text(stmt, static_cast<int>(k + 1), row[i]->c_str(), -1, SQLITE_TRANSIENT);
+                } else {
+                    sqlite3_bind_null(stmt, static_cast<int>(k + 1));
+                }
+            }
+            if (sqlite3_step(stmt) != SQLITE_DONE) {
+                LOG_ERROR("db_replace: 导入 {} 失败: {}", t.name, sqlite3_errmsg(db));
+                sqlite3_finalize(stmt);
+                return false;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    // 自增序列对齐（防止 id 显式导入后 AUTOINCREMENT 复用旧 id）
+    for (const char* seqTable : {"reading_history", "learning_increments"}) {
+        if (tableExists(db, seqTable)) {
+            const std::string upd = "UPDATE sqlite_sequence SET seq = "
+                "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "
+                "WHERE name='" + std::string(seqTable) + "'";
+            sqliteExec(db, upd.c_str());  // 失败忽略（无序列条目属正常）
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+// 原子替换：将 cur_db_path 换为 new_db_path 的内容，并跨替换保留用户数据。
+// 顺序（崩溃安全）：先在临时文件上完成"打开新库 + 事务导入用户表"，再做文件层替换。
+// - 替换前 g_state 已打开：直接从当前连接导出；未打开：只读打开 cur_db_path 导出。
+// - 因为导入发生在正式位替换之前，任意时刻崩溃，旧库都保持不动（数据零丢失）；
+//   文件层替换是同目录原子 rename（旧库 → .bak 兜底，新库 → 正式位）。
+// - 替换完成或失败后 g_state 一律关闭（由调用方重新 db_open）。
+extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const char* cur_db_path)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    const std::filesystem::path dbDir = std::filesystem::path(cur_db_path).parent_path();
+    Logger::getInstance().init((dbDir / "logs").string());
+
+    // 1. 导出用户数据表（源库不动）
+    std::vector<ExportedTable> userTables;
+    if (g_state.initialized && g_state.db && g_state.db->getConnection()) {
+        if (!exportUserTables(g_state.db->getConnection(), userTables)) {
+            LOG_ERROR("db_replace: 当前库导出失败，中止替换（引擎保持可用）");
+            return BRIDGE_ERR_GENERIC;
+        }
+    } else {
+        sqlite3* old = nullptr;
+        const int rc = sqlite3_open_v2(cur_db_path, &old, SQLITE_OPEN_READONLY, nullptr);
+        if (rc == SQLITE_OK) {
+            if (!exportUserTables(old, userTables)) {
+                LOG_ERROR("db_replace: 只读打开导出失败，中止替换");
+                sqlite3_close(old);
+                return BRIDGE_ERR_GENERIC;
+            }
+            sqlite3_close(old);
+        } else if (rc != SQLITE_CANTOPEN) {
+            LOG_ERROR("db_replace: 只读打开 {} 失败 rc={}", cur_db_path, rc);
+            return BRIDGE_ERR_GENERIC;
+        }
+        // SQLITE_CANTOPEN：旧库不存在（全新安装），无用户数据可保留
+    }
+    LOG_INFO("db_replace: 导出完成（共 {} 张用户表）", userTables.size());
+
+    // 2. 关闭当前库连接
+    g_state = {};
+
+    // 3. 在数据文件（tmp，尚未成为正式库）上完成"打开 + 合并"，崩溃时旧库不动
+    const int openRc = openDatabase(new_db_path);
+    if (openRc != BRIDGE_OK) {
+        LOG_ERROR("db_replace: 新库校验/初始化失败 rc={}（旧库未动）", openRc);
+        return openRc;
+    }
+    if (g_state.db) {
+        if (!sqliteExec(g_state.db->getConnection(), "BEGIN IMMEDIATE")) {
+            g_state = {};
+            return BRIDGE_ERR_GENERIC;
+        }
+        const bool importOk = importUserTables(g_state.db->getConnection(), userTables);
+        if (!sqliteExec(g_state.db->getConnection(), importOk ? "COMMIT" : "ROLLBACK")) {
+            g_state = {};
+            return BRIDGE_ERR_GENERIC;
+        }
+        if (!importOk) {
+            LOG_ERROR("db_replace: 用户表合并失败（旧库未动）");
+            g_state = {};
+            return BRIDGE_ERR_GENERIC;
+        }
+    }
+    LOG_INFO("db_replace: 数据合并完成（{} 张用户表）", userTables.size());
+
+    // 4. 关闭合并好的 tmp，执行文件层替换：旧库 → .bak；合并库 → 正式位
+    g_state = {};
+    const std::string curStr(cur_db_path);
+    const std::string bakStr = curStr + ".bak";
+    std::error_code ec;
+    std::filesystem::remove(bakStr, ec);
+    if (std::filesystem::exists(curStr)) {
+        std::filesystem::rename(curStr, bakStr, ec);
+        if (ec) {
+            LOG_ERROR("db_replace: 备份旧库到 .bak 失败: {}", ec.message());
+            return BRIDGE_ERR_GENERIC;
+        }
+    }
+    std::filesystem::rename(new_db_path, curStr, ec);
+    if (ec) {
+        LOG_ERROR("db_replace: 移动新库失败: {}", ec.message());
+        if (std::filesystem::exists(bakStr)) std::filesystem::rename(bakStr, curStr, ec);
+        return BRIDGE_ERR_GENERIC;
+    }
+    LOG_INFO("db_replace: 替换完成 — 新库已就位（旧库在 .bak），用户数据已合并");
+
+    // 5. 保证 g_state 关闭，由调用方统一 db_open
+    return BRIDGE_OK;
 }
 
 // ─── user ──────────────────────────────────────────────────────────────────────

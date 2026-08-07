@@ -10,6 +10,7 @@ class SettingsController extends ChangeNotifier {
   double _fontScale = 1.0;
   String _logLevel = 'INFO';
   String? _error;
+  String? _notice;
   NativeBridge? _bridge;
   UpdateChecker? _updateChecker;
   SharedPreferences? _prefs;
@@ -18,6 +19,7 @@ class SettingsController extends ChangeNotifier {
   double get fontScale => _fontScale;
   String get logLevel => _logLevel;
   String? get error => _error;
+  String? get notice => _notice;
   String? get updateCheckError => _updateChecker?.lastErrorReason;
 
   void setDarkMode(bool value) {
@@ -50,6 +52,16 @@ class SettingsController extends ChangeNotifier {
 
   void setError(String? message) {
     _error = message;
+    notifyListeners();
+  }
+
+  void clearNotice() {
+    _notice = null;
+    notifyListeners();
+  }
+
+  void setNotice(String? message) {
+    _notice = message;
     notifyListeners();
   }
 
