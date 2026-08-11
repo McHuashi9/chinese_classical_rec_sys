@@ -1,8 +1,8 @@
-# === 构建与本地环境 ===
+# 构建与本地环境
 /build/
 /CMakeFiles/
 /venv/
-.ruff_cache/
+/.ruff_cache/
 **/__pycache__/
 *.pyc
 *.o
@@ -24,7 +24,7 @@ flutter_app/linux/flutter/ephemeral/
 flutter_app/logs/
 flutter_app/ohos/
 
-# === 论文与实验数据（不入库；由 ~/chinese_classical_rec_sys_paper 归档承载）===
+# 论文与实验数据
 /paper/
 /figures/
 /scripts/paper/
@@ -46,7 +46,8 @@ flutter_app/ohos/
 /logs/
 /wenyan-quiz-generator/
 
-# === 本地文档与配置（不入库）===
+# 本地文档与配置
+/.reasonix/
 /AGENTS.md
 /Temp.md
 /plan.md
@@ -60,3 +61,14 @@ flutter_app/ohos/
 /local_docs/
 .vscode/
 .opencode/
+
+# 系统与编辑器临时文件
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*~
+.env
+.env.*
+!.env.example

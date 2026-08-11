@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:chinese_classical_rec_sys/engine/translation_builder.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 class ParsedEntry {
@@ -98,19 +99,25 @@ class AnnotatedTextBuilder {
   static TextSpan build(
     String pageContent,
     Map<int, String> annotations,
-    TextStyle baseStyle,
-  ) {
+    TextStyle baseStyle, {
+    bool isDark = false,
+  }) {
     final markerStyle = baseStyle.copyWith(
       color: AppTheme.vermilion,
       fontSize: baseStyle.fontSize != null ? baseStyle.fontSize! * 0.75 : null,
       fontWeight: FontWeight.w600,
+    );
+    final translationStyle = baseStyle.copyWith(
+      color: isDark ? AppTheme.darkInkSecondary : AppTheme.stoneGreen,
+      fontSize: baseStyle.fontSize != null ? baseStyle.fontSize! * 0.9 : null,
     );
     final spans = <InlineSpan>[];
     final re = RegExp(r'〔(\d+)〕');
     int lastEnd = 0;
     for (final match in re.allMatches(pageContent)) {
       if (match.start > lastEnd) {
-        spans.add(TextSpan(text: pageContent.substring(lastEnd, match.start)));
+        spans.addAll(_buildPlainSpans(
+            pageContent.substring(lastEnd, match.start), translationStyle));
       }
       final num = int.parse(match.group(1)!);
       spans.add(TextSpan(
@@ -120,10 +127,42 @@ class AnnotatedTextBuilder {
       lastEnd = match.end;
     }
     if (lastEnd < pageContent.length) {
-      spans.add(TextSpan(text: pageContent.substring(lastEnd)));
+      spans.addAll(_buildPlainSpans(
+          pageContent.substring(lastEnd), translationStyle));
       lastEnd = pageContent.length;
     }
     return TextSpan(style: baseStyle, children: spans);
+  }
+
+  /// 解析零宽字符标记（`\u200B` 成对包裹译文段）：
+  /// 标记内文本赋译文样式，标记字符本身不渲染；
+  /// 页尾无闭合标记 → 整段按译文样式到结尾；页首残留闭合标记 → 忽略。
+  static List<InlineSpan> _buildPlainSpans(
+      String text, TextStyle translationStyle) {
+    if (!text.contains(TranslationBuilder.mark)) {
+      return [TextSpan(text: text)];
+    }
+    final spans = <InlineSpan>[];
+    final re = RegExp(TranslationBuilder.mark);
+    var inTranslation = false;
+    var lastEnd = 0;
+    for (final match in re.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: inTranslation ? translationStyle : null,
+        ));
+      }
+      inTranslation = !inTranslation;
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: inTranslation ? translationStyle : null,
+      ));
+    }
+    return spans;
   }
 
   static int? findAnnotationAtOffset(

@@ -79,6 +79,40 @@ TEST_CASE("calculateDifficultyGap", "[engine]") {
             expected += Config::CRITIC_WEIGHTS[j] * (diffs[j] - abilities[j]);
         REQUIRE(std::abs(delta - expected) < EPS);
     }
+
+    SECTION("已答题维度降权（quiz_count>0 权重×QUIZ_WEIGHT_FACTOR 后归一化）") {
+        std::array<double, 10> diffs = {0.3, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8};
+        User u = makeUserNonUniform({0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3});
+        u.setQuizCount(0, 3);  // d1 已答过题 → 降权
+        Text t = makeTextNonUniform(1, diffs);
+
+        double delta = engine.calculateDifficultyGap(u, t);
+        double raw[10];
+        double weightSum = 0.0;
+        for (int j = 0; j < 10; j++) {
+            raw[j] = Config::CRITIC_WEIGHTS[j] * (u.getQuizCount(j) > 0 ? Config::QUIZ_WEIGHT_FACTOR : 1.0);
+            weightSum += raw[j];
+        }
+        double expected = 0.0;
+        for (int j = 0; j < 10; j++)
+            expected += (raw[j] / weightSum) * (diffs[j] - u.getAbility(j));
+        REQUIRE(std::abs(delta - expected) < EPS);
+    }
+
+    SECTION("降权生效：d1 为唯一贡献者时其归一化权重小于原始权重") {
+        std::array<double, 10> diffs = {0.5, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3};
+        std::array<double, 10> abilities = {0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3};
+        User u = makeUserNonUniform(abilities);
+        u.setQuizCount(0, 3);
+        Text t = makeTextNonUniform(1, diffs);
+
+        double delta = engine.calculateDifficultyGap(u, t);
+        // 仅 d1 有贡献：δ = w'_1·0.2（其他维度 0.3-0.3=0），w'_1 = 0.5·w_1 / (0.5·w_1 + Σ_{j≥2}w_j)
+        double w1 = Config::CRITIC_WEIGHTS[0];
+        double w1_decayed = 0.5 * w1 / (0.5 * w1 + 1.0 - w1);
+        REQUIRE(std::abs(delta - w1_decayed * 0.2) < EPS);
+        REQUIRE(w1_decayed < w1);
+    }
 }
 
 TEST_CASE("calculateProbability", "[engine]") {

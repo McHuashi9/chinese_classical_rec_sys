@@ -1,9 +1,11 @@
 #include "models/User.h"
+#include "core/Config.h"
 #include <algorithm>
 #include <numeric>
 
 User::User() : abilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, 
-                baseAbilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, lastReadTime(0) {}
+                baseAbilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
+                eta(Config::ETA), quizCounts{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}, lastReadTime(0) {}
 
 void User::setAbility(int index, double value) {
     if (index >= 0 && index < 10) {
@@ -30,6 +32,9 @@ void User::initializeDefault() {
     // 贝叶斯先验均值：u_j(0) = α_0 / (α_0 + β_0) = 3/10 = 0.3
     abilities.fill(0.3);
     baseAbilities.fill(0.3);
+    // 全新状态：悟性/答题计数一并复位
+    eta = Config::ETA;
+    quizCounts.fill(0);
 }
 
 time_t User::getLastReadTime() const {
@@ -51,4 +56,31 @@ double User::getBaseAbility(int index) const {
         return baseAbilities[index];
     }
     return 0.0;
+}
+
+void User::setEta(double value) {
+    eta = std::clamp(value, Config::ETA_MIN, Config::ETA_MAX);
+}
+
+double User::getEta() const {
+    return eta;
+}
+
+void User::setQuizCount(int index, int value) {
+    if (index >= 0 && index < 10) {
+        quizCounts[index] = std::max(0, value);
+    }
+}
+
+int User::getQuizCount(int index) const {
+    if (index >= 0 && index < 10) {
+        return quizCounts[index];
+    }
+    return 0;
+}
+
+void User::incrementQuizCount(int index) {
+    if (index >= 0 && index < 10) {
+        quizCounts[index]++;
+    }
 }

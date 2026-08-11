@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.27+-02569B?logo=flutter" alt="Flutter">
+  <img src="https://img.shields.io/badge/Flutter-3.41+-02569B?logo=flutter" alt="Flutter">
   <img src="https://img.shields.io/badge/C++-17-00599C?logo=c%2B%2B" alt="C++17">
   <img src="https://img.shields.io/badge/Linux-✓-FCC624?logo=linux" alt="Linux">
   <img src="https://img.shields.io/badge/Windows-✓-0078D6?logo=windows" alt="Windows">
@@ -50,6 +50,7 @@
 | 阅读器 | 乌丝栏版框、8 档字号、计时器、键盘翻页、阅读锁定 |
 | 能力雷达 | 10 维能力雷达图 + 综合评分，追踪学习成长 |
 | 亮/暗主题 | 清爽开关切换，全局统一 |
+| 数据自动同步 | 启动时自动检查并下载最新文言文库数据包（prerelease），无需等待 App 更新 |
 | 版本更新 | GitHub Release 检查，一键跳转下载 |
 | 学习统计 | 阅读时长、篇数、日均统计、连续天数 |
 
@@ -59,6 +60,7 @@
 
 ```bash
 # 1. 数据初始化（生成 classical.db 并同步到应用资产）
+python3 scripts/project/generate_questions.py --json   # 生成题库 questions.json（可选，只跑 init_data.py 则 questions 表为空）
 python3 scripts/project/init_data.py
 cp build/data/classical.db flutter_app/assets/data/
 
@@ -111,7 +113,7 @@ packaging/             AppImage / iOS 打包脚本
 flutter_app/
   lib/main.dart        入口 · MainShell (NavigationRail + IndexedStack)
   lib/bridge/          dart:ffi 绑定（ffi_bindings · c_types）
-  lib/engine/          FFI 封装（tracker · recommendation · read_tracker · text_repository · annotation_parser · update_checker · remote_db_sync · app_logger · algorithm_constants · github_config）
+  lib/engine/          FFI 封装（tracker · recommendation · read_tracker · text_repository · annotation_parser · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config）
   lib/models/          user · text · version · reading_view_data
   lib/state/           5 个控制器（coordinator · navigation · reading · settings · user）
   lib/service/         history_service

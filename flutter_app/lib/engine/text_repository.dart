@@ -72,6 +72,23 @@ class TextRepository {
     return utf8.decode(bytes, allowMalformed: true);
   }
 
+  String getTranslation(int textId) {
+    final out = calloc<Uint8>(65536);
+    final rc = _bridge.textGetTranslation(textId, out.cast<Utf8>(), 65536);
+    if (rc != BridgeError.ok) {
+      calloc.free(out);
+      return '';
+    }
+    final bytes = <int>[];
+    for (int i = 0; i < 65536; i++) {
+      final b = out[i];
+      if (b == 0) break;
+      bytes.add(b);
+    }
+    calloc.free(out);
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
   int get textCount => _textCache.length;
   List<ChineseText> get texts => List.unmodifiable(_textCache);
 }

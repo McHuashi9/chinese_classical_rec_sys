@@ -11,6 +11,8 @@ class ReadingViewData {
   final int elapsedSeconds;
   final bool alreadyTracked;
   final Map<int, String> annotations;
+  final bool showTranslation;
+  final VoidCallback onToggleTranslation;
   final void Function(int innerWidth, int innerHeight) onPaginate;
   final VoidCallback onNextPage;
   final VoidCallback onPrevPage;
@@ -28,6 +30,8 @@ class ReadingViewData {
     required this.elapsedSeconds,
     required this.alreadyTracked,
     required this.annotations,
+    required this.showTranslation,
+    required this.onToggleTranslation,
     required this.onPaginate,
     required this.onNextPage,
     required this.onPrevPage,

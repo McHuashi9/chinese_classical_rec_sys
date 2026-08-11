@@ -66,6 +66,12 @@ def extract_annotations(content: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def extract_translation(content: str) -> str:
+    """从文件内容中提取【译文】章节原文（译文是文件最后一段，译者名段原样保留）"""
+    match = re.search(r"【译文】\n(.+?)(?=$)", content, re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
 def extract_background(content: str) -> str:
     """从文件内容中提取【题解】部分作为背景介绍"""
     match = re.search(r"【题解】\n(.+?)(?=\n【原文】)", content, re.DOTALL)
@@ -110,6 +116,7 @@ def parse_text_file(file_path: str) -> dict | None:
         original_text = extract_original_text(body)
         background = extract_background(body)
         annotations_raw = extract_annotations(body)
+        translation = extract_translation(body)
         
         return {
             "title": fm.get('title', ''),
@@ -119,6 +126,7 @@ def parse_text_file(file_path: str) -> dict | None:
             "background": background,
             "source": fm.get('source', ''),
             "annotations_raw": annotations_raw,
+            "translation": translation,
         }
     except Exception as e:
         print(f"解析文件失败 {file_path}: {e}")
@@ -282,17 +290,32 @@ def create_tables(conn: sqlite3.Connection) -> bool:
             d8_base_ability REAL DEFAULT 0.0,
             d9_base_ability REAL DEFAULT 0.0,
             d10_base_ability REAL DEFAULT 0.0,
+            eta REAL DEFAULT 0.08,
+            d1_quiz_count INTEGER DEFAULT 0,
+            d2_quiz_count INTEGER DEFAULT 0,
+            d3_quiz_count INTEGER DEFAULT 0,
+            d4_quiz_count INTEGER DEFAULT 0,
+            d5_quiz_count INTEGER DEFAULT 0,
+            d6_quiz_count INTEGER DEFAULT 0,
+            d7_quiz_count INTEGER DEFAULT 0,
+            d8_quiz_count INTEGER DEFAULT 0,
+            d9_quiz_count INTEGER DEFAULT 0,
+            d10_quiz_count INTEGER DEFAULT 0,
             last_read_time INTEGER DEFAULT 0
         );
     """)
     
-    # 兼容旧表：若缺少 annotations_raw 则新增列
+    # 兼容旧表：若缺少 annotations_raw / translation 则新增列
     try:
         cursor.execute("ALTER TABLE classical_text ADD COLUMN annotations_raw TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass  # 列已存在
+    try:
+        cursor.execute("ALTER TABLE classical_text ADD COLUMN translation TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
 
-    # 创建 classical_text 表（10维特征 + 注释）
+    # 创建 classical_text 表（10维特征 + 注释 + 译文）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS classical_text (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,6 +327,7 @@ def create_tables(conn: sqlite3.Connection) -> bool:
             content TEXT NOT NULL,
             char_count INTEGER DEFAULT 0,
             annotations_raw TEXT DEFAULT '',
+            translation TEXT DEFAULT '',
             f1_avg_sentence_length REAL DEFAULT 0.0,
             f3_sentence_count REAL DEFAULT 0.0,
             f5_function_word_ratio REAL DEFAULT 0.0,
@@ -344,6 +368,29 @@ def create_tables(conn: sqlite3.Connection) -> bool:
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_learning_increments_user_dim
         ON learning_increments(user_id, dimension);
+    """)
+
+    # 创建 questions 表（内容库：题目 + 答案 + 解析，随数据包同步）
+    # answer_index = 正确答案在 options JSON 数组中的下标（0-based）；
+    # dims = CSV（如 "3,4,9"，0-based 维度），C++/Dart 直接 split 解析
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text_id INTEGER NOT NULL,
+            q_type TEXT NOT NULL,
+            stem TEXT NOT NULL,
+            options TEXT NOT NULL,
+            answer_index INTEGER NOT NULL,
+            explanation TEXT DEFAULT '',
+            difficulty REAL DEFAULT 0.0,
+            dims TEXT DEFAULT '',
+            seq INTEGER DEFAULT 0,
+            FOREIGN KEY (text_id) REFERENCES classical_text(id)
+        );
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_questions_text
+        ON questions(text_id);
     """)
     
     conn.commit()
@@ -403,13 +450,13 @@ def init_database(db_path: str) -> bool:
                 """
                 INSERT INTO classical_text 
                 (title, author, dynasty, background, source, content, char_count,
-                 annotations_raw,
+                 annotations_raw, translation,
                  f1_avg_sentence_length, f3_sentence_count,
                  f5_function_word_ratio, f6_avg_char_log_freq,
                  f8_tongjiazi_density, f9_ppl_ancient,
                  f10_ppl_modern, f11_mattr, 
                  f12_allusion_density, f13_semantic_complexity)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     text_data["title"],
@@ -420,6 +467,7 @@ def init_database(db_path: str) -> bool:
                     text_data["content"],
                     char_count,
                     annotations_raw,
+                    text_data.get("translation", ""),
                     feat.get("f1_avg_sentence_length", 0.0),
                     feat.get("f3_sentence_count", 0),
                     feat.get("f5_function_word_ratio", 0.0),
@@ -437,6 +485,45 @@ def init_database(db_path: str) -> bool:
         elapsed = time.time() - start_time
         cursor.execute("SELECT COUNT(*) FROM classical_text")
         count = cursor.fetchone()[0]
+
+        # 导入题库（build/data/questions.json，generate_questions.py --json 生成）
+        q_imported = 0
+        questions_file = os.path.join(os.path.dirname(DB_PATH), "questions.json")
+        if os.path.exists(questions_file):
+            cursor.execute("DELETE FROM questions")
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='questions'")
+            title_to_id = {r[0]: r[1] for r in
+                           cursor.execute("SELECT title, id FROM classical_text").fetchall()}
+            with open(questions_file, encoding="utf-8") as f:
+                rows = json.load(f)
+            for r in rows:
+                tid = None
+                # 优先 (title, author) 匹配（如 郑伯克段于鄢 有《左传》/《穀梁传》两篇同名）
+                hits = cursor.execute(
+                    "SELECT id FROM classical_text WHERE title=? AND author=?",
+                    (r["title"], r.get("author", ""))).fetchall()
+                if len(hits) == 1:
+                    tid = hits[0][0]
+                else:
+                    tid = title_to_id.get(r["title"])
+                if tid is None:
+                    continue
+                cursor.execute(
+                    """
+                    INSERT INTO questions
+                    (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
+                     r["answer_index"], r["explanation"], r["difficulty"],
+                     r["dims"], r["seq"]),
+                )
+                q_imported += 1
+            conn.commit()
+            print(f"题库导入: {q_imported} 题（来源 {questions_file}）")
+        else:
+            print(f"题库文件不存在（跳过）: {questions_file}")
+
         conn.close()
         
         print(f"导入完成: {count} 篇, 耗时 {elapsed:.2f}s")

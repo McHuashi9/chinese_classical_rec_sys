@@ -199,6 +199,17 @@ TEST_CASE_METHOD(KTFixture, "pruneOldIncrements", "[tracker]") {
         double expectedBase = 0.3 + 0.05 * psi;
         REQUIRE(std::abs(user.getBaseAbility(0) - expectedBase) < EPS);
     }
+
+    SECTION("负增量（quiz 答错）同样被合并进基础能力") {
+        repo.addIncrement(USER_ID, 1, -0.06, 0, "quiz");
+        time_t currentTime = 800 * 86400;
+        double psi = std::pow(1.0 + 800.0 / Config::TAU, -Config::C);
+        int pruned = tracker.pruneOldIncrements(user, currentTime);
+        REQUIRE(pruned == 1);
+        double expectedBase = 0.3 - 0.06 * psi;
+        REQUIRE(std::abs(user.getBaseAbility(0) - expectedBase) < EPS);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 0);
+    }
 }
 
 TEST_CASE("KnowledgeTracker nullptr repo", "[tracker]") {
@@ -208,4 +219,71 @@ TEST_CASE("KnowledgeTracker nullptr repo", "[tracker]") {
     tracker.applyReadEffect(user, text, 60.0, 0);
     tracker.applyForgettingEffect(user, 0);
     REQUIRE(tracker.pruneOldIncrements(user, 0) == 0);
+}
+
+// =============================================================================
+// 答题效应（论文§5.3：Δu_j^quiz = K_j(t)·(s - E[s_j])）
+// =============================================================================
+
+TEST_CASE_METHOD(KTFixture, "applyQuizEffect", "[tracker][quiz]") {
+    const std::vector<int> dims = {3, 4, 9};  // shici 题型：d4, d5, d10（0-based）
+
+    SECTION("答对上调能力") {
+        tracker.applyQuizEffect(user, text, dims, 1, now);
+        for (int j : dims) {
+            REQUIRE(user.getAbility(j) > 0.3);
+            REQUIRE(user.getQuizCount(j) == 1);
+        }
+        REQUIRE(user.getEta() > Config::ETA);  // 答对 → 悟性提升
+    }
+
+    SECTION("答错下调能力（校正性修正）") {
+        tracker.applyQuizEffect(user, text, dims, 0, now);
+        for (int j : dims) {
+            REQUIRE(user.getAbility(j) < 0.3);
+            REQUIRE(user.getQuizCount(j) == 1);
+        }
+        REQUIRE(user.getEta() < Config::ETA);  // 答错 → 悟性下降
+    }
+
+    SECTION("能力=难度时 E[s]=0.5，增量 = ±K0/2") {
+        // u_j = d_j = 0.5 → E[s_j] = 0.5；K = K0（N_j=0）
+        for (int j : dims)
+            user.setAbility(j, 0.5);
+        tracker.applyQuizEffect(user, text, dims, 1, now);
+        double expected = 0.5 + Config::QUIZ_K0 * 0.5;
+        for (int j : dims)
+            REQUIRE(std::abs(user.getAbility(j) - expected) < EPS);
+    }
+
+    SECTION("K 因子随答题次数衰减") {
+        // 第 1 次答题：K = K0；第 N 次：K = max(K_min, K0/(1+λK·N))
+        for (int j : dims)
+            user.setQuizCount(j, 10);
+        tracker.applyQuizEffect(user, text, dims, 1, now);
+        double k_expected = std::max(Config::QUIZ_K_MIN,
+                                     Config::QUIZ_K0 / (1.0 + Config::QUIZ_LAMBDA_K * 10));
+        // 此处 u_j = 0.3（先验），d_j = 0.5（text 特征）
+        double e = 1.0 / (1.0 + std::exp(-Config::QUIZ_BETA * (0.3 - 0.5)));
+        double expected = 0.3 + k_expected * (1.0 - e);
+        for (int j : dims)
+            REQUIRE(std::abs(user.getAbility(j) - expected) < EPS);
+    }
+
+    SECTION("负增量入库（答错真实拉低能力）") {
+        tracker.applyQuizEffect(user, text, dims, 0, now);
+        auto incs = repo.getAllIncrements(USER_ID);
+        REQUIRE(incs.size() == dims.size());
+        for (const auto& inc : incs) {
+            REQUIRE(inc.type == "quiz");
+            REQUIRE(inc.delta < 0);
+        }
+    }
+
+    SECTION("悟性有界（连答错 → η 触及下限）") {
+        user.setEta(Config::ETA_MIN + 0.001);
+        tracker.applyQuizEffect(user, text, dims, 0, now);
+        REQUIRE(user.getEta() >= Config::ETA_MIN);
+        REQUIRE(user.getEta() <= Config::ETA_MAX);
+    }
 }

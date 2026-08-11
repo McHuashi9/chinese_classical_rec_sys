@@ -17,6 +17,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
@@ -36,14 +37,28 @@ static struct {
 } g_state;
 static std::mutex g_mtx;
 
+// C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）
+static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(QuestionData) == 5212, "QuestionData ABI 尺寸不符，检查 #pragma pack");
+
 // ─── helpers ───────────────────────────────────────────────────────────────────
+
+static void copyCString(char* dst, size_t dstSize, const unsigned char* src)
+{
+    if (!src || dstSize == 0) return;
+    const size_t len = std::min(dstSize - 1, std::strlen(reinterpret_cast<const char*>(src)));
+    std::memcpy(dst, src, len);
+    dst[len] = '\0';
+}
 
 static void user_to_c(const User& src, UserData* dst)
 {
     for (int i = 0; i < 10; i++) {
         dst->abilities[i] = src.getAbility(i);
         dst->base_abilities[i] = src.getBaseAbility(i);
+        dst->quiz_counts[i] = src.getQuizCount(i);
     }
+    dst->eta = src.getEta();
     dst->last_read_time = static_cast<int64_t>(src.getLastReadTime());
 }
 
@@ -52,7 +67,9 @@ static void c_to_user(const UserData* src, User& dst)
     for (int i = 0; i < 10; i++) {
         dst.setAbility(i, src->abilities[i]);
         dst.setBaseAbility(i, src->base_abilities[i]);
+        dst.setQuizCount(i, src->quiz_counts[i]);
     }
+    dst.setEta(src->eta);
     dst.setLastReadTime(static_cast<time_t>(src->last_read_time));
 }
 
@@ -147,7 +164,10 @@ const std::unordered_map<std::string, std::vector<std::string>> kUserTableColumn
               "d6_ability", "d7_ability", "d8_ability", "d9_ability", "d10_ability",
               "d1_base_ability", "d2_base_ability", "d3_base_ability", "d4_base_ability",
               "d5_base_ability", "d6_base_ability", "d7_base_ability", "d8_base_ability",
-              "d9_base_ability", "d10_base_ability", "last_read_time"}},
+              "d9_base_ability", "d10_base_ability", "eta",
+              "d1_quiz_count", "d2_quiz_count", "d3_quiz_count", "d4_quiz_count",
+              "d5_quiz_count", "d6_quiz_count", "d7_quiz_count", "d8_quiz_count",
+              "d9_quiz_count", "d10_quiz_count", "last_read_time"}},
     {"reading_history", {"id", "user_id", "text_id", "read_time", "read_timestamp"}},
     {"text_tracking", {"text_id", "tracked_at"}},
     {"learning_increments", {"id", "user_id", "dimension", "delta", "timestamp", "type"}},
@@ -537,6 +557,47 @@ extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int m
     return BRIDGE_OK;
 }
 
+extern "C" CHINESE_CORE_EXPORT int text_get_translation(int id, char* out, int max_len)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
+
+    sqlite3* db = g_state.db->getConnection();
+    if (!db) return BRIDGE_ERR_GENERIC;
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT translation FROM classical_text WHERE id = ?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: text_get_translation 准备失败: {}", sqlite3_errmsg(db));
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+    int rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const char* text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        int len = text ? static_cast<int>(strlen(text)) : 0;
+        if (len >= max_len) {
+            LOG_WARN("bridge: text_id={} translation 截断 ({} > {} 字节)", id, len, max_len - 1);
+            len = max_len - 1;
+        }
+        if (text && len > 0) {
+            std::strncpy(out, text, len);
+            out[len] = '\0';
+        } else {
+            out[0] = '\0';
+        }
+    } else {
+        out[0] = '\0';
+        sqlite3_finalize(stmt);
+        return BRIDGE_ERR_TEXT;
+    }
+
+    sqlite3_finalize(stmt);
+    return BRIDGE_OK;
+}
+
 // ─── recommend ─────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
@@ -622,6 +683,140 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
     // 持久化修剪后的状态
     g_state.userRepo->saveUser(cpp_user);
     g_state.user = std::make_unique<User>(cpp_user);
+    return BRIDGE_OK;
+}
+
+// 取题：按 text_id 返回该文题目（顺序 seq，上限 max_count；不下发 answer_index，判题只在 C++ 侧）
+// 返回：题数（≥0）；文章不存在返回 BRIDGE_ERR_TEXT；参数非法返回 BRIDGE_ERR_GENERIC
+extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionData* out, int max_count)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
+    if (g_state.textIndex->find(text_id) == g_state.textIndex->end()) {
+        LOG_WARN("bridge: question_get_by_text 文章不存在 text_id={}", text_id);
+        return BRIDGE_ERR_TEXT;
+    }
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT id, q_type, stem, "
+                      "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
+                      "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
+                      "dims, explanation, difficulty "
+                      "FROM questions WHERE text_id = ? ORDER BY seq, id LIMIT ?";
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: question_get_by_text prepare 失败: {}", sqlite3_errmsg(g_state.db->getConnection()));
+        return BRIDGE_ERR_GENERIC;
+    }
+    sqlite3_bind_int(stmt, 1, text_id);
+    sqlite3_bind_int(stmt, 2, max_count);
+
+    int count = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        QuestionData& q = out[count];
+        std::memset(&q, 0, sizeof(q));
+        q.id = sqlite3_column_int(stmt, 0);
+        copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
+        copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
+        for (int i = 0; i < 4; i++) {
+            copyCString(q.options[i], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + i));
+        }
+        copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
+        copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
+        q.difficulty = sqlite3_column_double(stmt, 9);
+        count++;
+    }
+    sqlite3_finalize(stmt);
+
+    LOG_INFO("bridge: question_get_by_text text_id={} → {} 题 (上限 {})", text_id, count, max_count);
+    return count;
+}
+
+// 答题效应：按 question_id 查题 → 判题（用户选项 vs answer_index）→ applyQuizEffect
+extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int question_id,
+                                      int user_choice, int64_t timestamp,
+                                      UserData* out_user, int* out_correct)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+
+    // 1. 查询题目（text_id / answer_index / dims CSV）
+    std::string text_id, answer_index, dims;
+    {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT text_id, answer_index, dims FROM questions WHERE id = ?";
+        if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            LOG_ERROR("bridge: tracker_apply_quiz prepare 失败: {}", sqlite3_errmsg(g_state.db->getConnection()));
+            return BRIDGE_ERR_GENERIC;
+        }
+        sqlite3_bind_int(stmt, 1, question_id);
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            LOG_WARN("bridge: 题目不存在 question_id={}", question_id);
+            return BRIDGE_ERR_TEXT;
+        }
+        const char* v1 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char* v2 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        const char* v3 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        if (!v1 || !v2 || !v3) {
+            sqlite3_finalize(stmt);
+            LOG_WARN("bridge: 题目字段缺失 question_id={}", question_id);
+            return BRIDGE_ERR_TEXT;
+        }
+        text_id = v1;
+        answer_index = v2;
+        dims = v3;
+        sqlite3_finalize(stmt);
+    }
+
+    int tid = std::atoi(text_id.c_str());
+    int ans_idx = std::atoi(answer_index.c_str());
+    if (ans_idx < 0 || ans_idx > 3) {
+        LOG_WARN("bridge: answer_index 越界 question_id={} idx={}", question_id, ans_idx);
+        return BRIDGE_ERR_GENERIC;
+    }
+    if (user_choice < 0 || user_choice > 3) {
+        LOG_WARN("bridge: user_choice 越界 question_id={} choice={}", question_id, user_choice);
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    auto it = g_state.textIndex->find(tid);
+    if (it == g_state.textIndex->end()) return BRIDGE_ERR_TEXT;
+
+    // 2. 解析 dims CSV（如 "3,4,9" 表示 0-based 维度）
+    std::vector<int> dim_list;
+    {
+        std::stringstream ss(dims);
+        std::string tok;
+        while (std::getline(ss, tok, ',')) {
+            if (!tok.empty()) dim_list.push_back(std::atoi(tok.c_str()));
+        }
+    }
+    if (dim_list.empty()) {
+        LOG_WARN("bridge: dims 为空 question_id={}", question_id);
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    // 3. 判题 + 应用答题效应
+    User cpp_user;
+    c_to_user(user, cpp_user);
+
+    const int correct = (user_choice == ans_idx) ? 1 : 0;
+    if (out_correct) *out_correct = correct;
+    time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
+    g_state.tracker->applyQuizEffect(cpp_user, (*g_state.texts)[it->second], dim_list,
+                                     correct, effective_ts);
+    user_to_c(cpp_user, out_user);
+
+    // 持久化（失败则不更新内存态，保持与磁盘一致）
+    if (!g_state.userRepo->saveUser(cpp_user)) {
+        LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
+        return BRIDGE_ERR_GENERIC;
+    }
+    g_state.user = std::make_unique<User>(cpp_user);
+    LOG_INFO("bridge: 答题效应完成 — question_id={}, correct={}, avg_ability={:.3f}→{:.3f}",
+             question_id, correct, g_state.user->getAverageAbility(),
+             cpp_user.getAverageAbility());
     return BRIDGE_OK;
 }
 

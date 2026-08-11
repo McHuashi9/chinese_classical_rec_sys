@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
 import 'package:chinese_classical_rec_sys/pages/article_detail_page.dart';
+import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
 import 'package:chinese_classical_rec_sys/widgets/text_card.dart';
@@ -399,6 +400,9 @@ class _ReadHubPageState extends State<ReadHubPage>
       elapsedSeconds: readingCtrl.elapsedSeconds,
       alreadyTracked: !readingCtrl.hasUnrecordedReading,
       annotations: readingCtrl.annotations,
+      showTranslation: readingCtrl.showTranslation,
+      onToggleTranslation: () => readingCtrl.setShowTranslation(
+          !readingCtrl.showTranslation),
       onPaginate: (w, h) => readingCtrl.paginate(
         w.toDouble(), h.toDouble(),
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
@@ -415,9 +419,42 @@ class _ReadHubPageState extends State<ReadHubPage>
   void _completeReading() {
     final readingCtrl = context.read<ReadingController>();
     final coord = context.read<AppCoordinator>();
+    final textId = readingCtrl.readingText?.id;
+    final textTitle = readingCtrl.readingText?.title ?? '';
     coord.applyReadingEffect();
     readingCtrl.stopTimer();
     readingCtrl.discardReading();
+    _offerQuizAfterReading(textId, textTitle);
+  }
+
+  /// 阅读完成 → 若该文有题，询问是否开始随堂练习
+  void _offerQuizAfterReading(int? textId, String textTitle) async {
+    if (textId == null || !mounted) return;
+    final userCtrl = context.read<UserController>();
+    final questions = userCtrl.getQuizQuestions(textId);
+    if (questions.isEmpty) {
+      userCtrl.disposeQuizQuestions(questions);
+      return;
+    }
+    final start = await showConfirmDialog(context,
+      title: '阅读完成',
+      content: '本篇共 ${questions.length} 题随堂练习，开始作答？答完立即更新你的能力画像。',
+      confirmLabel: '开始做题',
+      cancelLabel: '下次再说',
+    );
+    if (!start || !mounted) {
+      userCtrl.disposeQuizQuestions(questions);
+      return;
+    }
+    // 题目内存所有权随路由转移：QuizPage →（提交）→ QuizResultPage 销毁时释放
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          articleTitle: textTitle,
+          questions: questions,
+        ),
+      ),
+    );
   }
 
   void _confirmAbandon() async {

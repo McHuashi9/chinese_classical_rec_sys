@@ -35,6 +35,28 @@ public:
      */
     void applyReadEffect(User& user, const Text& text, double readTime, 
                          time_t timestamp = 0);
+
+    /**
+     * @brief 应用答题效应，记录增量（论文公式19-22）
+     * 
+     * 对题目 dims 覆盖的每个维度 j：
+     *   E[s_j] = sigmoid(β·(u_j - d̂_j))                （预期正确率）
+     *   K_j(t) = max(K_min, K_0/(1 + λ_K·N_j))          （动态学习率）
+     *   Δu_j = K_j(t)·(s - E[s_j])                       （s=1 答对 / 0 答错）
+     * 每题一次（按 dims 平均误差）：
+     *   η ← clip(η + α_η·mean(s - E[s_j]), η_min, η_max)（悟性动态调整）
+     * 增量可为负（答错拉低能力），|Δ| ≥ MIN_DELTA_THRESHOLD 时入库 type="quiz"；
+     * 每维累计答题次数 N_j 自增。
+     * 
+     * @param user 用户对象（将被修改：能力/悟性/答题计数）
+     * @param text 文章对象（提供 d̂_j 特征）
+     * @param dims 题目涉及的维度（0-based，如 shici → {3,4,9}）
+     * @param correct 本题是否正确（1/0）
+     * @param timestamp 答题时刻（默认为当前时间）
+     */
+    void applyQuizEffect(User& user, const Text& text,
+                         const std::vector<int>& dims, int correct,
+                         time_t timestamp = 0);
     
     /**
      * @brief 计算当前能力（实现论文公式17）

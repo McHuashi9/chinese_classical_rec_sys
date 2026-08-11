@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
+import 'package:chinese_classical_rec_sys/engine/translation_builder.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 void main() {
@@ -193,6 +194,80 @@ void main() {
         '原文〔1〕内容', {1: '注'}, baseStyle,
       );
       expect(span.toPlainText(), '原文〔1〕内容');
+    });
+
+    group('译文样式（零宽字符标记）', () {
+      const mark = TranslationBuilder.mark;
+
+      test('标记内文本获得译文样式（浅色 stoneGreen 0.9x）', () {
+        final span = AnnotatedTextBuilder.build(
+          '原文段\n$mark译文段$mark',
+          {},
+          baseStyle,
+        );
+        final children = span.children!;
+        expect(children.length, 2);
+        expect((children[0] as TextSpan).text, '原文段\n');
+        expect((children[0] as TextSpan).style, isNull);
+        final transSpan = children[1] as TextSpan;
+        expect(transSpan.text, '译文段');
+        expect(transSpan.style!.color, AppTheme.stoneGreen);
+        expect(
+          transSpan.style!.fontSize,
+          closeTo(baseStyle.fontSize! * 0.9, 0.001),
+        );
+      });
+
+      test('深色模式用 darkInkSecondary', () {
+        final span = AnnotatedTextBuilder.build(
+          '$mark译文$mark',
+          {},
+          baseStyle,
+          isDark: true,
+        );
+        final transSpan = span.children!.first as TextSpan;
+        expect(transSpan.style!.color, AppTheme.darkInkSecondary);
+      });
+
+      test('标记字符本身不渲染', () {
+        final span = AnnotatedTextBuilder.build(
+          '$mark译$mark文',
+          {},
+          baseStyle,
+        );
+        expect(span.toPlainText(), '译文');
+      });
+
+      test('页尾无闭合标记：整段译文样式到结尾（容错）', () {
+        final span = AnnotatedTextBuilder.build(
+          '原文\n$mark未闭合译文',
+          {},
+          baseStyle,
+        );
+        final last = span.children!.last as TextSpan;
+        expect(last.text, '未闭合译文');
+        expect(last.style!.color, AppTheme.stoneGreen);
+      });
+
+      test('页首残留闭合标记忽略，后续正常', () {
+        final span = AnnotatedTextBuilder.build(
+          '$mark译$mark尾',
+          {},
+          baseStyle,
+        );
+        expect(span.toPlainText(), '译尾');
+      });
+
+      test('译文段内〔n〕不参与译文样式（原文段 marker 不受影响）', () {
+        final span = AnnotatedTextBuilder.build(
+          'a〔1〕b$mark译$mark',
+          {1: '注'},
+          baseStyle,
+        );
+        final marker = span.children![1] as TextSpan;
+        expect(marker.text, '〔1〕');
+        expect(marker.style!.color, AppTheme.vermilion);
+      });
     });
   });
 

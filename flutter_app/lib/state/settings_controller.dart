@@ -7,6 +7,7 @@ import 'package:chinese_classical_rec_sys/models/version.dart';
 
 class SettingsController extends ChangeNotifier {
   bool _darkMode = false;
+  bool _showTranslation = false;
   double _fontScale = 1.0;
   String _logLevel = 'INFO';
   String? _error;
@@ -16,6 +17,7 @@ class SettingsController extends ChangeNotifier {
   SharedPreferences? _prefs;
 
   bool get darkMode => _darkMode;
+  bool get showTranslation => _showTranslation;
   double get fontScale => _fontScale;
   String get logLevel => _logLevel;
   String? get error => _error;
@@ -25,6 +27,12 @@ class SettingsController extends ChangeNotifier {
   void setDarkMode(bool value) {
     _darkMode = value;
     _prefs?.setBool('darkMode', value);
+    notifyListeners();
+  }
+
+  void setShowTranslation(bool value) {
+    _showTranslation = value;
+    _prefs?.setBool('showTranslation', value);
     notifyListeners();
   }
 
@@ -70,6 +78,7 @@ class SettingsController extends ChangeNotifier {
     _bridge = bridge;
     _fontScale = prefs.getDouble('fontScale') ?? 1.0;
     _darkMode = prefs.getBool('darkMode') ?? false;
+    _showTranslation = prefs.getBool('showTranslation') ?? false;
     final savedLevel = prefs.getString('logLevel') ?? 'INFO';
     _logLevel = savedLevel;
     final cLevel = savedLevel.toLowerCase();

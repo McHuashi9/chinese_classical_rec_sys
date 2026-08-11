@@ -22,7 +22,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.8.2';
+  static const currentVersion = '0.9.0';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -133,7 +133,13 @@ class AppCoordinator {
     if (text == null) return false;
     final raw = _textRepo.getAnnotations(textId);
     final annotations = AnnotationParser.parse(raw);
-    readingCtrl.loadText(text, annotations: annotations);
+    final translation = _textRepo.getTranslation(textId);
+    readingCtrl.loadText(
+      text,
+      annotations: annotations,
+      translation: translation,
+      showTranslation: settingsCtrl.showTranslation,
+    );
     return true;
   }
 

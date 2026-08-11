@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/translation_builder.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
@@ -15,6 +16,8 @@ class ReadingController extends ChangeNotifier {
   Timer? _readingTimer;
   int? _readingTextId;
   Map<int, String> _annotations = {};
+  String _interleavedText = '';
+  bool _showTranslation = false;
 
   ReadingController(this._readTracker);
 
@@ -26,6 +29,14 @@ class ReadingController extends ChangeNotifier {
   bool get isReading => _readingText != null;
   int? get readingTextId => _readingTextId;
   Map<int, String> get annotations => _annotations;
+  bool get showTranslation => _showTranslation;
+
+  /// 阅读器内实时切换译文对照（不持久化，重分页由 ReadingFrame 检测）
+  void setShowTranslation(bool value) {
+    if (_showTranslation == value) return;
+    _showTranslation = value;
+    notifyListeners();
+  }
 
   String get formattedReadingTime {
     final m = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -43,7 +54,10 @@ class ReadingController extends ChangeNotifier {
   bool get hasUnrecordedReading =>
       _readTracker.hasUnrecordedReading(_readingTextId);
 
-  bool loadText(ChineseText text, {Map<int, String> annotations = const {}}) {
+  bool loadText(ChineseText text,
+      {Map<int, String> annotations = const {},
+      String translation = '',
+      bool showTranslation = false}) {
     final textId = text.id;
 
     if (_readingTextId != null) {
@@ -58,6 +72,11 @@ class ReadingController extends ChangeNotifier {
     _currentPage = 0;
     _pages = [];
     _annotations = annotations;
+    _interleavedText = translation.isEmpty
+        ? text.content
+        : TranslationBuilder.toInterleavedText(
+            TranslationBuilder.buildInterleaved(text.content, translation));
+    _showTranslation = showTranslation;
 
     _readTracker.ensureState(textId);
     _elapsedSeconds = 0;
@@ -69,7 +88,7 @@ class ReadingController extends ChangeNotifier {
 
   void paginate(double pageWidth, double pageHeight, ScreenSize screenSize, double fontScale) {
     if (_readingText == null) return;
-    final content = _readingText!.content;
+    final content = _showTranslation ? _interleavedText : _readingText!.content;
     if (content.isEmpty) {
       _pages = [];
       return;
@@ -148,6 +167,8 @@ class ReadingController extends ChangeNotifier {
     _currentPage = 0;
     _elapsedSeconds = 0;
     _annotations = {};
+    _interleavedText = '';
+    _showTranslation = false;
     _readingTimer?.cancel();
     _readingTimer = null;
     notifyListeners();

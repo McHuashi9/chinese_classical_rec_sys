@@ -26,6 +26,11 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target chinese_core -j$(nproc)
 
+      - name: Build and run C++ unit tests
+        run: |
+          cmake --build build --target run_tests -j$(nproc)
+          ./build/tests/run_tests
+
       - name: Cache Flutter dependencies
         uses: actions/cache@v4
         with:

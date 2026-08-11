@@ -39,6 +39,14 @@ class User {
   int get lastReadTime => ptr.ref.lastReadTime;
   set lastReadTime(int value) => ptr.ref.lastReadTime = value;
 
+  double get eta => ptr.ref.eta;
+  set eta(double value) => ptr.ref.eta = value;
+
+  int getQuizCount(int index) => ptr.ref.quizCounts[index];
+  void setQuizCount(int index, int value) {
+    ptr.ref.quizCounts[index] = value;
+  }
+
   double get averageAbility {
     double sum = 0;
     for (int i = 0; i < 10; i++) {

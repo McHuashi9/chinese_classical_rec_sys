@@ -75,10 +75,26 @@ public:
      */
     void setBaseAbility(int index, double value);
     double getBaseAbility(int index) const;
-    
+
+    /**
+     * @brief 悟性 η（论文§5.3）：初始 0.08，随答题表现动态调整，
+     * clip 在 [ETA_MIN, ETA_MAX]，影响阅读效应学习率 η(t) = η·(1-ū)^γ
+     */
+    void setEta(double value);
+    double getEta() const;
+
+    /**
+     * @brief 第 j 维累计答题次数 N_j(t)（论文§5.3 答题效应 K 因子分母）
+     */
+    void setQuizCount(int index, int value);
+    int getQuizCount(int index) const;
+    void incrementQuizCount(int index);
+
 private:
     std::array<double, 10> abilities;      // d1-d10 当前能力
     std::array<double, 10> baseAbilities;  // d1-d10 基础能力（遗忘极慢）
+    double eta;                            // 悟性 η（答题效应动态调整）
+    std::array<int, 10> quizCounts;        // d1-d10 累计答题次数 N_j
     time_t lastReadTime;                   // 最后阅读时间戳
 };
 

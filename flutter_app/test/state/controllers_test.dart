@@ -36,12 +36,19 @@ void main() {
     tearDown(() => ctrl.dispose());
 
     test('darkMode starts false', () => expect(ctrl.darkMode, false));
+    test('showTranslation starts false', () => expect(ctrl.showTranslation, false));
     test('fontScale starts 1.0', () => expect(ctrl.fontScale, 1.0));
     test('logLevel starts INFO', () => expect(ctrl.logLevel, 'INFO'));
     test('error starts null', () => expect(ctrl.error, null));
     test('setDarkMode toggles', () {
       ctrl.setDarkMode(true);
       expect(ctrl.darkMode, true);
+    });
+    test('setShowTranslation toggles', () {
+      ctrl.setShowTranslation(true);
+      expect(ctrl.showTranslation, true);
+      ctrl.setShowTranslation(false);
+      expect(ctrl.showTranslation, false);
     });
     test('setLogLevel updates', () {
       ctrl.setLogLevel('DEBUG');
@@ -86,6 +93,13 @@ void main() {
     test('hasUnrecordedReading is false', () => expect(ctrl.hasUnrecordedReading, false));
     test('stopTimer is safe when not reading', () => ctrl.stopTimer());
     test('discardReading is safe', () => ctrl.discardReading());
+    test('showTranslation starts false', () => expect(ctrl.showTranslation, false));
+    test('setShowTranslation toggles', () {
+      ctrl.setShowTranslation(true);
+      expect(ctrl.showTranslation, true);
+      ctrl.setShowTranslation(false);
+      expect(ctrl.showTranslation, false);
+    });
     test('startTimer/stopTimer/pauseTimer/resumeTimer are safe', () {
       ctrl.startTimer();
       ctrl.pauseTimer();
@@ -188,6 +202,41 @@ void main() {
           ctrl.prevPage();
         }
         expect(ctrl.currentPage, 0);
+      });
+    });
+
+    testWidgets('loadText 无译文时 showTranslation 开关不影响分页内容', (tester) async {
+      withCleanup(() {
+        const text = ChineseText(
+          id: 5, title: 'no-trans', author: 'a', dynasty: '唐',
+          content: '原文内容\n\n第二段',
+        );
+        ctrl.loadText(text);
+        ctrl.setShowTranslation(true);
+        expect(ctrl.showTranslation, true);
+      });
+    });
+
+    testWidgets('loadText 带译文默认不显示，开关后分页源切换为交错文本', (tester) async {
+      withCleanup(() {
+        const text = ChineseText(
+          id: 6, title: 'trans', author: 'a', dynasty: '唐',
+          content: '原文一\n\n原文二',
+        );
+        ctrl.loadText(
+          text,
+          translation: '译文一\n\n译文二',
+          showTranslation: false,
+        );
+        expect(ctrl.showTranslation, false);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        expect(ctrl.pages.join('\n'), isNot(contains('\u200B')));
+
+        ctrl.setShowTranslation(true);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        final joined = ctrl.pages.join('\n');
+        expect(joined, contains('\u200B译文一\u200B'));
+        expect(joined, contains('原文一'));
       });
     });
   });

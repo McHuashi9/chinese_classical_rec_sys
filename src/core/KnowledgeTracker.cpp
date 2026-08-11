@@ -15,7 +15,7 @@ double KnowledgeTracker::gaussian(double x) const {
 }
 
 double KnowledgeTracker::calculateDynamicLearningRate(double avgAbility) const {
-    return math_utils::calculateDynamicLearningRate(avgAbility);
+    return math_utils::calculateDynamicLearningRate(avgAbility, Config::ETA);
 }
 
 double KnowledgeTracker::calculateLearningGain(double d_j, double u_j) const {
@@ -46,9 +46,9 @@ void KnowledgeTracker::applyReadEffect(User& user, const Text& text, double read
         timestamp = std::time(nullptr);
     }
     
-    // 计算动态学习率 η(t)
+    // 计算动态学习率 η(t) = η·(1-ū)^γ（η 为悟性，随答题动态调整）
     double avgAbility = user.getAverageAbility();
-    double eta_t = calculateDynamicLearningRate(avgAbility);
+    double eta_t = math_utils::calculateDynamicLearningRate(avgAbility, user.getEta());
     
     LOG_DEBUG("知识追踪触发: 文章ID={}, 阅读时间={:.1f}s, 平均能力={:.3f}, 动态学习率={:.4f}",
               text.getId(), readTime, avgAbility, eta_t);
@@ -78,6 +78,63 @@ void KnowledgeTracker::applyReadEffect(User& user, const Text& text, double read
     }
     
     LOG_DEBUG("知识追踪完成: 更新后平均能力={:.3f}", user.getAverageAbility());
+}
+
+void KnowledgeTracker::applyQuizEffect(User& user, const Text& text,
+                                       const std::vector<int>& dims, int correct,
+                                       time_t timestamp) {
+    if (dims.empty()) {
+        LOG_WARN("答题效应: dims 为空，跳过");
+        return;
+    }
+    if (timestamp == 0) {
+        timestamp = std::time(nullptr);
+    }
+    const double s = (correct != 0) ? 1.0 : 0.0;
+    auto features = FeatureExtractor::getNormalizedFeatures(text);
+    double sumError = 0.0;
+    int applied = 0;
+
+    for (int j : dims) {
+        if (j < 0 || j >= 10) {
+            LOG_WARN("答题效应: 维度越界 {}", j);
+            continue;
+        }
+        double u_j = user.getAbility(j);
+        double d_j = features[j];
+        int n_j = user.getQuizCount(j);
+
+        // 论文§5.3: E[s_j] = sigmoid(β·(u_j - d̂_j))
+        double e = math_utils::expectedAccuracy(u_j, d_j);
+        // K_j(t) = max(K_min, K_0/(1 + λ_K·N_j))（用答题前 N_j）
+        double k_j = math_utils::quizLearningRate(n_j);
+        // Δu_j = K_j(t)·(s - E[s_j])
+        double delta = k_j * (s - e);
+
+        double newAbility = std::clamp(u_j + delta, 0.0, 1.0);
+        user.setAbility(j, newAbility);
+
+        sumError += (s - e);
+        applied++;
+
+        // 累计答题次数自增（答对答错都计）
+        user.incrementQuizCount(j);
+
+        // 记录增量（答题增量可为负——答错真实拉低能力，负数也入库）
+        if (incrementRepo && std::abs(delta) > Config::MIN_DELTA_THRESHOLD) {
+            incrementRepo->addIncrement(1, j + 1, delta, timestamp, "quiz");
+        }
+    }
+
+    // 悟性动态调整（每题一次，按 dims 平均误差）：η ← clip(η + α_η·mean(s-E[s_j]), η_min, η_max)
+    if (applied > 0) {
+        user.setEta(user.getEta() + Config::ALPHA_ETA * (sumError / applied));
+    }
+
+    std::string dimStr;
+    for (int j : dims) dimStr += std::to_string(j) + " ";
+    LOG_DEBUG("答题效应完成: dims=[{}], s={}, 更新后平均能力={:.3f}, η={:.3f}",
+              dimStr, s, user.getAverageAbility(), user.getEta());
 }
 
 double KnowledgeTracker::calculateCurrentAbility(const User& user, int dimension,
@@ -175,9 +232,9 @@ int KnowledgeTracker::pruneOldIncrements(User& user, time_t currentTime) const {
         }
     }
     
-    // 更新基础能力
+    // 更新基础能力（负增量也合并——quiz 答错拉低能力同样会被遗忘吸收）
     for (int j = 0; j < 10; j++) {
-        if (baseAbilityAdditions[j] > 0) {
+        if (baseAbilityAdditions[j] != 0.0) {
             double newBase = user.getBaseAbility(j) + baseAbilityAdditions[j];
             user.setBaseAbility(j, std::clamp(newBase, 0.0, 1.0));
         }

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:ffi';
 
 /// C UserData struct — matches bridge/c_types.h
-/// 10维能力向量 + 基础能力 + 最近阅读时间
+/// 10维能力向量 + 基础能力 + 悟性 η + 累计答题次数 + 最近阅读时间
 @Packed(1)
 final class UserData extends Struct {
   @Array(10)
@@ -10,6 +10,12 @@ final class UserData extends Struct {
 
   @Array(10)
   external Array<Double> baseAbilities;
+
+  @Double()
+  external double eta;
+
+  @Array(10)
+  external Array<Int32> quizCounts;
 
   @Int64()
   external int lastReadTime;
@@ -79,6 +85,31 @@ final class ReadingRecordData extends Struct {
 
   @Int64()
   external int timestamp;
+}
+
+/// C QuestionData struct — 题目（不含 answer_index，判题只在 C++ 侧）
+@Packed(1)
+final class QuestionData extends Struct {
+  @Int32()
+  external int id;
+
+  @Array(16)
+  external Array<Uint8> qType;
+
+  @Array(1024)
+  external Array<Uint8> stem;
+
+  @Array(4 * 512)
+  external Array<Uint8> options;
+
+  @Array(64)
+  external Array<Uint8> dims;
+
+  @Array(2048)
+  external Array<Uint8> explanation;
+
+  @Double()
+  external double difficulty;
 }
 
 /// C 错误码

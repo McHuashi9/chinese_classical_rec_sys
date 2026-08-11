@@ -689,21 +689,6 @@
     "f12_allusion_density": 0.086022,
     "f13_semantic_complexity": 0.0
   },
-  "后二十九日复上宰相书": {
-    "f1_avg_sentence_length": 22.64,
-    "f2_char_count": 566,
-    "f3_sentence_count": 25,
-    "f4_total_words": 544,
-    "f5_function_word_ratio": 0.0645,
-    "f6_avg_char_log_freq": -2.8164,
-    "f7_rare_char_density": 0.0565,
-    "f8_tongjiazi_density": 0.001767,
-    "f9_ppl_ancient": 36.16,
-    "f10_ppl_modern": 110.84,
-    "f11_mattr": 0.8314,
-    "f12_allusion_density": 0.067138,
-    "f13_semantic_complexity": 0.007937
-  },
   "后出师表": {
     "f1_avg_sentence_length": 21.76,
     "f2_char_count": 631,
@@ -2999,21 +2984,6 @@
     "f12_allusion_density": 0.01005,
     "f13_semantic_complexity": 0.0
   },
-  "钴潭西小丘记": {
-    "f1_avg_sentence_length": 17.05,
-    "f2_char_count": 341,
-    "f3_sentence_count": 20,
-    "f4_total_words": 334,
-    "f5_function_word_ratio": 0.0287,
-    "f6_avg_char_log_freq": -3.0096,
-    "f7_rare_char_density": 0.1068,
-    "f8_tongjiazi_density": 0.0,
-    "f9_ppl_ancient": 59.0,
-    "f10_ppl_modern": 200.4,
-    "f11_mattr": 0.8845,
-    "f12_allusion_density": 0.011869,
-    "f13_semantic_complexity": 0.014925
-  },
   "阅江楼记": {
     "f1_avg_sentence_length": 20.61,
     "f2_char_count": 577,
@@ -4018,5 +3988,35 @@
     "f11_mattr": 0.8525,
     "f12_allusion_density": 0.0,
     "f13_semantic_complexity": 0.017544
+  },
+  "后廿九日复上宰相书": {
+    "f1_avg_sentence_length": 22.64,
+    "f2_char_count": 566,
+    "f3_sentence_count": 25,
+    "f4_total_words": 544,
+    "f5_function_word_ratio": 0.0645,
+    "f6_avg_char_log_freq": -2.8164,
+    "f7_rare_char_density": 0.0565,
+    "f8_tongjiazi_density": 0.001767,
+    "f9_ppl_ancient": 36.16,
+    "f10_ppl_modern": 110.84,
+    "f11_mattr": 0.8314,
+    "f12_allusion_density": 0.067138,
+    "f13_semantic_complexity": 0.007937
+  },
+  "钴鉧潭西小丘记": {
+    "f1_avg_sentence_length": 17.05,
+    "f2_char_count": 341,
+    "f3_sentence_count": 20,
+    "f4_total_words": 334,
+    "f5_function_word_ratio": 0.0287,
+    "f6_avg_char_log_freq": -3.0096,
+    "f7_rare_char_density": 0.1068,
+    "f8_tongjiazi_density": 0.0,
+    "f9_ppl_ancient": 59.0,
+    "f10_ppl_modern": 200.4,
+    "f11_mattr": 0.8845,
+    "f12_allusion_density": 0.011869,
+    "f13_semantic_complexity": 0.014925
   }
 }

@@ -47,6 +47,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAppearanceCard(
       BuildContext context, bool isDark, double fontScale) {
     final settingsCtrl = context.read<SettingsController>();
+    final showTranslation =
+        context.select((SettingsController s) => s.showTranslation);
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -66,6 +68,13 @@ class _SettingsPageState extends State<SettingsPage> {
               secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
               value: isDark,
               onChanged: (v) => settingsCtrl.setDarkMode(v),
+              contentPadding: EdgeInsets.zero,
+            ),
+            SwitchListTile(
+              title: const Text('阅读默认显示译文'),
+              secondary: const Icon(Icons.translate),
+              value: showTranslation,
+              onChanged: (v) => settingsCtrl.setShowTranslation(v),
               contentPadding: EdgeInsets.zero,
             ),
             SizedBox(height: context.gapMedium),

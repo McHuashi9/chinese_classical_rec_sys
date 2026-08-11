@@ -9,6 +9,7 @@ class ChineseText {
   final String content;
   final int charCount;
   final List<double> difficulties;
+  final String translation;
 
   const ChineseText({
     required this.id,
@@ -20,6 +21,7 @@ class ChineseText {
     this.content = '',
     this.charCount = 0,
     this.difficulties = const [],
+    this.translation = '',
   });
 
   /// 从 C [TextInfo] 创建摘要视图 (不含全文内容)

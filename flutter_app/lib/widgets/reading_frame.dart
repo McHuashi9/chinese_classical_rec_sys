@@ -43,6 +43,9 @@ class _ReadingFrameState extends State<ReadingFrame> {
     if (oldWidget.viewData.currentPage != widget.viewData.currentPage) {
       _dismissAnnotation();
     }
+    if (oldWidget.viewData.showTranslation != widget.viewData.showTranslation) {
+      _needsPaginate = true;
+    }
   }
 
   void _dismissAnnotation() {
@@ -201,7 +204,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final needsIt = (_needsPaginate && widget.viewData.pages.isEmpty)
+        final needsIt = _needsPaginate
             || (constraints.biggest != _frameSize && constraints.biggest != Size.zero);
         if (needsIt) {
           _needsPaginate = false;
@@ -243,6 +246,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
                             AnnotatedTextBuilder.build(
                               current, widget.viewData.annotations,
                               bodyStyle.copyWith(color: textColor),
+                              isDark: widget.viewData.isDark,
                             ),
                             key: _textKey,
                           ),
@@ -274,6 +278,22 @@ class _ReadingFrameState extends State<ReadingFrame> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        IconButton(
+          tooltip: '译文对照',
+          onPressed: widget.viewData.onToggleTranslation,
+          visualDensity: VisualDensity.compact,
+          icon: Icon(
+            Icons.translate,
+            size: 20,
+            color: widget.viewData.showTranslation
+                ? (widget.viewData.isDark
+                    ? AppTheme.darkVermilion
+                    : AppTheme.vermilion)
+                : (widget.viewData.isDark
+                    ? AppTheme.darkInkSecondary
+                    : AppTheme.inkSecondary),
+          ),
+        ),
         if (!widget.viewData.alreadyTracked)
           TextButton(
             onPressed: widget.viewData.onAbandon,

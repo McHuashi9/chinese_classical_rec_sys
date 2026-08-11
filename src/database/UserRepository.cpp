@@ -34,6 +34,17 @@ bool UserRepository::initTable() {
         "d8_base_ability REAL DEFAULT 0.0, "  // d8 基础能力
         "d9_base_ability REAL DEFAULT 0.0, "  // d9 基础能力
         "d10_base_ability REAL DEFAULT 0.0, " // d10 基础能力
+        "eta REAL DEFAULT 0.08, "            // 悟性（答题效应动态调整）
+        "d1_quiz_count INTEGER DEFAULT 0, "
+        "d2_quiz_count INTEGER DEFAULT 0, "
+        "d3_quiz_count INTEGER DEFAULT 0, "
+        "d4_quiz_count INTEGER DEFAULT 0, "
+        "d5_quiz_count INTEGER DEFAULT 0, "
+        "d6_quiz_count INTEGER DEFAULT 0, "
+        "d7_quiz_count INTEGER DEFAULT 0, "
+        "d8_quiz_count INTEGER DEFAULT 0, "
+        "d9_quiz_count INTEGER DEFAULT 0, "
+        "d10_quiz_count INTEGER DEFAULT 0, "
         "last_read_time INTEGER DEFAULT 0"  // 最后阅读时间戳
         ");";
     
@@ -66,6 +77,24 @@ bool UserRepository::initTable() {
     };
     
     for (const char* migrate : baseAbilityMigrations) {
+        db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
+    }
+    
+    // 迁移：悟性 η 与累计答题次数 N_j（答题效应，论文§5.3）
+    const char* quizMigrations[] = {
+        "ALTER TABLE user ADD COLUMN eta REAL DEFAULT 0.08;",
+        "ALTER TABLE user ADD COLUMN d1_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d2_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d3_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d4_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d5_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d6_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d7_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d8_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d9_quiz_count INTEGER DEFAULT 0;",
+        "ALTER TABLE user ADD COLUMN d10_quiz_count INTEGER DEFAULT 0;"
+    };
+    for (const char* migrate : quizMigrations) {
         db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
     }
     
@@ -103,6 +132,17 @@ static int getUserCallback(void* data, int argc, char** argv, char** azColName) 
         {"d8_base_ability", [](User* u, const char* v) { u->setBaseAbility(7, std::atof(v)); }},
         {"d9_base_ability", [](User* u, const char* v) { u->setBaseAbility(8, std::atof(v)); }},
         {"d10_base_ability", [](User* u, const char* v) { u->setBaseAbility(9, std::atof(v)); }},
+        {"eta", [](User* u, const char* v) { u->setEta(std::atof(v)); }},
+        {"d1_quiz_count", [](User* u, const char* v) { u->setQuizCount(0, std::atoi(v)); }},
+        {"d2_quiz_count", [](User* u, const char* v) { u->setQuizCount(1, std::atoi(v)); }},
+        {"d3_quiz_count", [](User* u, const char* v) { u->setQuizCount(2, std::atoi(v)); }},
+        {"d4_quiz_count", [](User* u, const char* v) { u->setQuizCount(3, std::atoi(v)); }},
+        {"d5_quiz_count", [](User* u, const char* v) { u->setQuizCount(4, std::atoi(v)); }},
+        {"d6_quiz_count", [](User* u, const char* v) { u->setQuizCount(5, std::atoi(v)); }},
+        {"d7_quiz_count", [](User* u, const char* v) { u->setQuizCount(6, std::atoi(v)); }},
+        {"d8_quiz_count", [](User* u, const char* v) { u->setQuizCount(7, std::atoi(v)); }},
+        {"d9_quiz_count", [](User* u, const char* v) { u->setQuizCount(8, std::atoi(v)); }},
+        {"d10_quiz_count", [](User* u, const char* v) { u->setQuizCount(9, std::atoi(v)); }},
         {"last_read_time", [](User* u, const char* v) { u->setLastReadTime(static_cast<time_t>(std::atol(v))); }}
     };
     
@@ -127,7 +167,10 @@ bool UserRepository::getUser(User& user) {
                       "d5_ability, d6_ability, d7_ability, d8_ability, d9_ability, d10_ability, "
                       "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
                       "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
-                      "d9_base_ability, d10_base_ability, last_read_time "
+                      "d9_base_ability, d10_base_ability, eta, "
+                      "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
+                      "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
+                      "last_read_time "
                       "FROM user WHERE id = 1;";
     char* errMsg = nullptr;
 
@@ -153,6 +196,10 @@ bool UserRepository::saveUser(const User& user) {
         for (int i = 0; i < 10; ++i) {
             p.push_back(user.getBaseAbility(i));
         }
+        p.push_back(user.getEta());
+        for (int i = 0; i < 10; ++i) {
+            p.push_back(user.getQuizCount(i));
+        }
         p.push_back(static_cast<double>(user.getLastReadTime()));
         return p;
     };
@@ -163,20 +210,27 @@ bool UserRepository::saveUser(const User& user) {
     params.insert(params.end(), userParams.begin(), userParams.end());
     
     return db->executeSQL(
-        "INSERT INTO user (id, "
+"INSERT INTO user (id, "
         "d1_ability, d2_ability, d3_ability, d4_ability, d5_ability, d6_ability, "
         "d7_ability, d8_ability, d9_ability, d10_ability, "
         "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
         "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
-        "d9_base_ability, d10_base_ability, last_read_time) "
-        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "d9_base_ability, d10_base_ability, eta, "
+        "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
+        "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
+        "last_read_time) "
+        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(id) DO UPDATE SET "
         "d1_ability = ?, d2_ability = ?, d3_ability = ?, d4_ability = ?, "
         "d5_ability = ?, d6_ability = ?, d7_ability = ?, d8_ability = ?, "
         "d9_ability = ?, d10_ability = ?, "
         "d1_base_ability = ?, d2_base_ability = ?, d3_base_ability = ?, d4_base_ability = ?, "
         "d5_base_ability = ?, d6_base_ability = ?, d7_base_ability = ?, d8_base_ability = ?, "
-        "d9_base_ability = ?, d10_base_ability = ?, "
+        "d9_base_ability = ?, d10_base_ability = ?, eta = ?, "
+        "d1_quiz_count = ?, d2_quiz_count = ?, d3_quiz_count = ?, d4_quiz_count = ?, "
+        "d5_quiz_count = ?, d6_quiz_count = ?, d7_quiz_count = ?, d8_quiz_count = ?, "
+        "d9_quiz_count = ?, d10_quiz_count = ?, "
         "last_read_time = ?;",
         params
     );

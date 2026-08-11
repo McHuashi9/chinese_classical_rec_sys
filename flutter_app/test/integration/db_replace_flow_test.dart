@@ -3,6 +3,7 @@
 //
 // 依赖：需先构建核心（`cmake --build build --target chinese_core` 或 run_tests）。
 // 未找到 .so 时自动跳过（CI 的 Windows/Android/iOS 作业无 Linux 产物，不挂 CI）。
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -142,6 +143,57 @@ void main() {
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
       _expectUserBase(b, 0.8);
+    });
+  });
+
+  group('text_get_translation FFI 集成（需本机核心产物）', () {
+    late Directory work;
+
+    setUp(() {
+      if (bridge == null) {
+        markTestSkipped(
+            '未找到 libchinese_core.so，先执行 cmake --build build（CI 非 Linux 作业自动跳过）');
+        return;
+      }
+      work = Directory.systemTemp.createTempSync('translation_it');
+    });
+
+    tearDown(() {
+      bridge?.dbClose();
+      try {
+        work.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('真实资产库返回非空译文', () {
+      final b = bridge!;
+      final db = '${work.path}/classical.db';
+      _copyAssetDb(db);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+
+      final out = calloc<Uint8>(65536);
+      final rc = b.textGetTranslation(1, out.cast<Utf8>(), 65536);
+      expect(rc, BridgeError.ok);
+
+      final bytes = <int>[];
+      for (int i = 0; i < 65536; i++) {
+        if (out[i] == 0) break;
+        bytes.add(out[i]);
+      }
+      calloc.free(out);
+      expect(utf8.decode(bytes), isNotEmpty);
+    });
+
+    test('不存在 id 返回 BRIDGE_ERR_TEXT', () {
+      final b = bridge!;
+      final db = '${work.path}/classical.db';
+      _copyAssetDb(db);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+
+      final out = calloc<Uint8>(1024);
+      final rc = b.textGetTranslation(999999, out.cast<Utf8>(), 1024);
+      calloc.free(out);
+      expect(rc, BridgeError.errText);
     });
   });
 }

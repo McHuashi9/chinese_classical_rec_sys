@@ -18,6 +18,8 @@ extern "C" {
 typedef struct {
     double abilities[10];        ///< d1-d10 当前能力值 [0, 1]
     double base_abilities[10];   ///< d1-d10 基础能力值 (遗忘极慢)
+    double eta;                  ///< 悟性 η（答题效应动态调整，[0.02, 0.15]）
+    int quiz_counts[10];         ///< d1-d10 累计答题次数 N_j
     int64_t last_read_time;      ///< 最后阅读时间 (Unix 时间戳)
 } UserData;
 
@@ -56,6 +58,19 @@ typedef struct {
     double read_time;
     int64_t timestamp;
 } ReadingRecordData;
+
+/**
+ * @brief C ABI 题目结构（出题用，不下发 answer_index —— 判题只在 C++ 侧）
+ */
+typedef struct {
+    int id;                       ///< 题 id（tracker_apply_quiz 判题用）
+    char q_type[16];              ///< 题型 (shici / tongjia / fanyi)
+    char stem[1024];              ///< 题干 (UTF-8)
+    char options[4][512];         ///< 4 个选项 (UTF-8)
+    char dims[64];                ///< dims CSV（0-based，如 "3,4,9"）
+    char explanation[2048];       ///< 解析 (UTF-8，答完后展示)
+    double difficulty;            ///< 题目难度 D_q
+} QuestionData;
 
 /**
  * @brief 错误码
