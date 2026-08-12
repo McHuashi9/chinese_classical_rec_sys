@@ -407,6 +407,7 @@ class _ReadHubPageState extends State<ReadHubPage>
         w.toDouble(), h.toDouble(),
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
         settingsCtrl.fontScale,
+        isDark,
       ),
       onNextPage: readingCtrl.nextPage,
       onPrevPage: readingCtrl.prevPage,

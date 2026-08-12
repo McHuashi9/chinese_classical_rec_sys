@@ -153,6 +153,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
   @override
   Widget build(BuildContext context) {
     final fontScale = context.select((SettingsController s) => s.fontScale);
+    final showRuledLines =
+        context.select((SettingsController s) => s.showRuledLines);
     if (fontScale != _lastFontScale) {
       _lastFontScale = fontScale;
       _needsPaginate = true;
@@ -187,7 +189,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
                 maxLines: 1),
             SizedBox(height: context.gapLg),
             Expanded(
-                child: _buildReadingFrame(context, framePadding, fontScale)),
+                child: _buildReadingFrame(
+                    context, framePadding, fontScale, showRuledLines)),
             SizedBox(height: context.cardPaddingV),
             _buildNavigationBar(context),
           ],
@@ -196,7 +199,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
     );
   }
 
-  Widget _buildReadingFrame(BuildContext context, double framePadding, double fontScale) {
+  Widget _buildReadingFrame(BuildContext context, double framePadding,
+      double fontScale, bool showRuledLines) {
     final bgColor = widget.viewData.isDark ? AppTheme.darkCard : AppTheme.cardBg;
     final bodyStyle = AppTheme.bodyReadingSize(
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
@@ -215,6 +219,12 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
         final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
         final textColor = widget.viewData.isDark ? AppTheme.darkInk : AppTheme.ink;
+        final textSpan = AnnotatedTextBuilder.build(
+          current,
+          widget.viewData.annotations,
+          bodyStyle.copyWith(color: textColor),
+          isDark: widget.viewData.isDark,
+        );
 
         return Container(
           decoration: BoxDecoration(
@@ -228,26 +238,23 @@ class _ReadingFrameState extends State<ReadingFrame> {
                 ? GestureDetector(
                     onTapUp: _handleTextTap,
                     child: CustomPaint(
-                      painter: _TextRuledPainter(
-                        content: current,
-                        style: bodyStyle,
-                        maxWidth: constraints.maxWidth - framePadding * 2,
-                        lineColor: widget.viewData.isDark
-                            ? AppTheme.borderLight.withAlpha(60)
-                            : AppTheme.borderLight,
-                        padding: framePadding,
-                      ),
+                      painter: showRuledLines
+                          ? _TextRuledPainter(
+                              textSpan: textSpan,
+                              maxWidth: constraints.maxWidth - framePadding * 2,
+                              lineColor: widget.viewData.isDark
+                                  ? AppTheme.borderLight.withAlpha(60)
+                                  : AppTheme.borderLight,
+                              padding: framePadding,
+                            )
+                          : null,
                       child: Padding(
                         padding: EdgeInsets.all(framePadding),
                         child: SizedBox(
                           width: double.infinity,
                           height: double.infinity,
                           child: Text.rich(
-                            AnnotatedTextBuilder.build(
-                              current, widget.viewData.annotations,
-                              bodyStyle.copyWith(color: textColor),
-                              isDark: widget.viewData.isDark,
-                            ),
+                            textSpan,
                             key: _textKey,
                           ),
                         ),
@@ -330,15 +337,13 @@ class _ReadingFrameState extends State<ReadingFrame> {
 }
 
 class _TextRuledPainter extends CustomPainter {
-  final String content;
-  final TextStyle style;
+  final TextSpan textSpan;
   final double maxWidth;
   final Color lineColor;
   final double padding;
 
   _TextRuledPainter({
-    required this.content,
-    required this.style,
+    required this.textSpan,
     required this.maxWidth,
     required this.lineColor,
     required this.padding,
@@ -346,10 +351,10 @@ class _TextRuledPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (content.isEmpty) return;
+    if (textSpan.toPlainText().isEmpty) return;
 
     final tp = TextPainter(
-      text: TextSpan(text: content, style: style),
+      text: textSpan,
       textDirection: TextDirection.ltr,
     );
     tp.layout(maxWidth: maxWidth);
@@ -368,9 +373,8 @@ class _TextRuledPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TextRuledPainter oldDelegate) =>
-      oldDelegate.content != content ||
+      oldDelegate.textSpan != textSpan ||
       oldDelegate.maxWidth != maxWidth ||
       oldDelegate.lineColor != lineColor ||
-      oldDelegate.padding != padding ||
-      oldDelegate.style != style;
+      oldDelegate.padding != padding;
 }

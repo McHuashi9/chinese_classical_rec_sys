@@ -49,6 +49,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final settingsCtrl = context.read<SettingsController>();
     final showTranslation =
         context.select((SettingsController s) => s.showTranslation);
+    final showRuledLines =
+        context.select((SettingsController s) => s.showRuledLines);
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -75,6 +77,13 @@ class _SettingsPageState extends State<SettingsPage> {
               secondary: const Icon(Icons.translate),
               value: showTranslation,
               onChanged: (v) => settingsCtrl.setShowTranslation(v),
+              contentPadding: EdgeInsets.zero,
+            ),
+            SwitchListTile(
+              title: const Text('阅读显示格线'),
+              secondary: const Icon(Icons.notes),
+              value: showRuledLines,
+              onChanged: (v) => settingsCtrl.setShowRuledLines(v),
               contentPadding: EdgeInsets.zero,
             ),
             SizedBox(height: context.gapMedium),

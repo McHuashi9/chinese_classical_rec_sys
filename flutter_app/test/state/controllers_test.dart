@@ -121,7 +121,7 @@ void main() {
           id: 1, title: 't', author: 'a', dynasty: '唐',
         );
         ctrl.loadText(text);
-        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0, false);
         expect(ctrl.pages, isEmpty);
         expect(ctrl.totalPages, 0);
       });
@@ -134,7 +134,7 @@ void main() {
           content: 'Hello World',
         );
         ctrl.loadText(text);
-        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0, false);
         expect(ctrl.pages.length, 1);
         expect(ctrl.currentPage, 0);
         expect(ctrl.totalPages, 1);
@@ -152,7 +152,7 @@ void main() {
           content: longContent,
         );
         ctrl.loadText(text);
-        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0, false);
         expect(ctrl.pages.length, greaterThan(1));
         expect(ctrl.totalPages, greaterThan(1));
       });
@@ -166,7 +166,7 @@ void main() {
           content: longContent,
         );
         ctrl.loadText(text);
-        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0, false);
         expect(ctrl.currentPage, 0);
 
         ctrl.nextPage();
@@ -191,7 +191,7 @@ void main() {
           content: longContent,
         );
         ctrl.loadText(text);
-        ctrl.paginate(200, 100, ScreenSize.medium, 1.0);
+        ctrl.paginate(200, 100, ScreenSize.medium, 1.0, false);
         final last = ctrl.totalPages - 1;
         for (int i = 0; i < last + 5; i++) {
           ctrl.nextPage();
@@ -229,11 +229,11 @@ void main() {
           showTranslation: false,
         );
         expect(ctrl.showTranslation, false);
-        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0, false);
         expect(ctrl.pages.join('\n'), isNot(contains('\u200B')));
 
         ctrl.setShowTranslation(true);
-        ctrl.paginate(400, 600, ScreenSize.medium, 1.0);
+        ctrl.paginate(400, 600, ScreenSize.medium, 1.0, false);
         final joined = ctrl.pages.join('\n');
         expect(joined, contains('\u200B译文一\u200B'));
         expect(joined, contains('原文一'));

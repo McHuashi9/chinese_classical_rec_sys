@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-12
+
+### Added
+
+- **阅读格线开关**：设置页新增"阅读显示格线"开关，可关闭阅读页的稿纸横线，只看纯文字；重启后保持。
+
+### Fixed
+
+- **译文对照时格线对齐修复**：开启译文对照后，阅读页稿纸横线偶尔与正文错位、越往下越明显。现在格线严格贴着每行正文绘制，与注释角标、译文小字混排时也不再偏移。
+
 ## [0.9.0] - 2026-08-11
 
 ### Added
@@ -297,3 +307,4 @@ C++ CLI 原型。
 [0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1
 [0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
 [0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
+[0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1

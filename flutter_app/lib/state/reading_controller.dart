@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/translation_builder.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
@@ -86,7 +87,8 @@ class ReadingController extends ChangeNotifier {
     return true;
   }
 
-  void paginate(double pageWidth, double pageHeight, ScreenSize screenSize, double fontScale) {
+  void paginate(double pageWidth, double pageHeight, ScreenSize screenSize,
+      double fontScale, bool isDark) {
     if (_readingText == null) return;
     final content = _showTranslation ? _interleavedText : _readingText!.content;
     if (content.isEmpty) {
@@ -96,7 +98,8 @@ class ReadingController extends ChangeNotifier {
 
     final bodyStyle = AppTheme.bodyReadingSize(screenSize, fontScale);
     final tp = TextPainter(
-      text: TextSpan(text: content, style: bodyStyle),
+      text: AnnotatedTextBuilder.build(
+          content, _annotations, bodyStyle, isDark: isDark),
       textDirection: TextDirection.ltr,
     );
     tp.layout(maxWidth: pageWidth);
