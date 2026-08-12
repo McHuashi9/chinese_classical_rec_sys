@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
 import 'package:chinese_classical_rec_sys/pages/my_page.dart';
 import 'package:chinese_classical_rec_sys/pages/read_hub_page.dart';
+import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 Widget _wrap(Widget child) {
   final navCtrl = NavigationController();
@@ -75,24 +76,42 @@ void main() {
         readTracker: readTracker,
       );
       await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: navCtrl),
-            ChangeNotifierProvider.value(value: settingsCtrl),
-            ChangeNotifierProvider.value(value: readingCtrl),
-            ChangeNotifierProvider.value(value: userCtrl),
-            Provider.value(value: coord),
-          ],
-          child: MaterialApp(
-            themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
-            home: const Scaffold(body: SettingsPage()),
+        ListenableBuilder(
+          listenable: settingsCtrl,
+          builder: (context, _) => MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: navCtrl),
+              ChangeNotifierProvider.value(value: settingsCtrl),
+              ChangeNotifierProvider.value(value: readingCtrl),
+              ChangeNotifierProvider.value(value: userCtrl),
+              Provider.value(value: coord),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.lightTheme(ScreenSize.medium, 1.0),
+              darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0),
+              themeMode:
+                  settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+              home: const Scaffold(body: SettingsPage()),
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(settingsCtrl.darkMode, false);
-      expect(find.text('暗色模式'), findsOneWidget);
+      expect(
+        Theme.of(tester.element(find.text('设置'))).brightness,
+        Brightness.light,
+      );
+
+      await tester.tap(find.text('暗色模式'));
+      await tester.pumpAndSettle();
+
+      expect(settingsCtrl.darkMode, true);
+      expect(
+        Theme.of(tester.element(find.text('设置'))).brightness,
+        Brightness.dark,
+      );
     });
   });
 

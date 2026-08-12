@@ -1,5 +1,6 @@
 # 构建与本地环境
 /build/
+/build-cov/
 /CMakeFiles/
 /venv/
 /.ruff_cache/

@@ -22,7 +22,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.9.1';
+  static const currentVersion = '0.9.2';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -186,7 +186,7 @@ class AppCoordinator {
   ReadingStats getReadingStats() {
     final cache = _cachedStats;
     if (cache != null && _statsGeneration == _statsEpoch) return cache;
-    _cachedStats = history.computeStats(history.getRecent(9999));
+    _cachedStats = HistoryService.computeStats(history.getRecent(9999));
     _statsEpoch = _statsGeneration;
     return _cachedStats!;
   }

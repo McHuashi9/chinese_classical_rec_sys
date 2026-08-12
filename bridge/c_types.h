@@ -70,6 +70,9 @@ typedef struct {
     char dims[64];                ///< dims CSV（0-based，如 "3,4,9"）
     char explanation[2048];       ///< 解析 (UTF-8，答完后展示)
     double difficulty;            ///< 题目难度 D_q
+    char context[1024];           ///< 划线词所在原句 (UTF-8，空串表示无)
+    int mark_start;               ///< 划线区间起点（context 内下标，无则 -1）
+    int mark_len;                 ///< 划线区间长度（无则 0）
 } QuestionData;
 
 /**

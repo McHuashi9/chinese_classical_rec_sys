@@ -287,3 +287,87 @@ TEST_CASE_METHOD(KTFixture, "applyQuizEffect", "[tracker][quiz]") {
         REQUIRE(user.getEta() <= Config::ETA_MAX);
     }
 }
+
+// =============================================================================
+// 跨效应状态流：read → quiz → forgetting → prune 连续多步
+// =============================================================================
+
+TEST_CASE_METHOD(KTFixture, "跨效应状态流：主链 read→quiz对→forgetting→prune", "[tracker][quiz]") {
+    const std::vector<int> dims = {3, 4, 9};
+
+    // 预计算期望值（与各单测同一公式，验证跨效应叠加）
+    const double u0 = 0.3;
+    const double eta_t = 0.08 * std::pow(1.0 - u0, 1.5);
+    const double g3 = std::exp(-((0.5 - u0) - Config::DELTA_STAR) *
+                               ((0.5 - u0) - Config::DELTA_STAR) /
+                               (2 * Config::SIGMA * Config::SIGMA));
+    const double readDelta3 = eta_t * g3 * (1.0 - u0);
+    const double uAfterRead3 = u0 + readDelta3;
+    const double e3 = 1.0 / (1.0 + std::exp(-Config::QUIZ_BETA * (uAfterRead3 - 0.5)));
+    const double quizDelta3 = Config::QUIZ_K0 * (1.0 - e3);
+    const double psi10 = std::pow(1.0 + 10.0 / Config::TAU, -Config::C);
+    const double psi800 = std::pow(1.0 + 800.0 / Config::TAU, -Config::C);
+
+    // 1) 阅读：全 10 维正增量
+    tracker.applyReadEffect(user, text, 60.0, now);
+    REQUIRE(repo.getIncrementCount(USER_ID) == 10);
+    REQUIRE(std::abs(user.getAbility(3) - uAfterRead3) < EPS);
+
+    // 2) 答对：d3 与已有 read 增量共存（13 = 10 read + 3 quiz）
+    tracker.applyQuizEffect(user, text, dims, 1, now);
+    REQUIRE(repo.getIncrementCount(USER_ID) == 13);
+    REQUIRE(user.getQuizCount(3) == 1);
+    REQUIRE(std::abs(user.getAbility(3) - (uAfterRead3 + quizDelta3)) < EPS);
+
+    // 3) 遗忘：增量按 ψ(10d) 衰减但不删除（10 天 ψ≈0.615 > PSI_MIN）
+    tracker.applyForgettingEffect(user, now + 10 * 86400);
+    REQUIRE(repo.getIncrementCount(USER_ID) == 13);
+    REQUIRE(std::abs(user.getAbility(3) -
+                     (u0 + (readDelta3 + quizDelta3) * psi10)) < EPS);
+
+    // 4) 裁剪：800 天 ψ<PSI_MIN，全部合并进基础能力（正负都合）
+    const int pruned = tracker.pruneOldIncrements(user, now + 800 * 86400);
+    REQUIRE(pruned == 13);
+    REQUIRE(repo.getIncrementCount(USER_ID) == 0);
+    REQUIRE(std::abs(user.getBaseAbility(3) -
+                     (u0 + (readDelta3 + quizDelta3) * psi800)) < EPS);
+    REQUIRE(user.getQuizCount(3) == 1);  // quiz_count 不随裁剪丢失
+}
+
+TEST_CASE_METHOD(KTFixture, "跨效应状态流：分支 quiz答错 → 同维正负增量共存", "[tracker][quiz]") {
+    const std::vector<int> dims = {3, 4, 9};
+
+    // 1) 阅读后答错：d3 同时有 read 正增量与 quiz 负增量
+    tracker.applyReadEffect(user, text, 60.0, now);
+    const double uAfterRead3 = user.getAbility(3);
+    tracker.applyQuizEffect(user, text, dims, 0, now);
+    REQUIRE(user.getAbility(3) < uAfterRead3);  // 答错真实拉低（覆盖正增量）
+
+    // 同维正负增量在 repo 中共存
+    const auto incs = repo.getAllIncrements(USER_ID);
+    int d3Read = 0, d3QuizNeg = 0;
+    for (const auto& inc : incs) {
+        if (inc.dimension == 4) {  // 1-based: 维度 3
+            if (inc.type == "read" && inc.delta > 0) d3Read++;
+            if (inc.type == "quiz" && inc.delta < 0) d3QuizNeg++;
+        }
+    }
+    REQUIRE(d3Read == 1);
+    REQUIRE(d3QuizNeg == 1);
+
+    // 2) 裁剪：净值合入基础能力（quiz 负增量占优 → 基础能力低于先验）
+    const int pruned = tracker.pruneOldIncrements(user, now + 800 * 86400);
+    REQUIRE(pruned == 13);
+    REQUIRE(user.getBaseAbility(3) < 0.3 - EPS);
+    // 纯 quiz 负增量的维度也低于先验
+    REQUIRE(user.getBaseAbility(4) < 0.3 - EPS);
+    // 纯 read 维度（无 quiz）：仅正增量合入
+    const double psi800 = std::pow(1.0 + 800.0 / Config::TAU, -Config::C);
+    const double u0 = 0.3;
+    const double eta_t = 0.08 * std::pow(1.0 - u0, 1.5);
+    const double g = std::exp(-((0.5 - u0) - Config::DELTA_STAR) *
+                              ((0.5 - u0) - Config::DELTA_STAR) /
+                              (2 * Config::SIGMA * Config::SIGMA));
+    const double readDelta = eta_t * g * (1.0 - u0);
+    REQUIRE(std::abs(user.getBaseAbility(0) - (u0 + readDelta * psi800)) < EPS);
+}

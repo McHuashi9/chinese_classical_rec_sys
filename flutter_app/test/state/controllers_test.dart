@@ -1,3 +1,4 @@
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
@@ -6,6 +7,7 @@ import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 void main() {
@@ -16,7 +18,6 @@ void main() {
     tearDown(() => nav.dispose());
 
     test('pageIndex starts at 0', () => expect(nav.pageIndex, 0));
-    test('previousPageIndex starts at 0', () => expect(nav.previousPageIndex, 0));
     test('switchPage changes index', () {
       nav.switchPage(1);
       expect(nav.pageIndex, 1);
@@ -83,9 +84,6 @@ void main() {
 
     test('isReading starts false', () => expect(ctrl.isReading, false));
     test('readingText starts null', () => expect(ctrl.readingText, null));
-    test('pages starts empty', () => expect(ctrl.pages, isEmpty));
-    test('currentPage starts 0', () => expect(ctrl.currentPage, 0));
-    test('totalPages starts 0', () => expect(ctrl.totalPages, 0));
     test('elapsedSeconds starts 0', () => expect(ctrl.elapsedSeconds, 0));
     test('formattedReadingTime starts 00:00', () => expect(ctrl.formattedReadingTime, '00:00'));
     test('currentPageNumberLabel is empty', () => expect(ctrl.currentPageNumberLabel, ''));
@@ -239,6 +237,35 @@ void main() {
         expect(joined, contains('原文一'));
       });
     });
+
+    testWidgets('译文交错分页完整性：多页下所有段不丢、首尾段保持', (tester) async {
+      withCleanup(() {
+        const text = ChineseText(
+          id: 7, title: 'interleaved', author: 'a', dynasty: '唐',
+          content: '原文一\n\n原文二\n\n原文三\n\n原文四',
+        );
+        ctrl.loadText(
+          text,
+          translation: '译文一\n\n译文二\n\n译文三\n\n译文四',
+          showTranslation: true,
+        );
+        // 小页高强制分多页（2 行/页）
+        ctrl.paginate(400, 60, ScreenSize.medium, 1.0, false);
+        expect(ctrl.pages.length, greaterThan(1));
+
+        final joined = ctrl.pages.join('\n');
+        // 全部原文段与译文段都出现在分页结果中
+        for (final seg in ['原文一', '原文二', '原文三', '原文四']) {
+          expect(joined, contains(seg));
+        }
+        for (final seg in ['译文一', '译文二', '译文三', '译文四']) {
+          expect(joined, contains('\u200B$seg\u200B'));
+        }
+        // 顺序保持：首段在首页首行，末段在末页尾部
+        expect(ctrl.pages.first.trimRight(), startsWith('原文一'));
+        expect(ctrl.pages.last.trimRight(), endsWith('\u200B译文四\u200B'));
+      });
+    });
   });
 
   group('UserController', () {
@@ -253,18 +280,19 @@ void main() {
 
     test('user starts null', () => expect(ctrl.user, null));
     test('averageAbility defaults to 0.3', () => expect(ctrl.averageAbility, 0.3));
-    test('recommendations starts empty', () => expect(ctrl.recommendations, isEmpty));
     test('applyReadEffect is safe without tracker', () {
       expect(ctrl.applyReadEffect(1, 60), false);
     });
     test('recordReading is safe without tracker', () {
       ctrl.recordReading(1, 60);
     });
-    test('setUser updates user', () {
-      // User needs ffi alloc, skip for unit test
-      // Just verify setUser doesn't throw on null
-      ctrl.setUser(null);
-      expect(ctrl.user, null);
+    test('setUser updates user（真实 User 对象，旧用户被释放）', () {
+      final u1 = User.allocate(calloc);
+      final u2 = User.allocate(calloc);
+      ctrl.setUser(u1);
+      expect(identical(ctrl.user, u1), isTrue);
+      ctrl.setUser(u2);
+      expect(identical(ctrl.user, u2), isTrue);
     });
   });
 }

@@ -68,7 +68,7 @@ class HistoryService {
 
   int getTotalCount() => _bridge.historyGetTotalCount();
 
-  ReadingStats computeStats(List<ReadingRecord> records) {
+  static ReadingStats computeStats(List<ReadingRecord> records) {
     int totalSeconds = 0;
     final dateSet = <int>{};
     for (final r in records) {

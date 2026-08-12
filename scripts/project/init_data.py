@@ -372,7 +372,8 @@ def create_tables(conn: sqlite3.Connection) -> bool:
 
     # 创建 questions 表（内容库：题目 + 答案 + 解析，随数据包同步）
     # answer_index = 正确答案在 options JSON 数组中的下标（0-based）；
-    # dims = CSV（如 "3,4,9"，0-based 维度），C++/Dart 直接 split 解析
+    # dims = CSV（如 "3,4,9"，0-based 维度），C++/Dart 直接 split 解析；
+    # context = 划线词所在原句（mark_start/mark_len = 划线区间，无则 -1/0）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -385,6 +386,9 @@ def create_tables(conn: sqlite3.Connection) -> bool:
             difficulty REAL DEFAULT 0.0,
             dims TEXT DEFAULT '',
             seq INTEGER DEFAULT 0,
+            context TEXT DEFAULT '',
+            mark_start INTEGER DEFAULT -1,
+            mark_len INTEGER DEFAULT 0,
             FOREIGN KEY (text_id) REFERENCES classical_text(id)
         );
     """)
@@ -511,12 +515,14 @@ def init_database(db_path: str) -> bool:
                 cursor.execute(
                     """
                     INSERT INTO questions
-                    (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
+                     context, mark_start, mark_len)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
                      r["answer_index"], r["explanation"], r["difficulty"],
-                     r["dims"], r["seq"]),
+                     r["dims"], r["seq"], r.get("context", ""),
+                     r.get("mark_start", -1), r.get("mark_len", 0)),
                 )
                 q_imported += 1
             conn.commit()

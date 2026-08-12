@@ -24,6 +24,7 @@ extern "C" {
     int text_get_count();
     int text_get_detail(int id, TextDetail* out);
     int text_get_translation(int id, char* out, int max_len);
+    int text_get_annotations(int id, char* out, int max_len);
     int recommend(const UserData* user, int top_k, int* out_ids, double* out_probs, int out_ids_capacity, int out_probs_capacity);
     int tracker_apply_read(const UserData* user, int text_id, double read_time, int64_t timestamp, UserData* out_user);
     int tracker_apply_forgetting(const UserData* user, int64_t now, UserData* out_user);
@@ -44,6 +45,7 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
 
     char buf[16];
     REQUIRE(text_get_translation(1, buf, sizeof(buf)) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(text_get_annotations(1, buf, sizeof(buf)) == BRIDGE_ERR_NOT_INIT);
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_ERR_NOT_INIT);
@@ -187,6 +189,23 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
         REQUIRE(std::string(qs[i].dims).size() > 0);
         REQUIRE(qs[i].difficulty >= 0.0);
         REQUIRE(qs[i].difficulty <= 1.0);
+        // 划线语境一致性：无 context 时区间必须为空；有 context 时区间在界内
+        // 且划出的字串与题干「X」中的词一致
+        const std::string ctx(qs[i].context);
+        if (ctx.empty()) {
+            REQUIRE(qs[i].mark_start == -1);
+            REQUIRE(qs[i].mark_len == 0);
+        } else {
+            REQUIRE(qs[i].mark_start >= 0);
+            REQUIRE(qs[i].mark_len > 0);
+            REQUIRE(qs[i].mark_start + qs[i].mark_len <= static_cast<int>(ctx.size()));
+            const std::string stem(qs[i].stem);
+            const size_t b = stem.find('「'), e = stem.find('」');
+            if (b != std::string::npos && e != std::string::npos && e > b) {
+                const std::string word = stem.substr(b + 1, e - b - 1);
+                REQUIRE(ctx.substr(qs[i].mark_start, qs[i].mark_len) == word);
+            }
+        }
         // 每题 id 都可通过 tracker_apply_quiz 判题
     }
 
@@ -254,6 +273,85 @@ TEST_CASE("bridge - text_get_translation 不存在 id 返回错误", "[bridge][s
 
     char buf[4096];
     REQUIRE(text_get_translation(999999, buf, sizeof(buf)) == BRIDGE_ERR_TEXT);
+
+    db_close();
+}
+
+TEST_CASE("bridge - history 真实链路：阅读落库 → 查询倒序/截断/去重", "[bridge][smoke]") {
+    db_close();
+
+    const std::string work = quizWorkDb("hist");
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 3 次阅读（文章 1 两次 + 文章 2 一次），时间戳刻意乱序
+    UserData user, out;
+    REQUIRE(user_load(&user) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 1, 150.0, 1000, &out) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 2, 60.0, 3000, &out) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 1, 30.0, 2000, &out) == BRIDGE_OK);
+
+    REQUIRE(history_get_total_count() == 3);
+
+    // 倒序：text 2 → text 1(t=2000) → text 1(t=1000)
+    ReadingRecordData recs[8];
+    int n = history_get_recent(10, recs, 8);
+    REQUIRE(n == 3);
+    REQUIRE(recs[0].text_id == 2);
+    REQUIRE(recs[0].read_time == 60.0);
+    REQUIRE(recs[1].text_id == 1);
+    REQUIRE(recs[1].read_time == 30.0);
+    REQUIRE(recs[2].text_id == 1);
+    REQUIRE(recs[2].read_time == 150.0);
+    REQUIRE(recs[2].timestamp == 1000);
+
+    // limit 截断（插 3 取 2）
+    REQUIRE(history_get_recent(2, recs, 8) == 2);
+    // 输出容量截断
+    REQUIRE(history_get_recent(10, recs, 1) == 1);
+    // out 为 null → 桥约定返回 NOT_INIT
+    REQUIRE(history_get_recent(10, nullptr, 8) == BRIDGE_ERR_NOT_INIT);
+
+    // 独立 add_record 也可入链
+    REQUIRE(history_add_record(5, 90.0, 4000) == BRIDGE_OK);
+    REQUIRE(history_get_total_count() == 4);
+    REQUIRE(history_get_recent(1, recs, 8) == 1);
+    REQUIRE(recs[0].text_id == 5);
+
+    // tracked ids：同文去重（文章 1 只出现一次），插入顺序 1, 2
+    int ids[8];
+    n = history_get_tracked_text_ids(ids, 8);
+    REQUIRE(n == 2);
+    REQUIRE(ids[0] == 1);
+    REQUIRE(ids[1] == 2);
+    // 容量截断
+    REQUIRE(history_get_tracked_text_ids(ids, 1) == 1);
+
+    db_close();
+}
+
+TEST_CASE("bridge - text_get_annotations 完整链路", "[bridge][smoke]") {
+    db_close();
+
+    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+
+    char buf[65536];
+    int rc = text_get_annotations(1, buf, sizeof(buf));
+    REQUIRE(rc == BRIDGE_OK);
+    REQUIRE(std::string(buf).size() > 0);
+    REQUIRE(std::string(buf).rfind("〔1〕", 0) == 0);  // 以 〔1〕 开头
+
+    // 截断：小缓冲只写 max_len-1 字节并补 \0
+    char small[8];
+    rc = text_get_annotations(1, small, 8);
+    REQUIRE(rc == BRIDGE_OK);
+    REQUIRE(std::string(small).size() == 7);
+
+    // 不存在的 id 返回错误
+    REQUIRE(text_get_annotations(999999, buf, sizeof(buf)) == BRIDGE_ERR_TEXT);
+
+    // 参数校验
+    REQUIRE(text_get_annotations(1, nullptr, 64) == BRIDGE_ERR_GENERIC);
+    REQUIRE(text_get_annotations(1, buf, 0) == BRIDGE_ERR_GENERIC);
 
     db_close();
 }

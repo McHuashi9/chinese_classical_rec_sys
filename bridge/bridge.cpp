@@ -39,7 +39,7 @@ static std::mutex g_mtx;
 
 // C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）
 static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #pragma pack");
-static_assert(sizeof(QuestionData) == 5212, "QuestionData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(QuestionData) == 6244, "QuestionData ABI 尺寸不符，检查 #pragma pack");
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -702,7 +702,8 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
     const char* sql = "SELECT id, q_type, stem, "
                       "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
                       "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
-                      "dims, explanation, difficulty "
+                      "dims, explanation, difficulty, "
+                      "context, mark_start, mark_len "
                       "FROM questions WHERE text_id = ? ORDER BY seq, id LIMIT ?";
     if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
         LOG_ERROR("bridge: question_get_by_text prepare 失败: {}", sqlite3_errmsg(g_state.db->getConnection()));
@@ -724,6 +725,9 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
         copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
         copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
         q.difficulty = sqlite3_column_double(stmt, 9);
+        copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
+        q.mark_start = sqlite3_column_int(stmt, 11);
+        q.mark_len = sqlite3_column_int(stmt, 12);
         count++;
     }
     sqlite3_finalize(stmt);

@@ -1,0 +1,158 @@
+import 'dart:ffi';
+
+import 'package:ffi/ffi.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
+import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/models/question.dart';
+import 'package:chinese_classical_rec_sys/models/user.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+
+/// 可编排的 Fake：applyQuiz 按预设序列返回（null → 判题失败）
+/// 内存契约：每次 applyQuiz 必须返回新分配的 User（submitQuiz 会 dispose）
+class _ScriptedQuizTracker implements QuizTracker {
+  final List<(User?, bool?)> results = [];
+
+  @override
+  (User?, bool?) applyQuiz(User user, int questionId, int choice) {
+    if (results.isEmpty) return (null, null);
+    return results.removeAt(0);
+  }
+
+  @override
+  User? applyRead(User user, int textId, double readTime) => null;
+
+  @override
+  void disposeQuestions(List<Question> questions) {}
+
+  @override
+  List<Question> getQuestionsForText(int textId) => [];
+
+  @override
+  User? prune(User user) => null;
+}
+
+void main() {
+  group('UserController.submitQuiz', () {
+    late UserController ctrl;
+    late _ScriptedQuizTracker tracker;
+    late Pointer<QuestionData> block;
+
+    setUp(() {
+      ctrl = UserController(ReadTracker());
+      tracker = _ScriptedQuizTracker();
+      ctrl.initTracker(tracker);
+    });
+
+    tearDown(() {
+      ctrl.dispose();
+      calloc.free(block);
+    });
+
+    /// 分配 N 题的整块内存，id 从 [startId] 递增
+    List<Question> questions(int n, {int startId = 1}) {
+      block = calloc<QuestionData>(n);
+      for (int i = 0; i < n; i++) {
+        (block + i).ref.id = startId + i;
+      }
+      return [for (int i = 0; i < n; i++) Question(block + i, owner: block)];
+    }
+
+    User? freshUser() {
+      final u = User.allocate(calloc);
+      ctrl.setUser(u);
+      return u;
+    }
+
+    test('user 为 null 时返回 null', () {
+      expect(ctrl.submitQuiz(questions(1), [0]), isNull);
+    });
+
+    test('题目数与选项数不匹配返回 null，用户不变', () {
+      final before = freshUser();
+      expect(ctrl.submitQuiz(questions(2), [0]), isNull);
+      expect(identical(ctrl.user, before), isTrue);
+    });
+
+    test('首题判题失败：返回 null，无任何生效', () {
+      final before = freshUser();
+      tracker.results.add((null, null));
+      expect(ctrl.submitQuiz(questions(2), [0, 1]), isNull);
+      expect(identical(ctrl.user, before), isTrue);
+    });
+
+    test('全对：逐题结果正确，用户指针替换为最终用户', () {
+      final initial = freshUser();
+      final u1 = User.allocate(calloc);
+      final u2 = User.allocate(calloc);
+      tracker.results.addAll([(u1, true), (u2, true)]);
+
+      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+
+      expect(answers, isNotNull);
+      expect(answers!.length, 2);
+      expect(answers[0].questionId, 1);
+      expect(answers[0].correct, isTrue);
+      expect(answers[1].questionId, 2);
+      expect(answers[1].correct, isTrue);
+      expect(identical(ctrl.user, u2), isTrue);
+      expect(identical(ctrl.user, initial), isFalse);
+    });
+
+    test('能力快照为每题答前能力（第 2 题快照 = 第 1 题答后）', () {
+      freshUser();
+      // 通过"每个返回的 User 带不同能力"模拟效应：
+      // 第 1 题答前能力来自初始 user（全部 0.0），答后 user1（全部 0.4）
+      final u1 = User.allocate(calloc);
+      final u2 = User.allocate(calloc);
+      for (int j = 0; j < 10; j++) {
+        u1.ptr.ref.abilities[j] = 0.4;
+      }
+      for (int j = 0; j < 10; j++) {
+        u2.ptr.ref.abilities[j] = 0.6;
+      }
+      tracker.results.addAll([(u1, true), (u2, false)]);
+
+      final answers = ctrl.submitQuiz(questions(2), [0, 1])!;
+
+      for (int j = 0; j < 10; j++) {
+        expect(answers[0].abilityBefore[j], 0.0);
+        expect(answers[1].abilityBefore[j], 0.4);
+      }
+    });
+
+    test('第 2 题起判题失败：部分生效，内存态同步为已生效部分', () {
+      freshUser();
+      final u1 = User.allocate(calloc);
+      for (int j = 0; j < 10; j++) {
+        u1.ptr.ref.abilities[j] = 0.4;
+      }
+      tracker.results.addAll([(u1, true), (null, null)]);
+
+      var notified = 0;
+      ctrl.addListener(() => notified++);
+      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+
+      expect(answers, isNotNull);
+      expect(answers!.length, 1);
+      expect(answers[0].correct, isTrue);
+      // 内存态 = 第 1 题答后用户（避免下次重复生效）
+      expect(identical(ctrl.user, u1), isTrue);
+      expect(notified, 1);
+    });
+
+    test('成功提交触发 notifyListeners 且每题结果齐全', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), false)]);
+
+      var notified = 0;
+      ctrl.addListener(() => notified++);
+      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+
+      expect(answers, isNotNull);
+      expect(answers!.length, 2);
+      expect(notified, 1);
+    });
+  });
+}

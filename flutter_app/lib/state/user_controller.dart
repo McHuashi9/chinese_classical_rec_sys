@@ -7,7 +7,7 @@ import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 
 class UserController extends ChangeNotifier {
-  KnowledgeTracker? _tracker;
+  QuizTracker? _tracker;
   final ReadTracker _readTracker;
 
   User? _user;
@@ -15,7 +15,7 @@ class UserController extends ChangeNotifier {
 
   UserController(this._readTracker);
 
-  void initTracker(KnowledgeTracker tracker) { _tracker = tracker; }
+  void initTracker(QuizTracker tracker) { _tracker = tracker; }
 
   User? get user => _user;
   double get averageAbility => _user?.averageAbility ?? 0.3;
@@ -92,6 +92,8 @@ class UserController extends ChangeNotifier {
       final updated = result.$1;
       final correct = result.$2;
       if (updated == null || correct == null) {
+        // 契约外异常（updated 非 null 但 correct 为 null）：释放避免泄漏
+        updated?.dispose();
         // 首题失败：无生效，保留 _user
         if (answers.isEmpty) return null;
         // 部分成功：C++ 已落库前几题，同步内存态避免下次重复生效

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-12
+
+### Added
+
+- **随堂练习展示划线原句**：实词解释、通假字两类题目的题干后补充"划线词所在原句"，划线词以朱色下划线标出（共 4564 题带原句），与题干"划线词/划线字"的措辞一致；答题结果页同样展示。此前题干只写"下列句中划线词……"却不给出对应句子。
+
+### Fixed
+
+- **译文对照多页阅读丢内容修复**：开启译文对照且文章跨多页时，分页边界错位会导致最后一页缺失部分原文与译文段落。现在译文交错文本的分页按排版偏移精确切分，所有段落完整保留。
+
 ## [0.9.1] - 2026-08-12
 
 ### Added
@@ -308,3 +318,4 @@ C++ CLI 原型。
 [0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
 [0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
 [0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
+[0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2

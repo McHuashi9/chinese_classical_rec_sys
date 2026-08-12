@@ -39,20 +39,17 @@ void main() {
       expect(text.averageDifficulty, 0.05);
     });
 
-    test('const constructor equality', () {
+    test('const 构造保持规范化（同一编译期常量是同一实例）', () {
       const a = ChineseText(
         id: 1, title: '论语', author: '孔子', dynasty: '春秋');
       const b = ChineseText(
         id: 1, title: '论语', author: '孔子', dynasty: '春秋');
-      expect(a.id, b.id);
-      expect(a.title, b.title);
-      expect(a.source, b.source);
-      expect(a.background, b.background);
+      expect(identical(a, b), isTrue);
     });
   });
 
   group('RecommendResult', () {
-    test('holds text and probability', () {
+    test('持有文本与推荐概率', () {
       final text = ChineseText.fromInfo(5, '孟子', '孟轲', '战国');
       final result = RecommendResult(text: text, probability: 0.85);
       expect(result.text.id, 5);

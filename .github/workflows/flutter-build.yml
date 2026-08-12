@@ -44,12 +44,29 @@ jobs:
         working-directory: flutter_app
 
       - name: Flutter test
-        run: flutter test
+        run: flutter test --coverage
         working-directory: flutter_app
 
       - name: Flutter analyze
         run: flutter analyze
         working-directory: flutter_app
+
+      - name: Coverage report (C++)
+        run: |
+          pip install 'gcovr>=8'
+          ./scripts/test_coverage_cpp.sh
+
+      - name: Coverage summary (Dart)
+        run: python3 scripts/summarize_cov.py flutter_app/coverage/lcov.info
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            build-cov/coverage/index.html
+            build-cov/coverage/coverage.json
+            flutter_app/coverage/lcov.info
+          retention-days: 7
 
       - name: Package AppImage
         run: bash packaging/appimage/build.sh

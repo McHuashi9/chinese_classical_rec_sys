@@ -5,6 +5,7 @@ import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 
 /// 答题结果页：对错统计 + 每题解析 + 能力变化摘要
 /// 持有题目列表的内存所有权（QuizPage 提交时转移过来），销毁时统一释放
@@ -208,6 +209,21 @@ class _QuizResultPageState extends State<QuizResultPage> {
                     height: 1.4,
                   ),
             ),
+            if (q.context.isNotEmpty) ...[
+              SizedBox(height: context.gapTiny),
+              MarkedSentence(
+                text: q.context,
+                markStart: q.markStart,
+                markLen: q.markLen,
+                isDark: isDark,
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                      height: 1.4,
+                      color: isDark
+                          ? AppTheme.darkInkSecondary
+                          : AppTheme.inkSecondary,
+                    ),
+              ),
+            ],
             SizedBox(height: context.gapSmall),
             Text(
               '解析：${q.explanation}',

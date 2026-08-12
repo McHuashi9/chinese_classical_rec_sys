@@ -183,6 +183,10 @@ class ReadingController extends ChangeNotifier {
     int linesPerPage,
     String content,
   ) {
+    // 译文交错文本的零宽标记（\u200B）不参与排版（AnnotatedTextBuilder 仅作样式
+    // 分隔符），TextPainter 返回的偏移是去标记后的"排版空间"；直接用它切含标记的
+    // 原始字符串会逐页错位、末页截断。先把排版偏移映射回原始字符串偏移。
+    final paintedToRaw = _buildPaintedOffsetMap(content);
     final result = <String>[];
     for (int startLine = 0; startLine < lineMetrics.length; startLine += linesPerPage) {
       final startOffset = startLine == 0
@@ -192,9 +196,26 @@ class ReadingController extends ChangeNotifier {
       final endOffset = tp.getPositionForOffset(
         Offset(tp.width, lineMetrics[endLine].baseline),
       ).offset;
-      result.add(content.substring(startOffset, endOffset).trimRight());
+      result.add(
+        content
+            .substring(paintedToRaw[startOffset], paintedToRaw[endOffset])
+            .trimRight(),
+      );
     }
     return result;
+  }
+
+  /// 排版偏移 → 原始字符串偏移映射：`map[p]` = 原始串中第 p 个排版字符的位置；
+  /// 末尾追加原始串总长（排版末尾边界 = 原始串末尾）。
+  /// 无标记文本（纯原文）时映射为恒等，行为不变。
+  List<int> _buildPaintedOffsetMap(String content) {
+    final map = <int>[];
+    for (int i = 0; i < content.length; i++) {
+      if (content[i] == TranslationBuilder.mark) continue;
+      map.add(i);
+    }
+    map.add(content.length);
+    return map;
   }
 
   int _getLineStartOffset(

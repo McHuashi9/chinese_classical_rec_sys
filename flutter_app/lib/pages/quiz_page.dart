@@ -5,6 +5,7 @@ import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
 class QuizPage extends StatefulWidget {
@@ -180,6 +181,18 @@ class _QuizPageState extends State<QuizPage> {
                             height: 1.5,
                           ),
                     ),
+                    if (q.context.isNotEmpty) ...[
+                      SizedBox(height: context.gapSmall),
+                      MarkedSentence(
+                        text: q.context,
+                        markStart: q.markStart,
+                        markLen: q.markLen,
+                        isDark: isDark,
+                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                              height: 1.5,
+                            ),
+                      ),
+                    ],
                     SizedBox(height: context.gapLg),
                     ...List.generate(4, (i) => _optionTile(q, i)),
                   ],

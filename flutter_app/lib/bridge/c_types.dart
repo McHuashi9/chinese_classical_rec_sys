@@ -110,6 +110,15 @@ final class QuestionData extends Struct {
 
   @Double()
   external double difficulty;
+
+  @Array(1024)
+  external Array<Uint8> context;
+
+  @Int32()
+  external int markStart;
+
+  @Int32()
+  external int markLen;
 }
 
 /// C 错误码

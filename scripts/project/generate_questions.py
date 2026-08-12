@@ -143,6 +143,52 @@ def is_literal_word(item: dict) -> bool:
     return not any(k in item["text"].split("：", 1)[-1][:12] for k in kw)
 
 
+# 划线词的记号写法：heading 后紧贴词在原文中位置 → 每题存 context（原句）+
+# mark_start/mark_len（划线区间，无则 -1/0，Dart 端直接下标渲染，不重复搜索）
+NO_MARK = {"context": "", "mark_start": -1, "mark_len": 0}
+
+
+def extract_context(art: dict, num: int, head: str) -> dict:
+    """取含 〔num〕 的原句 + 划线词偏移（raw→clean 映射）
+
+    标记在原文中位置不定：textbook 常紧贴词后，anthology 常挂在句尾
+    （如"顾安所得酒乎〔10〕"中「顾」在句首）→ 取句内距标记最近的
+    一次出现；纯函数不碰 random，seed 固定下题库可复现。
+    """
+    orig = art["original"]
+    marker = f"〔{num}〕"
+    if marker not in orig:
+        return dict(NO_MARK)
+    mpos = orig.find(marker)
+    # 换行也是句界（防跨段拼接）；前后扫最近的断点
+    s = max(orig.rfind(c, 0, mpos) for c in "\n。！？")
+    e = min((i for i in (orig.find(c, mpos) for c in "\n。！？") if i >= 0), default=len(orig))
+    sent = orig[s + 1:e]
+    mpos = sent.find(marker)  # 标记在句内偏移（与 starts 同坐标系）
+    starts = [m.start() for m in re.finditer(re.escape(head), sent)]
+    if not starts:
+        return dict(NO_MARK)
+    # 距标记最近（优先出现在标记之前）
+    best = min(starts, key=lambda p: (abs(p - mpos), p > mpos))
+    mks = list(re.finditer(r"〔\d+〕", sent))
+    # 剔除标记造成的偏移：统计 best 之前所有标记字符数
+    shift = sum(m.end() - m.start() for m in mks if m.start() < best)
+    clean = re.sub(r"〔\d+〕", "", sent)
+    mark_start = best - shift
+    # 清洗首尾空白与不成对引号（引号整句包裹时剥壳，前导字符同步调整偏移）
+    new_lead = len(clean) - len(clean.lstrip())
+    clean = clean[new_lead:].rstrip()
+    mark_start -= new_lead
+    quotes = "\u201c\u201d\u2018\u2019\""
+    new_lead = len(clean) - len(clean.lstrip(quotes))
+    new_tail = len(clean) - len(clean.rstrip(quotes))
+    clean = clean[new_lead:len(clean) - new_tail]
+    mark_start -= new_lead
+    if not 0 <= mark_start <= len(clean) - len(head):
+        return dict(NO_MARK)
+    return {"context": clean, "mark_start": mark_start, "mark_len": len(head)}
+
+
 def gen_shici(art: dict, items: list) -> list:
     """实词解释：正确释义 + 同篇其他词头释义（张冠李戴式干扰项）"""
     qs = []
@@ -167,10 +213,11 @@ def gen_shici(art: dict, items: list) -> list:
         distractors = random.sample(pool, 3)
         qs.append({
             "type": "shici", "dims": TYPE_DIMS["shici"],
-            "stem": f"下列句中加点词「{item['head']}」的解释，正确的一项是",
+            "stem": f"下列句中划线词「{item['head']}」的解释，正确的一项是",
             "options": [correct] + distractors,
             "answer": correct,
             "explanation": item["text"],
+            **extract_context(art, item["num"], item["head"]),
         })
     return qs
 
@@ -194,22 +241,23 @@ def gen_tongjia(art: dict, items: list) -> list:
             # X 必须紧邻"通/同"引号结构（word……，通'Y'）
             if re.search(re.escape(word) + r"[，。；、]?[通同][“\"]", item["text"]) and word not in seen:
                 seen.add(word)
-                cands.append((word, m.group(1)))
+                cands.append((item, word, m.group(1)))
     if len(cands) < 4:
         return qs
-    for word, zhengzi in cands:
+    for item, word, zhengzi in cands:
         distractors = []
-        for _, z in cands:
+        for _, _, z in cands:
             if z != zhengzi and z not in distractors:
                 distractors.append(z)
             if len(distractors) >= 3:
                 break
         qs.append({
             "type": "tongjia", "dims": TYPE_DIMS["tongjia"],
-            "stem": f"下列句中加点字「{word}」的本字，正确的一项是",
+            "stem": f"下列句中划线字「{word}」的本字，正确的一项是",
             "options": [zhengzi] + distractors,
             "answer": zhengzi,
             "explanation": next(i["text"] for i in items if word in i["head"]),
+            **extract_context(art, item["num"], word),
         })
     return qs
 
@@ -404,6 +452,8 @@ def main():
             "answer_index": q["options"].index(q["answer"]),
             "explanation": q["explanation"], "difficulty": q["difficulty"],
             "dims": ",".join(str(d) for d in q["dims"]), "seq": q["seq"],
+            "context": q.get("context", ""), "mark_start": q.get("mark_start", -1),
+            "mark_len": q.get("mark_len", 0),
         } for q in all_qs]
         db_json.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"入库 JSON → {db_json}（{len(rows)} 题）")
@@ -414,6 +464,10 @@ def main():
     print(f"总题数 {len(all_qs)} | 覆盖篇数 {sum(1 for v in stats.values() if any(v.values()))}/{len(files)}")
     for t in ("shici", "tongjia", "fanyi"):
         print(f"  {t}: {len(by_type.get(t, []))} 题")
+    for t in ("shici", "tongjia"):
+        sub = [q for q in all_qs if q["type"] == t]
+        covered = sum(1 for q in sub if q["context"])
+        print(f"  {t} 带原句(划线): {covered}/{len(sub)}")
     if failures:
         print(f"零产出篇目 {len(failures)}：{list(failures)[:10]}")
 
@@ -427,7 +481,15 @@ def main():
             for i, q in enumerate(art_qs, 1):
                 opts = "\n".join(f"    {chr(65+j)}. {o}" for j, o in enumerate(q["options"]))
                 ans = q["answer"]
-                md.append(f"{i}. [{q['type']}] 难度 {q['difficulty']}｜{q['stem']}\n{opts}\n    **答案**：{ans}\n    **解析**：{q['explanation']}\n")
+                ctx = ""
+                if q.get("context"):
+                    ctx = q["context"][:q["mark_start"]] + "**" + \
+                        q["context"][q["mark_start"]:q["mark_start"] + q["mark_len"]] + \
+                        "**" + q["context"][q["mark_start"] + q["mark_len"]:]
+                md.append(f"{i}. [{q['type']}] 难度 {q['difficulty']}｜{q['stem']}")
+                if ctx:
+                    md.append(f"    原句：{ctx}")
+                md.append(f"{opts}\n    **答案**：{ans}\n    **解析**：{q['explanation']}\n")
         sample_file = out / "sample_review.md"
         sample_file.write_text("\n".join(md), encoding="utf-8")
         print(f"样本 → {sample_file}")

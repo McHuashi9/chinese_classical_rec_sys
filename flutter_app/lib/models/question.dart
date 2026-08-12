@@ -36,6 +36,14 @@ class Question {
 
   double get difficulty => ptr.ref.difficulty;
 
+  /// 划线词所在原句（空串表示无）
+  String get context => readCString(ptr.ref.context, 1024);
+
+  /// 划线区间（context 内下标；无 context 时为 -1/0）
+  int get markStart => ptr.ref.markStart;
+
+  int get markLen => ptr.ref.markLen;
+
   /// 解析 dims CSV（如 "3,4,9" → [3, 4, 9]）
   List<int> get dimensionList {
     final parts = dims.split(',');
