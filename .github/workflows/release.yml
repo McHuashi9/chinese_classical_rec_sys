@@ -170,6 +170,11 @@ jobs:
         run: |
           rm -rf flutter_app/ios
           cd flutter_app && flutter create --platforms=ios .
+      - name: Apply icon & splash
+        working-directory: flutter_app
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
       - name: Build libchinese_core.a
         run: bash scripts/project/build_ios_core.sh
       - name: Copy static lib into Runner
