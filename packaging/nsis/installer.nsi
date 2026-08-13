@@ -1,4 +1,4 @@
-﻿Unicode true
+Unicode true
 
 !define PRODUCT_NAME "文言文推荐系统"
 !define PRODUCT_VERSION "0.2.0"
@@ -8,6 +8,10 @@ Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "chinese-classical-rec-sys-${PRODUCT_VERSION}-windows.exe"
 InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 RequestExecutionLevel admin
+
+; 安装包本体/卸载器图标（BMP 帧 .ico，16/32/48，NSIS 全版本兼容）
+Icon "${__FILEDIR__}\app_icon.ico"
+UninstallIcon "${__FILEDIR__}\app_icon.ico"
 
 !ifndef RELEASE_DIR
   !define RELEASE_DIR "flutter_app\build\windows\x64\runner\Release"
