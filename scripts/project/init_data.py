@@ -24,6 +24,7 @@
 排除：f2(字数)、f4(总词数)、f7(生僻字密度)
 """
 
+import argparse
 import io
 import json
 import os
@@ -373,7 +374,9 @@ def create_tables(conn: sqlite3.Connection) -> bool:
     # 创建 questions 表（内容库：题目 + 答案 + 解析，随数据包同步）
     # answer_index = 正确答案在 options JSON 数组中的下标（0-based）；
     # dims = CSV（如 "3,4,9"，0-based 维度），C++/Dart 直接 split 解析；
-    # context = 划线词所在原句（mark_start/mark_len = 划线区间，无则 -1/0）
+    # context = 划线词所在原句（mark_start/mark_len = 划线区间，无则 -1/0）；
+    # q_key = 内容指纹稳定键（generate_questions.py 生成；不含 options），
+    #   数据包重建时按 q_key 认领旧 id，保证老用户 quiz_attempts/review_items 引用不漂移
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -389,6 +392,7 @@ def create_tables(conn: sqlite3.Connection) -> bool:
             context TEXT DEFAULT '',
             mark_start INTEGER DEFAULT -1,
             mark_len INTEGER DEFAULT 0,
+            q_key TEXT DEFAULT '',
             FOREIGN KEY (text_id) REFERENCES classical_text(id)
         );
     """)
@@ -396,13 +400,23 @@ def create_tables(conn: sqlite3.Connection) -> bool:
         CREATE INDEX IF NOT EXISTS idx_questions_text
         ON questions(text_id);
     """)
+    # 部分唯一索引：空键不受唯一约束（老数据/无键行兼容）
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_q_key
+        ON questions(q_key) WHERE q_key != '';
+    """)
     
     conn.commit()
     return True
 
 
-def init_database(db_path: str) -> bool:
-    """初始化数据库并导入数据"""
+def init_database(db_path: str, id_map: dict | None = None) -> bool:
+    """初始化数据库并导入数据
+
+    id_map: {q_key: 旧 id} 映射（export_question_id_map.py 导出）。
+    提供时按 q_key 认领旧 id，新题尾部追加——老用户 quiz_attempts/review_items
+    引用的 question_id 不漂移；None 时全新自增（首次建库）。
+    """
     start_time = time.time()
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
@@ -500,6 +514,10 @@ def init_database(db_path: str) -> bool:
                            cursor.execute("SELECT title, id FROM classical_text").fetchall()}
             with open(questions_file, encoding="utf-8") as f:
                 rows = json.load(f)
+            # id 对齐：--id-map（{q_key: 旧 id}）命中则沿用旧 id，新题从 max+1 尾部追加
+            # （保证老用户 quiz_attempts/review_items 的 question_id 引用不漂移）
+            used_ids = set()
+            next_id = (max(id_map.values()) + 1) if id_map else None
             for r in rows:
                 tid = None
                 # 优先 (title, author) 匹配（如 郑伯克段于鄢 有《左传》/《穀梁传》两篇同名）
@@ -512,21 +530,54 @@ def init_database(db_path: str) -> bool:
                     tid = title_to_id.get(r["title"])
                 if tid is None:
                     continue
-                cursor.execute(
-                    """
-                    INSERT INTO questions
-                    (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
-                     context, mark_start, mark_len)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
-                     r["answer_index"], r["explanation"], r["difficulty"],
-                     r["dims"], r["seq"], r.get("context", ""),
-                     r.get("mark_start", -1), r.get("mark_len", 0)),
-                )
+                q_key = r.get("q_key", "")
+                qid = None
+                if q_key and id_map and q_key in id_map:
+                    qid = id_map[q_key]
+                    if qid in used_ids:  # 防御：映射重复/新行 q_key 冲突
+                        qid = None
+                if qid is None and next_id is not None:
+                    qid = next_id
+                if qid is not None:
+                    used_ids.add(qid)
+                # 显式 id 模式下让自增序列跟随最大 id
+                if qid is not None and (next_id is not None):
+                    next_id = max(next_id, qid + 1)
+                if qid is None:
+                    cursor.execute(
+                        """
+                        INSERT INTO questions
+                        (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
+                         context, mark_start, mark_len, q_key)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
+                         r["answer_index"], r["explanation"], r["difficulty"],
+                         r["dims"], r["seq"], r.get("context", ""),
+                         r.get("mark_start", -1), r.get("mark_len", 0), q_key),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO questions
+                        (id, text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
+                         context, mark_start, mark_len, q_key)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (qid, tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
+                         r["answer_index"], r["explanation"], r["difficulty"],
+                         r["dims"], r["seq"], r.get("context", ""),
+                         r.get("mark_start", -1), r.get("mark_len", 0), q_key),
+                    )
                 q_imported += 1
+            if next_id is not None:
+                # 自增序列对齐：未来 AUTOINCREMENT 从当前最大 id+1 继续
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='questions'")
+                cursor.execute("INSERT INTO sqlite_sequence(name, seq) VALUES ('questions', ?)",
+                               (max(used_ids, default=0),))
             conn.commit()
-            print(f"题库导入: {q_imported} 题（来源 {questions_file}）")
+            print(f"题库导入: {q_imported} 题（来源 {questions_file}"
+                  f"{'，id-map 对齐 ' + str(len(used_ids)) + ' 题' if next_id is not None else ''}）")
         else:
             print(f"题库文件不存在（跳过）: {questions_file}")
 
@@ -542,15 +593,26 @@ def init_database(db_path: str) -> bool:
 
 
 def main():
+    ap = argparse.ArgumentParser(description="初始化 classical.db（内容库）")
+    ap.add_argument("--db", default=DB_PATH, help=f"数据库路径（默认 {DB_PATH}）")
+    ap.add_argument("--id-map", default="",
+                    help="旧库 q_key→id 映射 JSON（export_question_id_map.py 导出），"
+                         "用于题库 id 对齐（老用户复习数据不漂移）")
+    args = ap.parse_args()
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(script_dir))
     os.chdir(project_root)
-    
+
+    id_map = None
+    if args.id_map:
+        id_map = json.loads(Path(args.id_map).read_text(encoding="utf-8"))
+
     print(f"工作目录: {os.getcwd()}")
-    print(f"数据库: {DB_PATH}")
-    
-    success = init_database(DB_PATH)
-    
+    print(f"数据库: {args.db}")
+
+    success = init_database(args.db, id_map)
+
     if success:
         print("数据初始化成功！")
     else:

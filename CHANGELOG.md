@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-08-14
+
+### Changed
+
+- **通假字题干扰项换质（全 374 题）**：干扰项从"全库本字池随机"升级为"音近×2 + 形近×1"（素材不足自动回退原池）——音近干扰项与本字同音（如「蚤」通「早」的选项 早/燥/草/爪；读音以 pypinyin 多音字全集为准），形近干扰项优先取同声旁字（如「被」通「披」的选项含彼/赔，共享"皮"部件），更贴近"按音/按形猜本字"的真实错因。题库总量与题序不变（4770 题），已答记录与复习队列完全不受影响。
+- **题库稳定键（q_key）**：每道题增加内容指纹稳定键，数据包重建时旧题按 q_key 认领原 id、新题尾部追加——今后题库增删改序不再导致老用户作答流水与错题复习队列错位。
+
 ## [0.9.4] - 2026-08-13
 
 ### Added
@@ -352,3 +359,4 @@ C++ CLI 原型。
 [0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
 [0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
 [0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
+[0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5

@@ -11,10 +11,12 @@
     python3 scripts/project/generate_questions.py --json       # 全量生成 + 写入入库 JSON
 """
 import argparse
+import hashlib
 import json
 import random
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +25,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 ARTICLES_DIR = Path(__file__).resolve().parents[2] / "articles"
 FEATURES_FILE = Path(__file__).resolve().parent / "features.json"
+EXTERNAL_TJ = Path(__file__).resolve().parents[2] / "external" / "tongjiazi" / "knowledge_base"
 OUT_DIR = Path("/tmp/opencode/questions_sample")
 
 # CRITIC 权重（与 include/core/Config.h 一致，d1..d10）
@@ -242,15 +245,124 @@ def gen_shici(art: dict, items: list) -> list:
     return qs
 
 
-def gen_tongjia(art: dict, items: list, global_zhengzi: set = None) -> list:
-    """通假字还原：本字 + 全库本字池干扰项
+def flat_pinyin(s: str) -> str:
+    """去声调拼音（NFD 去组合符，mào→mao；多音串按整串原样保留）"""
+    return "".join(c for c in unicodedata.normalize("NFD", s or "")
+                   if not unicodedata.combining(c))
+
+
+def compute_q_key(title: str, author: str, q_type: str, stem: str, answer: str) -> str:
+    """题目稳定键：内容指纹（不含 options/difficulty/explanation/seq → 换干扰项不改键）
+
+    数据包重建时按 q_key 认领旧 id，保证老用户 quiz_attempts/review_items
+    引用的 question_id 不漂移（新题尾部追加）。
+    """
+    raw = f"{title}|{author}|{q_type}|{stem}|{answer}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+class TongjiaMaterial:
+    """通假字干扰项素材索引（③ 形近/音近；素材/依赖缺失时优雅降级为纯①本字池）
+
+    音近口径：干扰项 = 与本字同音（去声调）的语料字，读音以 pypinyin（含多音字）
+    为权威源——源数据 tongjia_links 的拼音字段在借字/本字间不一致，不可直接采信。
+    题目语义 =「同音字里选对的那个」（通假真实错因）。
+    形近口径：同声旁（质量高，优先）> 同部首同结构（nodes 素材，次选）。
+    """
+
+    def __init__(self, zheng_pool: list, corpus_chars: set):
+        self.zheng_pool = sorted(zheng_pool)
+        self.corpus_chars = set(corpus_chars)
+        self.char_readings = {}   # 字 -> {去声调读音}（pypinyin，heteronym 全读音）
+        self.char_sb = {}         # 形声字 -> 声旁
+        self.sb_chars = {}        # 声旁 -> {形声字}
+        self.char_rs = {}         # 字 -> {(部首, 结构)}
+        self.rad_struct = {}      # (部首, 结构) -> {字}
+        self.sound_ok = False
+        self.shape_ok = False
+        self._load_readings()
+        self._load_external()
+
+    def _load_readings(self):
+        try:
+            from pypinyin import Style, pinyin as pinyin_fn
+        except ImportError:
+            print("警告: 未安装 pypinyin → ③ 音近换质关闭（形近仍可用）")
+            return
+        chars = self.corpus_chars | set(self.zheng_pool)
+        self.char_readings = {
+            ch: {flat_pinyin(x[0]) for x in pinyin_fn(ch, style=Style.NORMAL, heteronym=True)}
+            for ch in sorted(chars)
+        }
+        self.sound_ok = True
+
+    def _load_external(self):
+        xs_f = EXTERNAL_TJ / "xingsheng_links.jsonl"
+        nodes_f = EXTERNAL_TJ / "nodes.jsonl"
+        if not all(f.exists() for f in (xs_f, nodes_f)):
+            print("警告: external/tongjiazi 素材缺失 → ③ 形近换质关闭")
+            return
+        for line in xs_f.open(encoding="utf-8"):
+            r = json.loads(line)
+            ch, sb = r.get("形声字", ""), r.get("声旁", "")
+            if ch and sb:
+                self.char_sb[ch] = sb
+                self.sb_chars.setdefault(sb, set()).add(ch)
+        for line in nodes_f.open(encoding="utf-8"):
+            r = json.loads(line)
+            ch, rad, st = r.get("字", ""), r.get("部首", ""), r.get("结构", "")
+            if ch and rad and st:
+                self.char_rs.setdefault(ch, set()).add((rad, st))
+                self.rad_struct.setdefault((rad, st), set()).add(ch)
+        self.shape_ok = True
+
+    def sound_pool(self, word: str, zhengzi: str) -> set:
+        """与本字同音（去声调，pypinyin 全读音交集）的语料字"""
+        if not self.sound_ok:
+            return set()
+        ans = self.char_readings.get(zhengzi, set())
+        if not ans:
+            return set()
+        return {c for c in self.corpus_chars
+                if self.char_readings.get(c, set()) & ans}
+
+    def shape_pool_primary(self, word: str, zhengzi: str) -> set:
+        """形近池（优）：同声旁字（借字/本字作声旁或形声字）"""
+        if not self.shape_ok:
+            return set()
+        out = set()
+        for ch in (word, zhengzi):
+            sb = self.char_sb.get(ch)
+            if sb:
+                out |= self.sb_chars.get(sb, set())
+            if ch in self.sb_chars:
+                out |= {c for c in self.sb_chars[ch]}
+        return out & self.corpus_chars
+
+    def shape_pool_secondary(self, word: str, zhengzi: str) -> set:
+        """形近池（次）：同部首同结构字"""
+        if not self.shape_ok:
+            return set()
+        out = set()
+        for ch in (word, zhengzi):
+            for key in self.char_rs.get(ch, ()):
+                out |= self.rad_struct.get(key, set())
+        return out & self.corpus_chars
+
+
+def gen_tongjia(art: dict, items: list, mat: TongjiaMaterial) -> list:
+    """通假字还原：本字 + 干扰项三级降级
 
     候选判定（防张冠李戴）：
     - 单字词头：释义必须 [通同]" 直启 才采信（X：通"Y" / X（注音）：同"Y"），
       排除"词头并非借字"的条目（如"厉：带子下垂的部分。游：同'旒'"）
     - 复合词头：首字必须紧邻"通/同"引号结构（X…：X，通'Y'），
       排除"后字才是借字"的复合词头（如"顾反命：…反，同'返'"）
-    干扰项从全库本字池取（删除同篇 ≥4 候选门槛），并排除一字多本字/异体同现。
+
+    干扰项三级降级（题集不变硬约束：换质失败回退原①选项，绝不掉题）：
+    1. 音近×2 + 形近×1（音近 = 与本字同音去声调的语料字；形近 = 同声旁 > 同部首同结构）
+    2. 音近×2 + ①本字池×1（形近不足时）
+    3. ①全库本字池×3（现状；本字池必须排序保 seed 可复现）
     """
     qs = []
     cands = []
@@ -280,23 +392,56 @@ def gen_tongjia(art: dict, items: list, global_zhengzi: set = None) -> list:
         cands.append((item, word, m.group(1)))
     if not cands:
         return qs
-    # 本字池必须排序（set 遍历顺序依赖进程 hash 随机化，会破坏 seed=42 可复现）
-    zheng_pool = sorted(global_zhengzi if global_zhengzi else {z for _, _, z in cands})
+    # 换质采样用独立 RNG（避免扰动主随机流 → shici/fanyi 输出与旧版逐字节一致）
+    swap_rng = random.Random(42)
     for item, word, zhengzi in cands:
-        # 排除与借字成对的其他本字/异体（如"与"的本字含"举/欤/歙"，异体同现判分有争议）
-        banned = {zhengzi} | next((g for g in ZHENG_ALIAS_GROUPS if zhengzi in g), set())
-        pool = [z for z in zheng_pool if z not in banned]
-        if len(pool) < 3:
+        # 与旧行为完全一致的池与消耗：每道题恒消费 1 次主随机流 sample(pool,3)
+        # （换质成功则弃用、失败/未换质则照用 → shici/fanyi 下游抽样不受扰动）
+        banned_old = {zhengzi} | next((g for g in ZHENG_ALIAS_GROUPS if zhengzi in g), set())
+        pool_old = [z for z in mat.zheng_pool if z not in banned_old]
+        # 题集不变硬约束：本字池不足 3 不出题（与旧行为一致，换质不改变题集）
+        if len(pool_old) < 3:
             continue
-        distractors = random.sample(pool, 3)
-        qs.append({
+        old_sample = random.sample(pool_old, 3)
+        options = None
+        swap = "none"
+        if mat.sound_ok:
+            banned = banned_old | {word}
+            sound = sorted(mat.sound_pool(word, zhengzi) - banned)
+            if len(sound) >= 2:
+                s2 = swap_rng.sample(sound, 2)
+                if mat.shape_ok:
+                    shape = [c for c in sorted(mat.shape_pool_primary(word, zhengzi) - banned)
+                             if c not in s2]
+                    if not shape:
+                        shape = [c for c in sorted(mat.shape_pool_secondary(word, zhengzi) - banned)
+                                 if c not in s2]
+                    if shape:
+                        options = [zhengzi] + s2 + [swap_rng.choice(shape)]
+                        swap = "sound_shape"
+                if options is None:
+                    pool_sw = [z for z in pool_old if z != word]
+                    if pool_sw:
+                        options = [zhengzi] + s2 + swap_rng.sample(pool_sw, 1)
+                        swap = "sound_pool"
+        if options is None:
+            options = [zhengzi] + old_sample
+        q = {
             "type": "tongjia", "dims": TYPE_DIMS["tongjia"],
             "stem": f"下列句中划线字「{word}」的本字，正确的一项是",
-            "options": [zhengzi] + distractors,
+            "options": options,
             "answer": zhengzi,
             "explanation": f"正确答案：{zhengzi}。{item['text']}",
             **extract_context(art, item["num"], word),
-        })
+        }
+        # 换质失败回退①（用已消费的 old_sample，不额外消耗随机流；回退后仍不过才跳过）
+        if not validate(q):
+            q["options"] = [zhengzi] + old_sample
+            swap = "none"
+        if not validate(q):
+            continue
+        q["_swap"] = swap
+        qs.append(q)
     return qs
 
 
@@ -445,13 +590,18 @@ def main():
     sent_pool = []
     # 全局通假本字池（tongjia 干扰项跨篇取材）
     global_zhengzi = set()
+    # 语料字集（③ 干扰项只用语料内出现过的字，滤生僻字）
+    corpus_chars = set()
     for f in files:
         a = parse_article(f)
         sent_pool += [s for p in split_paras(a["translation"]) for s in re.split(r"[。！？]", p) if s.strip()]
+        corpus_chars.update(re.findall(r"[\u4e00-\u9fff]",
+                                       a["original"] + a["annotations_raw"] + a["translation"]))
         for item in parse_annotations(a["annotations_raw"]):
             m = TONGJIA_RE.search(item["text"])
             if m:
                 global_zhengzi.add(m.group(1))
+    mat = TongjiaMaterial(global_zhengzi, corpus_chars)
 
     if args.sample:
         # 分层抽样：保证样本含通假/翻译题篇目，其余随机补足
@@ -459,7 +609,7 @@ def main():
         for f in files:
             a = parse_article(f)
             it = parse_annotations(a["annotations_raw"])
-            if gen_tongjia(a, it, global_zhengzi):
+            if gen_tongjia(a, it, mat):
                 has_tj.add(f)
             if gen_fanyi(a, it, sent_pool):
                 has_fy.add(f)
@@ -476,7 +626,7 @@ def main():
         items = parse_annotations(art["annotations_raw"])
         qs = []
         qs += gen_shici(art, items)
-        qs += gen_tongjia(art, items, global_zhengzi)
+        qs += gen_tongjia(art, items, mat)
         qs += gen_fanyi(art, items, sent_pool)
         for q in qs:
             random.shuffle(q["options"])  # 答案位置随机化（answer 为文本值，不受影响）
@@ -490,6 +640,7 @@ def main():
             q["title"], q["author"], q["source"] = art["title"], art["author"], art["source"]
             ws = [CRITIC_WEIGHTS[j] for j in q["dims"]]
             q["difficulty"] = round(sum(w * dhat[j] for w, j in zip(ws, q["dims"])) / sum(ws), 3)
+            q["q_key"] = compute_q_key(q["title"], q["author"], q["type"], q["stem"], q["answer"])
         all_qs.extend(qs)
         if not qs:
             failures[art["title"]] = f"注释条目 {len(items)} 条"
@@ -510,6 +661,7 @@ def main():
             "dims": ",".join(str(d) for d in q["dims"]), "seq": q["seq"],
             "context": q.get("context", ""), "mark_start": q.get("mark_start", -1),
             "mark_len": q.get("mark_len", 0),
+            "q_key": q["q_key"],
         } for q in all_qs]
         db_json.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"入库 JSON → {db_json}（{len(rows)} 题）")
@@ -524,6 +676,12 @@ def main():
         sub = [q for q in all_qs if q["type"] == t]
         covered = sum(1 for q in sub if q["context"])
         print(f"  {t} 带原句(划线): {covered}/{len(sub)}")
+    swap_stats = {}
+    for q in all_qs:
+        if q["type"] == "tongjia":
+            key = q.get("_swap", "none")
+            swap_stats[key] = swap_stats.get(key, 0) + 1
+    print(f"  tongjia 干扰项换质: {swap_stats}")
     if failures:
         print(f"零产出篇目 {len(failures)}：{list(failures)[:10]}")
 
