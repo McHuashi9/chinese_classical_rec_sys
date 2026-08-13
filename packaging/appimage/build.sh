@@ -26,8 +26,8 @@ cp -r flutter_app/build/linux/x64/release/bundle/* "${APPDIR}/usr/bin/"
 # 4. Copy .desktop
 cp packaging/linux/${APP_NAME}.desktop "${APPDIR}/usr/share/applications/"
 
-# 5. Copy icon
-cp assets/icon/icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+# 5. Copy icon（占位稿源图：flutter_app/linux/runner/resources/app_icon_256.png）
+cp flutter_app/linux/runner/resources/app_icon_256.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
 
 # 6. Ensure chinese_core.so is in bundle (safety net)
 cp build/libchinese_core.so flutter_app/build/linux/x64/release/bundle/lib/
