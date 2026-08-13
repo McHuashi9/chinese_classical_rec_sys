@@ -16,8 +16,16 @@ class _ScriptedQuizTracker implements QuizTracker {
   /// prune 返回值：null = 不裁剪（直接采纳传入 user）；非 null = 裁剪后的 user
   User? pruneResult;
 
+  /// 记录最近一次 applyQuiz 收到的 isReview（复习通道断言用）
+  bool lastIsReview = false;
+
+  /// getDueReviews 的替代实现（reviewCount 测试用）；null 走默认空列表
+  List<ReviewItem> Function()? dueReviewOverride;
+
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice) {
+  (User?, bool?) applyQuiz(User user, int questionId, int choice,
+      {bool isReview = false}) {
+    lastIsReview = isReview;
     if (results.isEmpty) return (null, null);
     return results.removeAt(0);
   }
@@ -29,7 +37,17 @@ class _ScriptedQuizTracker implements QuizTracker {
   void disposeQuestions(List<Question> questions) {}
 
   @override
-  List<Question> getQuestionsForText(int textId) => [];
+  QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
+
+  @override
+  List<ReviewItem> getDueReviews(int textId) =>
+      dueReviewOverride?.call() ?? [];
+
+  @override
+  List<Question> getQuestionsByIds(List<int> ids) => [];
+
+  @override
+  QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
   User? prune(User user) => pruneResult;
@@ -185,6 +203,41 @@ void main() {
       expect(answers, isNotNull);
       expect(answers!.length, 1);
       expect(identical(ctrl.user, pruned), isTrue);
+    });
+
+    test('isReview 透传：复习提交逐题带 isReview=true', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), true)]);
+
+      final answers = ctrl.submitQuiz(questions(2), [0, 1], isReview: true);
+
+      expect(answers, isNotNull);
+      expect(tracker.lastIsReview, isTrue);
+    });
+
+    test('isReview 默认 false：正式测验不带复习标记', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true)]);
+
+      ctrl.submitQuiz(questions(1), [0]);
+
+      expect(tracker.lastIsReview, isFalse);
+    });
+
+    test('提交后 reviewCount 置脏重查（复习状态可能已变）', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true)]);
+      var reviewQueries = 0;
+      tracker.dueReviewOverride = () {
+        reviewQueries++;
+        return [];
+      };
+
+      expect(ctrl.reviewCount, 0); // 懒查第一次
+      expect(reviewQueries, 1);
+      ctrl.submitQuiz(questions(1), [0]);
+      expect(ctrl.reviewCount, 0); // 提交后置脏 → 重查
+      expect(reviewQueries, 2);
     });
   });
 }

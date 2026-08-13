@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -151,6 +153,7 @@ class ArticleDetailPage extends StatelessWidget {
               ),
               SizedBox(height: context.gapXl),
             ],
+            _QuizSection(textId: text.id, textTitle: text.title),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -346,5 +349,164 @@ class ArticleDetailPage extends StatelessWidget {
     if (context.mounted) {
       Navigator.of(context).pop();
     }
+  }
+}
+
+/// 随堂练习卡片区块（"开始阅读"按钮上方）：
+/// 摘要"答 X/Y · 错 N"；未答完 → 继续练习；已答完且有错题 → 复习错题；无题不显示
+class _QuizSection extends StatefulWidget {
+  final int textId;
+  final String textTitle;
+
+  const _QuizSection({required this.textId, required this.textTitle});
+
+  @override
+  State<_QuizSection> createState() => _QuizSectionState();
+}
+
+class _QuizSectionState extends State<_QuizSection> {
+  UserController? _userCtrl;
+  QuizAttemptSummary? _summary;
+  int _dueForText = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _userCtrl ??= context.read<UserController>();
+    // watch 注册依赖：UserController 通知（答题/复习提交、远程同步）→ 本方法重跑 → 刷新
+    context.watch<UserController>();
+    _refresh();
+  }
+
+  /// 重查摘要与本篇到期错题数（didChangeDependencies 与答题返回两条路径共用）
+  void _refresh() {
+    final userCtrl = _userCtrl;
+    if (userCtrl == null) return;
+    _summary = userCtrl.getAttemptSummary(widget.textId);
+    _dueForText = userCtrl.getDueReviews(widget.textId).length;
+    setState(() {});
+  }
+
+  Future<void> _continueQuiz() async {
+    final userCtrl = _userCtrl!;
+    final batch = userCtrl.getQuizQuestions(widget.textId);
+    final questions = batch.questions;
+    if (questions.isEmpty) {
+      userCtrl.disposeQuizQuestions(questions);
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          articleTitle: widget.textTitle,
+          questions: questions,
+        ),
+      ),
+    );
+    if (mounted) _refresh();
+  }
+
+  Future<void> _startReview() async {
+    final userCtrl = _userCtrl!;
+    final due = userCtrl.getDueReviews(widget.textId);
+    if (due.isEmpty) return;
+    final ids = due.take(KnowledgeTracker.quizBatchSize)
+        .map((r) => r.questionId)
+        .toList();
+    final questions = userCtrl.getQuestionsByIds(ids);
+    if (questions.isEmpty) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          articleTitle: widget.textTitle,
+          questions: questions,
+          isReview: true,
+        ),
+      ),
+    );
+    if (mounted) _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.select((SettingsController s) => s.darkMode);
+    final summary = _summary;
+    if (summary == null || summary.total <= 0) return const SizedBox.shrink();
+
+    final allAnswered = summary.answered >= summary.total;
+    final hasWrong = summary.wrong > 0;
+    final hasDue = _dueForText > 0;
+    // 错题口径：N = 队列内错题总数（含未到期）；有到期数且少于 N 时标注到期数；
+    // 无到期时标注"暂无到期"，避免"显示错题数却无复习按钮"的矛盾观感
+    final dueSuffix = !hasWrong
+        ? ''
+        : _dueForText == 0
+            ? '（暂无到期）'
+            : _dueForText < summary.wrong
+                ? '（到期 $_dueForText）'
+                : '';
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.gapLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.edit_note, size: 16,
+                  color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+              SizedBox(width: context.gapSmall),
+              Text(
+                '随堂练习',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '答 ${summary.answered}/${summary.total}'
+                '${hasWrong ? ' · 错 ${summary.wrong}' : ''}$dueSuffix',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: hasWrong
+                          ? (isDark ? AppTheme.darkVermilion : AppTheme.vermilion)
+                          : (isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                    ),
+              ),
+            ],
+          ),
+          SizedBox(height: context.gapSmall),
+          Row(
+            children: [
+              if (!allAnswered) ...[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _continueQuiz,
+                    child: const Text('继续练习'),
+                  ),
+                ),
+              ],
+              if (!allAnswered && hasWrong) SizedBox(width: context.gapSmall),
+              // 复习按钮随到期数驱动：未到期只提示不提供入口（避免死按钮）
+              if (hasWrong && hasDue) ...[
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
+                          isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                      side: BorderSide(
+                        color:
+                            isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                      ),
+                    ),
+                    onPressed: _startReview,
+                    child: const Text('复习错题'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

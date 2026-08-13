@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/pages/article_detail_page.dart';
@@ -54,6 +56,48 @@ ChineseText _text({
     difficulties: difficulties ?? List.filled(10, 0.5),
   );
 }
+
+/// 随堂练习卡片测试用：只提供摘要与到期列表两个能力点
+class _QuizFakeTracker implements QuizTracker {
+  QuizAttemptSummary? summary;
+  List<ReviewItem> due;
+
+  _QuizFakeTracker({this.summary, this.due = const []});
+
+  @override
+  QuizAttemptSummary? getAttemptSummary(int textId) => summary;
+
+  @override
+  List<ReviewItem> getDueReviews(int textId) => due;
+
+  @override
+  (User?, bool?) applyQuiz(User user, int questionId, int choice,
+          {bool isReview = false}) =>
+      (null, null);
+
+  @override
+  User? applyRead(User user, int textId, double readTime) => null;
+
+  @override
+  User? prune(User user) => null;
+
+  @override
+  QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
+
+  @override
+  List<Question> getQuestionsByIds(List<int> ids) => [];
+
+  @override
+  void disposeQuestions(List<Question> questions) {}
+}
+
+ReviewItem _reviewItem(int questionId) => ReviewItem(
+      questionId: questionId,
+      textId: 1,
+      correctStreak: 0,
+      wrongCount: 1,
+      nextReviewAt: 0,
+    );
 
 void main() {
   late NavigationController navCtrl;
@@ -500,5 +544,103 @@ void main() {
 
     expect(find.text('进详情'), findsOneWidget);
     expect(find.text('开始阅读'), findsNothing);
+  });
+
+  group('随堂练习卡片', () {
+    testWidgets('错题未到期：标注暂无到期且不显示复习按钮', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(3, 3, 2),
+        due: const [],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('答 3/3 · 错 2（暂无到期）'), findsOneWidget);
+      expect(find.text('复习错题'), findsNothing);
+      expect(find.text('继续练习'), findsNothing);
+    });
+
+    testWidgets('错题部分到期：标注到期数并显示复习按钮', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(3, 3, 2),
+        due: [_reviewItem(101)],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('答 3/3 · 错 2（到期 1）'), findsOneWidget);
+      expect(find.text('复习错题'), findsOneWidget);
+    });
+
+    testWidgets('错题全部到期：不追加到期标注并显示复习按钮', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(3, 3, 2),
+        due: [_reviewItem(101), _reviewItem(102)],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('答 3/3 · 错 2'), findsOneWidget);
+      expect(find.text('复习错题'), findsOneWidget);
+    });
+
+    testWidgets('未答完：显示继续练习按钮', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(5, 2, 0),
+        due: const [],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('答 2/5'), findsOneWidget);
+      expect(find.text('继续练习'), findsOneWidget);
+      expect(find.text('复习错题'), findsNothing);
+    });
+
+    testWidgets('文章无题：不渲染随堂练习卡片', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(0, 0, 0),
+        due: const [],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('随堂练习'), findsNothing);
+    });
   });
 }

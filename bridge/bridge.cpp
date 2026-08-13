@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <set>
 #include <sstream>
 #include <vector>
@@ -37,9 +38,13 @@ static struct {
 } g_state;
 static std::mutex g_mtx;
 
+// 取题随机轮换的固定种子（Catch2 可复现；轮换由"排除已答"驱动，种子只保证批次内顺序确定）
+static constexpr uint32_t kQuizShuffleSeed = 42;
+
 // C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）
 static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(QuestionData) == 6244, "QuestionData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(ReviewItemData) == 24, "ReviewItemData ABI 尺寸不符，检查 #pragma pack");
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +176,10 @@ const std::unordered_map<std::string, std::vector<std::string>> kUserTableColumn
     {"reading_history", {"id", "user_id", "text_id", "read_time", "read_timestamp"}},
     {"text_tracking", {"text_id", "tracked_at"}},
     {"learning_increments", {"id", "user_id", "dimension", "delta", "timestamp", "type"}},
+    // 测验闭环（quiz_attempts 作答流水 / review_items 错题复习队列）：
+    // 缺表则跳过导出（源库表不存在时兼容旧库），导入侧由 openDatabase 的 initTable 幂等建表
+    {"quiz_attempts", {"id", "question_id", "text_id", "correct", "is_review", "answered_at"}},
+    {"review_items", {"question_id", "text_id", "correct_streak", "wrong_count", "next_review_at"}},
 };
 
 static bool sqliteExec(sqlite3* db, const char* sql)
@@ -316,7 +325,7 @@ static bool importUserTables(sqlite3* db, const std::vector<ExportedTable>& tabl
     }
 
     // 自增序列对齐（防止 id 显式导入后 AUTOINCREMENT 复用旧 id）
-    for (const char* seqTable : {"reading_history", "learning_increments"}) {
+    for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts"}) {
         if (tableExists(db, seqTable)) {
             const std::string upd = "UPDATE sqlite_sequence SET seq = "
                 "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "
@@ -686,9 +695,12 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
     return BRIDGE_OK;
 }
 
-// 取题：按 text_id 返回该文题目（顺序 seq，上限 max_count；不下发 answer_index，判题只在 C++ 侧）
+// 取题：按 text_id 返回该文题目（排除已答含复习记录 → 固定种子随机轮换，上限 max_count；
+// 不下发 answer_index，判题只在 C++ 侧）
 // 返回：题数（≥0）；文章不存在返回 BRIDGE_ERR_TEXT；参数非法返回 BRIDGE_ERR_GENERIC
-extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionData* out, int max_count)
+// answered_all（可空）：1 = 该篇已无未答题；0 = 还有未答题或该篇无题
+extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionData* out,
+                                                        int max_count, int* answered_all)
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
@@ -697,49 +709,112 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
         LOG_WARN("bridge: question_get_by_text 文章不存在 text_id={}", text_id);
         return BRIDGE_ERR_TEXT;
     }
+    if (answered_all) *answered_all = 0;
 
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT id, q_type, stem, "
-                      "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
-                      "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
-                      "dims, explanation, difficulty, "
-                      "context, mark_start, mark_len "
-                      "FROM questions WHERE text_id = ? ORDER BY seq, id LIMIT ?";
-    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        LOG_ERROR("bridge: question_get_by_text prepare 失败: {}", sqlite3_errmsg(g_state.db->getConnection()));
-        return BRIDGE_ERR_GENERIC;
-    }
-    sqlite3_bind_int(stmt, 1, text_id);
-    sqlite3_bind_int(stmt, 2, max_count);
-
-    int count = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        QuestionData& q = out[count];
-        std::memset(&q, 0, sizeof(q));
-        q.id = sqlite3_column_int(stmt, 0);
-        copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
-        copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
-        for (int i = 0; i < 4; i++) {
-            copyCString(q.options[i], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + i));
+    // 1. 该篇总题数（answered_all 判定基准）
+    int total = 0;
+    {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT COUNT(*) FROM questions WHERE text_id = ?";
+        if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            LOG_ERROR("bridge: question_get_by_text count prepare 失败: {}",
+                      sqlite3_errmsg(g_state.db->getConnection()));
+            return BRIDGE_ERR_GENERIC;
         }
-        copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
-        copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
-        q.difficulty = sqlite3_column_double(stmt, 9);
-        copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
-        q.mark_start = sqlite3_column_int(stmt, 11);
-        q.mark_len = sqlite3_column_int(stmt, 12);
-        count++;
+        sqlite3_bind_int(stmt, 1, text_id);
+        if (sqlite3_step(stmt) == SQLITE_ROW) total = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
     }
-    sqlite3_finalize(stmt);
+    if (total == 0) return 0;
 
-    LOG_INFO("bridge: question_get_by_text text_id={} → {} 题 (上限 {})", text_id, count, max_count);
+    // 2. 取未答题（排除已答含复习记录——答过就不重复考，复习队列是错题唯一回收通道）
+    std::vector<QuestionData> pool;
+    {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT id, q_type, stem, "
+                          "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
+                          "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
+                          "dims, explanation, difficulty, "
+                          "context, mark_start, mark_len "
+                          "FROM questions WHERE text_id = ?1 AND id NOT IN "
+                          "(SELECT question_id FROM quiz_attempts WHERE text_id = ?2) "
+                          "ORDER BY seq, id";
+        if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            LOG_ERROR("bridge: question_get_by_text prepare 失败: {}",
+                      sqlite3_errmsg(g_state.db->getConnection()));
+            return BRIDGE_ERR_GENERIC;
+        }
+        sqlite3_bind_int(stmt, 1, text_id);
+        sqlite3_bind_int(stmt, 2, text_id);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            QuestionData q;
+            std::memset(&q, 0, sizeof(q));
+            q.id = sqlite3_column_int(stmt, 0);
+            copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
+            copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
+            for (int i = 0; i < 4; i++) {
+                copyCString(q.options[i], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + i));
+            }
+            copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
+            copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
+            q.difficulty = sqlite3_column_double(stmt, 9);
+            copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
+            q.mark_start = sqlite3_column_int(stmt, 11);
+            q.mark_len = sqlite3_column_int(stmt, 12);
+            pool.push_back(q);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (pool.empty()) {
+        // 有题且全答完
+        if (answered_all) *answered_all = 1;
+        return 0;
+    }
+
+    // 3. 固定种子洗牌（Catch2 可复现）+ 截断到 max_count；
+    //    同一篇连续作答自然轮换：已答题被排除，剩余题随机抽取直到答完
+    std::mt19937 rng(kQuizShuffleSeed);
+    std::shuffle(pool.begin(), pool.end(), rng);
+    const int count = static_cast<int>(std::min<size_t>(pool.size(),
+                                                        static_cast<size_t>(max_count)));
+    for (int i = 0; i < count; i++) out[i] = pool[i];
+
+    LOG_INFO("bridge: question_get_by_text text_id={} → {} 题 (上限 {}, 剩余 {})",
+             text_id, count, max_count, pool.size());
     return count;
 }
 
-// 答题效应：按 question_id 查题 → 判题（用户选项 vs answer_index）→ applyQuizEffect
+// 复习间隔：base · 2^streak，封顶 REVIEW_MAX_INTERVAL
+static int64_t reviewIntervalAfter(int streak)
+{
+    int64_t interval = Config::REVIEW_BASE_INTERVAL;
+    for (int i = 0; i < streak && i < 10; i++) {
+        interval *= 2;
+        if (interval >= Config::REVIEW_MAX_INTERVAL) return Config::REVIEW_MAX_INTERVAL;
+    }
+    return interval > Config::REVIEW_MAX_INTERVAL ? Config::REVIEW_MAX_INTERVAL : interval;
+}
+
+static bool execRawSql(sqlite3* db, const char* sql)
+{
+    char* err = nullptr;
+    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &err);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("bridge: execSql 失败: {}", err ? err : "?");
+        sqlite3_free(err);
+        return false;
+    }
+    return true;
+}
+
+// 答题：按 question_id 查题 → 判题（用户选项 vs answer_index）→ applyQuizEffect（正式测验）
+// + 写作答流水 quiz_attempts + upsert 复习状态 review_items（同锁同事务）
+// is_review=1（错题复习）：跳过 applyQuizEffect（不更新能力/eta/quiz_count，防刷分），
+// 只判题 + 写流水 + 更新复习状态。
 extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int question_id,
                                       int user_choice, int64_t timestamp,
-                                      UserData* out_user, int* out_correct)
+                                      UserData* out_user, int* out_correct, int is_review)
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
@@ -801,26 +876,285 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         return BRIDGE_ERR_GENERIC;
     }
 
-    // 3. 判题 + 应用答题效应
+    // 3. 判题 + 应用答题效应（复习跳过效应）
     User cpp_user;
     c_to_user(user, cpp_user);
 
     const int correct = (user_choice == ans_idx) ? 1 : 0;
     if (out_correct) *out_correct = correct;
     time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
-    g_state.tracker->applyQuizEffect(cpp_user, (*g_state.texts)[it->second], dim_list,
-                                     correct, effective_ts);
-    user_to_c(cpp_user, out_user);
+    if (!is_review) {
+        g_state.tracker->applyQuizEffect(cpp_user, (*g_state.texts)[it->second], dim_list,
+                                         correct, effective_ts);
+        user_to_c(cpp_user, out_user);
 
-    // 持久化（失败则不更新内存态，保持与磁盘一致）
-    if (!g_state.userRepo->saveUser(cpp_user)) {
-        LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
+        // 持久化（失败则不更新内存态，保持与磁盘一致）
+        if (!g_state.userRepo->saveUser(cpp_user)) {
+            LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
+            return BRIDGE_ERR_GENERIC;
+        }
+        g_state.user = std::make_unique<User>(cpp_user);
+    } else {
+        // 复习无效应：原样回传（调用方仍按契约接管返回的 user 内存）
+        user_to_c(cpp_user, out_user);
+    }
+
+    // 4. 作答流水 + 复习状态（同锁同事务；失败回滚且返回错误）
+    sqlite3* db = g_state.db->getConnection();
+    if (!execRawSql(db, "BEGIN")) return BRIDGE_ERR_GENERIC;
+    bool ok = true;
+
+    {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "INSERT INTO quiz_attempts(question_id, text_id, correct, is_review, answered_at) "
+                          "VALUES (?, ?, ?, ?, ?)";
+        ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+        if (ok) {
+            sqlite3_bind_int(stmt, 1, question_id);
+            sqlite3_bind_int(stmt, 2, tid);
+            sqlite3_bind_int(stmt, 3, correct);
+            sqlite3_bind_int(stmt, 4, is_review ? 1 : 0);
+            sqlite3_bind_int64(stmt, 5, static_cast<int64_t>(effective_ts));
+            ok = sqlite3_step(stmt) == SQLITE_DONE;
+        }
+        if (!ok) {
+            LOG_ERROR("bridge: quiz_attempts 写入失败 question_id={}: {}", question_id,
+                      sqlite3_errmsg(db));
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (ok && correct == 1) {
+        if (!is_review) {
+            // 正式测验答对 → 视为已掌握，从复习队列移除
+            sqlite3_stmt* stmt = nullptr;
+            const char* sql = "DELETE FROM review_items WHERE question_id = ?";
+            ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+            if (ok) {
+                sqlite3_bind_int(stmt, 1, question_id);
+                ok = sqlite3_step(stmt) == SQLITE_DONE;
+            }
+            if (!ok) {
+                LOG_ERROR("bridge: review_items 删除失败 question_id={}: {}", question_id,
+                          sqlite3_errmsg(db));
+            }
+            sqlite3_finalize(stmt);
+        } else {
+            // 复习答对 → streak+1，间隔翻倍；streak≥3 移除（视为掌握）
+            int streak = 0;
+            {
+                sqlite3_stmt* stmt = nullptr;
+                const char* sql = "SELECT correct_streak FROM review_items WHERE question_id = ?";
+                ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+                if (ok) {
+                    sqlite3_bind_int(stmt, 1, question_id);
+                    const int rc = sqlite3_step(stmt);
+                    if (rc == SQLITE_ROW) streak = sqlite3_column_int(stmt, 0);
+                    else if (rc != SQLITE_DONE) ok = false;
+                }
+                sqlite3_finalize(stmt);
+            }
+            if (ok) {
+                if (streak + 1 >= Config::REVIEW_MASTER_STREAK) {
+                    sqlite3_stmt* stmt = nullptr;
+                    const char* sql = "DELETE FROM review_items WHERE question_id = ?";
+                    ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+                    if (ok) {
+                        sqlite3_bind_int(stmt, 1, question_id);
+                        ok = sqlite3_step(stmt) == SQLITE_DONE;
+                    }
+                    sqlite3_finalize(stmt);
+                } else {
+                    sqlite3_stmt* stmt = nullptr;
+                    const char* sql = "UPDATE review_items SET correct_streak = ?, next_review_at = ? "
+                                      "WHERE question_id = ?";
+                    ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+                    if (ok) {
+                        sqlite3_bind_int(stmt, 1, streak + 1);
+                        sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(effective_ts) +
+                                           reviewIntervalAfter(streak + 1));
+                        sqlite3_bind_int(stmt, 3, question_id);
+                        ok = sqlite3_step(stmt) == SQLITE_DONE;
+                    }
+                    sqlite3_finalize(stmt);
+                }
+            }
+            if (!ok) {
+                LOG_ERROR("bridge: review_items 更新失败 question_id={}: {}", question_id,
+                          sqlite3_errmsg(db));
+            }
+        }
+    } else if (ok && correct == 0) {
+        // 答错（正式或复习均重置）：streak 清零、wrong_count+1、下次到期 = answered_at + base
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql =
+            "INSERT INTO review_items(question_id, text_id, correct_streak, wrong_count, next_review_at) "
+            "VALUES (?, ?, 0, COALESCE((SELECT wrong_count FROM review_items WHERE question_id = ?), 0) + 1, ?) "
+            "ON CONFLICT(question_id) DO UPDATE SET "
+            "correct_streak = 0, "
+            "wrong_count = review_items.wrong_count + 1, "
+            "next_review_at = excluded.next_review_at";
+        ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
+        if (ok) {
+            sqlite3_bind_int(stmt, 1, question_id);
+            sqlite3_bind_int(stmt, 2, tid);
+            sqlite3_bind_int(stmt, 3, question_id);
+            sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(effective_ts) +
+                               Config::REVIEW_BASE_INTERVAL);
+            ok = sqlite3_step(stmt) == SQLITE_DONE;
+        }
+        if (!ok) {
+            LOG_ERROR("bridge: review_items upsert 失败 question_id={}: {}", question_id,
+                      sqlite3_errmsg(db));
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (ok) {
+        ok = execRawSql(db, "COMMIT");
+    }
+    if (!ok) {
+        execRawSql(db, "ROLLBACK");
         return BRIDGE_ERR_GENERIC;
     }
-    g_state.user = std::make_unique<User>(cpp_user);
-    LOG_INFO("bridge: 答题效应完成 — question_id={}, correct={}, avg_ability={:.3f}→{:.3f}",
-             question_id, correct, g_state.user->getAverageAbility(),
-             cpp_user.getAverageAbility());
+
+    if (!is_review) {
+        LOG_INFO("bridge: 答题效应完成 — question_id={}, correct={}, avg_ability={:.3f}→{:.3f}",
+                 question_id, correct, g_state.user->getAverageAbility(),
+                 cpp_user.getAverageAbility());
+    } else {
+        LOG_INFO("bridge: 复习作答完成 — question_id={}, correct={}（无答题效应）",
+                 question_id, correct);
+    }
+    return BRIDGE_OK;
+}
+
+// 到期错题列表：text_id=0 取全部，否则按篇过滤；只返回 next_review_at <= now 的条目，
+// 按到期时间升序，上限 max_count。返回条数（≥0）
+extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItemData* out,
+                                                         int max_count)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT question_id, text_id, correct_streak, wrong_count, next_review_at "
+                      "FROM review_items WHERE next_review_at <= ? "
+                      "AND (? = 0 OR text_id = ?) "
+                      "ORDER BY next_review_at ASC LIMIT ?";
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: quiz_get_review_items prepare 失败: {}",
+                  sqlite3_errmsg(g_state.db->getConnection()));
+        return BRIDGE_ERR_GENERIC;
+    }
+    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
+    sqlite3_bind_int(stmt, 2, text_id);
+    sqlite3_bind_int(stmt, 3, text_id);
+    sqlite3_bind_int(stmt, 4, max_count);
+
+    int count = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ReviewItemData& r = out[count];
+        std::memset(&r, 0, sizeof(r));
+        r.question_id = sqlite3_column_int(stmt, 0);
+        r.text_id = sqlite3_column_int(stmt, 1);
+        r.correct_streak = sqlite3_column_int(stmt, 2);
+        r.wrong_count = sqlite3_column_int(stmt, 3);
+        r.next_review_at = sqlite3_column_int64(stmt, 4);
+        count++;
+    }
+    sqlite3_finalize(stmt);
+    return count;
+}
+
+// 按 id 取题专用通道（复习用）：复习题是已答题，question_get_by_text 排除已答后拿不到，
+// 此通道不受排除已答影响。按输入顺序返回，上限 max_count（不校验 id 是否存在，
+// 缺失 id 被跳过）。返回实际条数
+extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int count,
+                                                             QuestionData* out, int max_count)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!ids || !out || count <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT id, q_type, stem, "
+                      "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
+                      "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
+                      "dims, explanation, difficulty, "
+                      "context, mark_start, mark_len "
+                      "FROM questions WHERE id = ?";
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: quiz_get_questions_by_ids prepare 失败: {}",
+                  sqlite3_errmsg(g_state.db->getConnection()));
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    int filled = 0;
+    const int n = count < max_count ? count : max_count;
+    for (int i = 0; i < n; i++) {
+        sqlite3_reset(stmt);
+        sqlite3_bind_int(stmt, 1, ids[i]);
+        if (sqlite3_step(stmt) != SQLITE_ROW) continue;  // 缺失 id：跳过
+        QuestionData& q = out[filled];
+        std::memset(&q, 0, sizeof(q));
+        q.id = sqlite3_column_int(stmt, 0);
+        copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
+        copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
+        for (int k = 0; k < 4; k++) {
+            copyCString(q.options[k], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + k));
+        }
+        copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
+        copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
+        q.difficulty = sqlite3_column_double(stmt, 9);
+        copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
+        q.mark_start = sqlite3_column_int(stmt, 11);
+        q.mark_len = sqlite3_column_int(stmt, 12);
+        filled++;
+    }
+    sqlite3_finalize(stmt);
+    return filled;
+}
+
+// 文章测验摘要：总题数/已答数/错题数（review_items 现役错题）一次查询。
+// 文章不存在返回 BRIDGE_ERR_TEXT；out 指针可空（跳过对应统计）
+extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* total,
+                                                            int* answered, int* wrong)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (g_state.textIndex->find(text_id) == g_state.textIndex->end()) return BRIDGE_ERR_TEXT;
+
+    sqlite3* db = g_state.db->getConnection();
+
+    if (total) {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT COUNT(*) FROM questions WHERE text_id = ?";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, text_id);
+            if (sqlite3_step(stmt) == SQLITE_ROW) *total = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    if (answered) {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT COUNT(DISTINCT question_id) FROM quiz_attempts WHERE text_id = ?";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, text_id);
+            if (sqlite3_step(stmt) == SQLITE_ROW) *answered = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    if (wrong) {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT COUNT(*) FROM review_items WHERE text_id = ?";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, text_id);
+            if (sqlite3_step(stmt) == SQLITE_ROW) *wrong = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
     return BRIDGE_OK;
 }
 

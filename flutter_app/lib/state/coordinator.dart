@@ -22,7 +22,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.9.3';
+  static const currentVersion = '0.9.4';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -237,6 +237,8 @@ class AppCoordinator {
     _textRepo.loadTextCache();
     _loadUser();
     _loadTextTrackedStates();
+    // db_replace 已合并用户表：错题队列/作答流水可能变化，置脏懒查缓存并通知刷新
+    userCtrl.invalidateQuizData();
     if (restored) {
       // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
       AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');

@@ -19,6 +19,10 @@ extern "C" {
     int history_get_recent(int limit, ReadingRecordData* out, int max_count);
     int history_get_total_count();
     int history_get_tracked_text_ids(int* out, int max_count);
+    int question_get_by_text(int text_id, QuestionData* out, int max_count, int* answered_all);
+    int tracker_apply_quiz(const UserData* user, int question_id, int user_choice,
+                           int64_t timestamp, UserData* out_user, int* out_correct, int is_review);
+    int quiz_get_review_items(int text_id, ReviewItemData* out, int max_count);
 }
 
 namespace {
@@ -143,6 +147,50 @@ TEST_CASE("db_replace - 同步场景：整库替换保留用户数据（新库�
     const int n2 = history_get_recent(10, recs2, 10);
     REQUIRE(n2 == 3);
     REQUIRE(recs2[0].id > 2);  // 最新记录 id 大于导入的最大 id（2）
+
+    db_close();
+}
+
+TEST_CASE("db_replace - 同步场景：作答流水与错题复习队列跨替换保留（测验闭环）", "[db_replace]") {
+    db_close();
+    const std::string work = makeWorkDb("quizsync");
+
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 文章 1 取一题答错（过去时间戳 → 已到期入队），制造流水 + 复习状态
+    QuestionData qs[1];
+    REQUIRE(question_get_by_text(1, qs, 1, nullptr) == 1);
+    const int qid = qs[0].id;
+    const int ans_idx = std::atoi(
+        sqliteText(work, "SELECT answer_index FROM questions WHERE id = " + std::to_string(qid)).c_str());
+    REQUIRE(ans_idx >= 0);
+    const int wrong_choice = (ans_idx + 1) % 4;
+
+    UserData u;
+    REQUIRE(user_load(&u) == BRIDGE_OK);
+    UserData out;
+    int correct = -1;
+    const int64_t past = static_cast<int64_t>(time(nullptr)) - 4LL * 24 * 3600;
+    REQUIRE(tracker_apply_quiz(&u, qid, wrong_choice, past, &out, &correct, 0) == BRIDGE_OK);
+    REQUIRE(correct == 0);
+
+    REQUIRE(sqliteCount(work, "SELECT COUNT(*) FROM quiz_attempts") == 1);
+    REQUIRE(sqliteCount(work, "SELECT COUNT(*) FROM review_items") == 1);
+
+    // 新库 = 资产副本
+    const std::string newDb = work + ".new";
+    fs::copy_file(TEST_DB_PATH, newDb, fs::copy_options::overwrite_existing);
+
+    REQUIRE(db_replace(newDb.c_str(), work.c_str()) == BRIDGE_OK);
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 流水与复习队列保留（含到期状态：复习列表仍能取到该题）
+    REQUIRE(sqliteCount(work, "SELECT COUNT(*) FROM quiz_attempts") == 1);
+    REQUIRE(sqliteCount(work, "SELECT COUNT(*) FROM review_items") == 1);
+    ReviewItemData items[8];
+    REQUIRE(quiz_get_review_items(1, items, 8) == 1);
+    REQUIRE(items[0].question_id == qid);
+    REQUIRE(items[0].wrong_count == 1);
 
     db_close();
 }

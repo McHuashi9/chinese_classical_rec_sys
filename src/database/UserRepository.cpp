@@ -97,7 +97,35 @@ bool UserRepository::initTable() {
     for (const char* migrate : quizMigrations) {
         db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
     }
-    
+
+    // 测验闭环（作答流水 + 错题复习状态）：用户库无版本号机制，
+    // CREATE IF NOT EXISTS 幂等建表，旧库打开即自动迁移
+    const char* quizAttemptsSql =
+        "CREATE TABLE IF NOT EXISTS quiz_attempts ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "question_id INTEGER NOT NULL, "     // questions.id（内容库）
+        "text_id INTEGER NOT NULL, "
+        "correct INTEGER NOT NULL, "         // 0/1
+        "is_review INTEGER DEFAULT 0, "      // 0=正式测验 1=错题复习
+        "answered_at INTEGER NOT NULL"       // unix 秒
+        ");";
+    const char* reviewItemsSql =
+        "CREATE TABLE IF NOT EXISTS review_items ("
+        "question_id INTEGER PRIMARY KEY, "  // 错题（quiz_attempts 中答错过的题）
+        "text_id INTEGER NOT NULL, "
+        "correct_streak INTEGER DEFAULT 0, " // 连续答对次数（调度翻倍用）
+        "wrong_count INTEGER DEFAULT 0, "
+        "next_review_at INTEGER NOT NULL"    // 下次到期时间
+        ");";
+    const char* quizAttemptsIdxSql =
+        "CREATE INDEX IF NOT EXISTS idx_quiz_attempts_text ON quiz_attempts(text_id, question_id);";
+
+    if (!db->executeSQL(quizAttemptsSql) || !db->executeSQL(reviewItemsSql) ||
+        !db->executeSQL(quizAttemptsIdxSql)) {
+        LOG_ERROR("UserRepository::initTable quiz tables failed: {}", db->getLastError());
+        return false;
+    }
+
     return true;
 }
 

@@ -121,6 +121,25 @@ final class QuestionData extends Struct {
   external int markLen;
 }
 
+/// C ReviewItemData struct — 复习条目（错题复习队列）
+@Packed(1)
+final class ReviewItemData extends Struct {
+  @Int32()
+  external int questionId;
+
+  @Int32()
+  external int textId;
+
+  @Int32()
+  external int correctStreak;
+
+  @Int32()
+  external int wrongCount;
+
+  @Int64()
+  external int nextReviewAt;
+}
+
 /// C 错误码
 abstract class BridgeError {
   static const int ok = 0;

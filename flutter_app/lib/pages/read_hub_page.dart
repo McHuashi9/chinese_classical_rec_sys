@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -428,24 +429,64 @@ class _ReadHubPageState extends State<ReadHubPage>
     _offerQuizAfterReading(textId, textTitle);
   }
 
-  /// 阅读完成 → 若该文有题，询问是否开始随堂练习
+  /// 阅读完成 → 测验入口三态：无题静默 / 有未答题询问开始 / 已答完提示并邀复习
   void _offerQuizAfterReading(int? textId, String textTitle) async {
     if (textId == null || !mounted) return;
     final userCtrl = context.read<UserController>();
-    final questions = userCtrl.getQuizQuestions(textId);
+    final batch = userCtrl.getQuizQuestions(textId);
+    final questions = batch.questions;
+
     if (questions.isEmpty) {
-      userCtrl.disposeQuizQuestions(questions);
+      if (!batch.answeredAll) {
+        userCtrl.disposeQuizQuestions(questions);
+        return; // 无题：不弹窗（现状）
+      }
+      // 已答完：有该篇到期错题才弹复习
+      final due = userCtrl.getDueReviews(textId);
+      if (due.isEmpty) return;
+      final review = await showConfirmDialog(context,
+        title: '本篇练习已完成',
+        content: '有 ${due.length} 道错题已到期，现在复习？',
+        confirmLabel: '复习错题',
+        cancelLabel: '稍后',
+      );
+      if (!review || !mounted) return;
+      await _startReview(textId, textTitle);
       return;
     }
-    final start = await showConfirmDialog(context,
-      title: '阅读完成',
-      content: '本篇共 ${questions.length} 题随堂练习，开始作答？答完立即更新你的能力画像。',
-      confirmLabel: '开始做题',
-      cancelLabel: '下次再说',
-    );
-    if (!start || !mounted) {
-      userCtrl.disposeQuizQuestions(questions);
-      return;
+
+    // 有未答题：现弹窗 + 错题提示；同时有该篇到期错题时加第三按钮
+    final due = userCtrl.getDueReviews(textId);
+    if (due.isNotEmpty) {
+      final action = await showActionDialog(context,
+        title: '阅读完成',
+        content: '本篇共 ${questions.length} 题随堂练习，开始作答？答完立即更新你的能力画像。'
+            '错题将进入复习队列。',
+        actionLabels: ['开始做题', '复习错题'],
+        cancelLabel: '下次再说',
+      );
+      if (!mounted) return;
+      if (action == null || action == -1) {
+        userCtrl.disposeQuizQuestions(questions);
+        return;
+      }
+      if (action == 1) {
+        userCtrl.disposeQuizQuestions(questions);
+        await _startReview(textId, textTitle);
+        return;
+      }
+    } else {
+      final start = await showConfirmDialog(context,
+        title: '阅读完成',
+        content: '本篇共 ${questions.length} 题随堂练习，开始作答？答完立即更新你的能力画像。'
+            '错题将进入复习队列。',
+        confirmLabel: '开始做题',
+        cancelLabel: '下次再说',
+      );
+      if (!start || !mounted) {
+        userCtrl.disposeQuizQuestions(questions);
+        return;
+      }
     }
     // 题目内存所有权随路由转移：QuizPage →（提交）→ QuizResultPage 销毁时释放
     await Navigator.of(context).push<void>(
@@ -453,6 +494,26 @@ class _ReadHubPageState extends State<ReadHubPage>
         builder: (_) => QuizPage(
           articleTitle: textTitle,
           questions: questions,
+        ),
+      ),
+    );
+  }
+
+  /// 开始该篇错题复习：取到期错题（≤ quizBatchSize 一批）→ 复习通道答题页
+  Future<void> _startReview(int textId, String textTitle) async {
+    if (!mounted) return;
+    final userCtrl = context.read<UserController>();
+    final due = userCtrl.getDueReviews(textId);
+    if (due.isEmpty) return;
+    final ids = due.take(KnowledgeTracker.quizBatchSize).map((r) => r.questionId).toList();
+    final questions = userCtrl.getQuestionsByIds(ids);
+    if (questions.isEmpty) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          articleTitle: textTitle,
+          questions: questions,
+          isReview: true,
         ),
       ),
     );

@@ -57,7 +57,8 @@ final class NativeBridge {
   ) trackerPrune;
 
   /// 答题效应（本篇文章测验）: C++ 按 question_id 查题判题并更新能力
-  /// 返回判题结果（correct: 1 对 / 0 错）到 outCorrect
+  /// 返回判题结果（correct: 1 对 / 0 错）到 outCorrect；
+  /// isReview=1（错题复习）跳过能力效应，只判题 + 写复习状态
   late final int Function(
     Pointer<UserData> user,
     int questionId,
@@ -65,11 +66,37 @@ final class NativeBridge {
     int timestamp,
     Pointer<UserData> outUser,
     Pointer<Int32> outCorrect,
+    int isReview,
   ) trackerApplyQuiz;
 
   /// 取题: 按文章取题（上限 maxCount，若题量不足返回实际数量；不含 answer_index）
-  late final int Function(int textId, Pointer<QuestionData> out, int maxCount)
-      questionGetByText;
+  /// answeredAll 输出：1 = 该篇已无未答题（含复习记录排除）
+  late final int Function(
+    int textId,
+    Pointer<QuestionData> out,
+    int maxCount,
+    Pointer<Int32> answeredAll,
+  ) questionGetByText;
+
+  /// 到期错题列表（textId=0 全部；上限 maxCount）
+  late final int Function(int textId, Pointer<ReviewItemData> out, int maxCount)
+      quizGetReviewItems;
+
+  /// 按 id 取题（复习通道，不受"排除已答"影响；缺失 id 跳过）
+  late final int Function(
+    Pointer<Int32> ids,
+    int count,
+    Pointer<QuestionData> out,
+    int maxCount,
+  ) quizGetQuestionsByIds;
+
+  /// 文章测验摘要：total=总题数 answered=已答数 wrong=错题数（review_items 现役）
+  late final int Function(
+    int textId,
+    Pointer<Int32> total,
+    Pointer<Int32> answered,
+    Pointer<Int32> wrong,
+  ) quizGetAttemptSummary;
 
   // ─── 阅读历史 ────────────────────────────────────────────────
   late final int Function(int textId, double readTime, int timestamp)
@@ -155,13 +182,28 @@ final class NativeBridge {
             'tracker_prune');
 
     trackerApplyQuiz = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>, Int32, Int32, Int64, Pointer<UserData>, Pointer<Int32>),
-        int Function(Pointer<UserData>, int, int, int, Pointer<UserData>, Pointer<Int32>)>(
+        Int32 Function(Pointer<UserData>, Int32, Int32, Int64, Pointer<UserData>, Pointer<Int32>, Int32),
+        int Function(Pointer<UserData>, int, int, int, Pointer<UserData>, Pointer<Int32>, int)>(
             'tracker_apply_quiz');
 
     questionGetByText = _lib.lookupFunction<
-        Int32 Function(Int32, Pointer<QuestionData>, Int32),
-        int Function(int, Pointer<QuestionData>, int)>('question_get_by_text');
+        Int32 Function(Int32, Pointer<QuestionData>, Int32, Pointer<Int32>),
+        int Function(int, Pointer<QuestionData>, int, Pointer<Int32>)>(
+            'question_get_by_text');
+
+    quizGetReviewItems = _lib.lookupFunction<
+        Int32 Function(Int32, Pointer<ReviewItemData>, Int32),
+        int Function(int, Pointer<ReviewItemData>, int)>('quiz_get_review_items');
+
+    quizGetQuestionsByIds = _lib.lookupFunction<
+        Int32 Function(Pointer<Int32>, Int32, Pointer<QuestionData>, Int32),
+        int Function(Pointer<Int32>, int, Pointer<QuestionData>, int)>(
+            'quiz_get_questions_by_ids');
+
+    quizGetAttemptSummary = _lib.lookupFunction<
+        Int32 Function(Int32, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>),
+        int Function(int, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>)>(
+            'quiz_get_attempt_summary');
 
     historyAddRecord = _lib.lookupFunction<
         Int32 Function(Int32, Double, Int64),

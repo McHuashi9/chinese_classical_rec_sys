@@ -76,6 +76,17 @@ typedef struct {
 } QuestionData;
 
 /**
+ * @brief C ABI 复习条目结构（错题复习队列，quiz_get_review_items 用）
+ */
+typedef struct {
+    int question_id;              ///< 错题 id（questions.id）
+    int text_id;                  ///< 所属文章 id（复习列表按篇分组）
+    int correct_streak;           ///< 连续答对次数（调度翻倍用）
+    int wrong_count;              ///< 累计答错次数
+    int64_t next_review_at;       ///< 下次到期时间（Unix 秒）
+} ReviewItemData;
+
+/**
  * @brief 错误码
  */
 #define BRIDGE_OK              0   ///< 成功

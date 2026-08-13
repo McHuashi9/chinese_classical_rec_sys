@@ -90,7 +90,9 @@ void main() {
       var verified = 0;
       for (final t in repo.texts) {
         final block = calloc<QuestionData>(5);
-        final n = b.questionGetByText(t.id, block, 5);
+        final answeredAll = calloc<Int32>();
+        final n = b.questionGetByText(t.id, block, 5, answeredAll);
+        calloc.free(answeredAll);
         if (n <= 0) {
           calloc.free(block);
           continue;

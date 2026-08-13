@@ -33,6 +33,12 @@ struct Config {
     // 动态权重参数
     static constexpr double ALPHA_0 = 0.40;       // 初始难度/兴趣权重 α₀
     static constexpr double U_TARGET = 0.80;      // 目标能力阈值
+
+    // 错题复习调度（测验闭环）：首次间隔 = ψ⁻¹(0.85)≈2.6 天取整 3 天；
+    // 间隔倍增（SM-2 式启发，与幂律 ψ 无推导关系）与移除判据待上线后按再错率校准
+    static constexpr long long REVIEW_BASE_INTERVAL = 3LL * 24 * 3600;   // 首次复习间隔（秒）
+    static constexpr long long REVIEW_MAX_INTERVAL = 30LL * 24 * 3600;   // 间隔封顶（秒）
+    static constexpr int REVIEW_MASTER_STREAK = 3;                       // 连续答对达到该次数移除（视为掌握）
     
     // 最小阅读时间阈值（秒）
     static constexpr int MIN_READ_TIME = 30;

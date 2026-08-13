@@ -36,7 +36,8 @@ class _FakeQuizTracker implements QuizTracker {
   int disposeCount = 0;
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice) {
+  (User?, bool?) applyQuiz(User user, int questionId, int choice,
+      {bool isReview = false}) {
     // 每次必须返回新分配的 User（submitQuiz 会 dispose 中间态）
     if (failFrom > 0 && _calls >= failFrom) {
       _calls++;
@@ -55,7 +56,16 @@ class _FakeQuizTracker implements QuizTracker {
   User? prune(User user) => null;
 
   @override
-  List<Question> getQuestionsForText(int textId) => [];
+  QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
+
+  @override
+  List<ReviewItem> getDueReviews(int textId) => [];
+
+  @override
+  List<Question> getQuestionsByIds(List<int> ids) => [];
+
+  @override
+  QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
   void disposeQuestions(List<Question> questions) {
@@ -207,15 +217,17 @@ void main() {
 
     expect(find.text('第 2/2 题'), findsOneWidget);
     expect(find.text('提交'), findsOneWidget);
-    // 末题未答：提交禁用
+    // 末题未答：提交禁用 + 常驻提示还有未答题
     final submitBtn = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(submitBtn.onPressed, isNull);
+    expect(find.text('还有 1 题未作答，可返回补充后再提交'), findsOneWidget);
 
-    // 答完末题 → 提交可用
+    // 答完末题 → 提交可用，提示消失
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
     expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNotNull);
+    expect(find.text('还有 1 题未作答，可返回补充后再提交'), findsNothing);
 
     // 上一题回改
     await tester.tap(find.text('上一题'));
@@ -320,6 +332,101 @@ void main() {
     expect(find.textContaining('能力已随作答更新'), findsOneWidget);
 
     // 题目内存所有权恰好一次释放：拆树后 QuizPage（已置位转移）与结果页都只释放一次
+    await tester.pumpWidget(const SizedBox());
+    expect(tracker.disposeCount, 1);
+  });
+
+  testWidgets('复习模式：标题错题复习，结果页显示复习不改变能力画像', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final settingsCtrl = SettingsController();
+    final userCtrl = UserController();
+    final tracker = _FakeQuizTracker();
+    userCtrl.initTracker(tracker);
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settingsCtrl),
+        ChangeNotifierProvider<UserController>.value(value: userCtrl),
+      ],
+      child: MaterialApp(
+        home: QuizPage(
+          articleTitle: '岳阳楼记',
+          questions: questions,
+          isReview: true,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('错题复习'), findsOneWidget);
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项2释义'));
+    await tester.pump();
+    await tester.tap(find.text('提交'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('复习不改变能力画像'), findsOneWidget);
+    expect(find.textContaining('错题已入复习队列'), findsNothing);
+    expect(find.textContaining('能力已随作答更新'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    expect(tracker.disposeCount, 1);
+  });
+
+  testWidgets('正式测验答错：结果页提示错题已入复习队列', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final settingsCtrl = SettingsController();
+    final userCtrl = UserController();
+    final tracker = _FakeQuizTracker(); // 第 1 题对、第 2 题错
+    userCtrl.initTracker(tracker);
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settingsCtrl),
+        ChangeNotifierProvider<UserController>.value(value: userCtrl),
+      ],
+      child: MaterialApp(
+        home: QuizPage(
+          articleTitle: '岳阳楼记',
+          questions: questions,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项2释义'));
+    await tester.pump();
+    await tester.tap(find.text('提交'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('错题已入复习队列'), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox());
     expect(tracker.disposeCount, 1);
   });

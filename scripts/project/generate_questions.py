@@ -235,7 +235,8 @@ def gen_shici(art: dict, items: list) -> list:
             "stem": f"下列句中划线词「{item['head']}」的解释，正确的一项是",
             "options": [correct] + distractors,
             "answer": correct,
-            "explanation": item["text"],
+            # 解析前拼正确答案文本：结果页答错时也能看到正确答案（判题仍只在 C++ 侧）
+            "explanation": f"正确答案：{correct}。{item['text']}",
             **extract_context(art, item["num"], item["head"]),
         })
     return qs
@@ -293,7 +294,7 @@ def gen_tongjia(art: dict, items: list, global_zhengzi: set = None) -> list:
             "stem": f"下列句中划线字「{word}」的本字，正确的一项是",
             "options": [zhengzi] + distractors,
             "answer": zhengzi,
-            "explanation": item["text"],
+            "explanation": f"正确答案：{zhengzi}。{item['text']}",
             **extract_context(art, item["num"], word),
         })
     return qs
@@ -392,7 +393,7 @@ def gen_fanyi(art: dict, items: list, sent_pool: list = None) -> list:
             "stem": f"下列对文中画线句子的翻译，正确的一项是\n{clean_markers(o_sent)}",
             "options": t_opts,
             "answer": t_sent,
-            "explanation": f"（原句自原文段 {o_idx+1}，译文句自译文段 {t_idx+1}）",
+            "explanation": f"正确答案：{t_sent}。\n（原句自原文段 {o_idx+1}，译文句自译文段 {t_idx+1}）",
         })
         break  # 每篇只出 1 题翻译
     return qs

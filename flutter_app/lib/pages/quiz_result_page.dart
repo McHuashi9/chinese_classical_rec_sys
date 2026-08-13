@@ -18,12 +18,16 @@ class QuizResultPage extends StatefulWidget {
   /// 传入原题数以判定"部分失败"（展示时统计仍以已生效题数为准）
   final int totalQuestions;
 
+  /// 错题复习模式：不产生答题效应，摘要文案区分
+  final bool isReview;
+
   const QuizResultPage({
     super.key,
     required this.articleTitle,
     required this.answers,
     required this.questions,
     this.totalQuestions = 0,
+    this.isReview = false,
   });
 
   @override
@@ -111,13 +115,24 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   ),
                   SizedBox(height: context.gapSmall),
                   Text(
-                    partial
-                        ? '仅 $total 题计入能力（其余提交失败）'
-                        : '能力已随作答更新',
+                    widget.isReview
+                        ? '复习不改变能力画像'
+                        : partial
+                            ? '仅 $total 题计入能力（其余提交失败）'
+                            : '能力已随作答更新',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppTheme.vermilion,
                         ),
                   ),
+                  if (!widget.isReview && correctCount < total) ...[
+                    SizedBox(height: context.gapTiny),
+                    Text(
+                      '错题已入复习队列（约 3 天后到期）',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppTheme.vermilion,
+                          ),
+                    ),
+                  ],
                   SizedBox(height: context.gapLg),
                   const Divider(color: AppTheme.border, height: 1),
                 ],

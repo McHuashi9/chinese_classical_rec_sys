@@ -8,14 +8,17 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
+/// [isReview] 错题复习模式：标题区分，提交走复习通道（不产生答题效应）
 class QuizPage extends StatefulWidget {
   final String articleTitle;
   final List<Question> questions;
+  final bool isReview;
 
   const QuizPage({
     super.key,
     required this.articleTitle,
     required this.questions,
+    this.isReview = false,
   });
 
   @override
@@ -59,6 +62,9 @@ class _QuizPageState extends State<QuizPage> {
 
   bool get _allowSubmit => _isLast && _choices.every((c) => c != null);
 
+  int get _unansweredCount =>
+      widget.questions.length - _choices.where((c) => c != null).length;
+
   void _selectOption(int opt) {
     setState(() => _choices[_index] = opt);
   }
@@ -78,6 +84,7 @@ class _QuizPageState extends State<QuizPage> {
     final answers = userCtrl.submitQuiz(
       widget.questions,
       List.generate(widget.questions.length, (i) => _choices[i]!),
+      isReview: widget.isReview,
     );
     if (!mounted) return;
     if (answers == null) {
@@ -101,6 +108,7 @@ class _QuizPageState extends State<QuizPage> {
               ? widget.questions.sublist(0, credited)
               : widget.questions,
           totalQuestions: widget.questions.length,
+          isReview: widget.isReview,
         ),
       ),
     );
@@ -123,7 +131,9 @@ class _QuizPageState extends State<QuizPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          '随堂练习 · ${widget.articleTitle}',
+          widget.isReview
+              ? '错题复习 · ${widget.articleTitle}'
+              : '随堂练习 · ${widget.articleTitle}',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontFamily: AppTheme.fontTitle,
               ),
@@ -198,36 +208,59 @@ class _QuizPageState extends State<QuizPage> {
             ),
             Padding(
               padding: EdgeInsets.all(context.pagePadding),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_index > 0)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _prev,
-                        child: const Text('上一题'),
-                      ),
-                    ),
-                  if (_index > 0) SizedBox(width: context.gapMedium),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.vermilion,
-                        foregroundColor: AppTheme.cardBg,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      onPressed: _isLast ? (_allowSubmit ? _submit : null) : _next,
+                  if (_isLast && _unansweredCount > 0) ...[
+                    Padding(
+                      padding: EdgeInsets.only(bottom: context.gapMedium),
                       child: Text(
-                        _isLast ? '提交' : '下一题',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: AppTheme.cardBg,
-                              fontWeight: FontWeight.w700,
+                        '还有 $_unansweredCount 题未作答，可返回补充后再提交',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: isDark
+                                  ? AppTheme.darkVermilion
+                                  : AppTheme.vermilion,
                             ),
                       ),
                     ),
+                  ],
+                  Row(
+                    children: [
+                      if (_index > 0)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _prev,
+                            child: const Text('上一题'),
+                          ),
+                        ),
+                      if (_index > 0) SizedBox(width: context.gapMedium),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.vermilion,
+                            foregroundColor: AppTheme.cardBg,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          onPressed: _isLast
+                              ? (_allowSubmit ? _submit : null)
+                              : _next,
+                          child: Text(
+                            _isLast ? '提交' : '下一题',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: AppTheme.cardBg,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

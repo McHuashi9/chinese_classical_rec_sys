@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:chinese_classical_rec_sys/pages/review_list_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
@@ -15,17 +16,19 @@ class MyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.select((UserController u) => u.user);
+    final reviewCount = context.select((UserController u) => u.reviewCount);
 
     return user != null
-        ? _MyContent(user: user)
+        ? _MyContent(user: user, reviewCount: reviewCount)
         : const Center(child: CircularProgressIndicator());
   }
 }
 
 class _MyContent extends StatelessWidget {
   final User user;
+  final int reviewCount;
 
-  const _MyContent({required this.user});
+  const _MyContent({required this.user, required this.reviewCount});
 
   double get _average {
     double sum = 0;
@@ -57,6 +60,12 @@ class _MyContent extends StatelessWidget {
 
           // 2x2 stats
           _buildStats(context, coord),
+
+          // 错题复习入口（兜底通道：只有到期错题才显示）
+          if (reviewCount > 0) ...[
+            SizedBox(height: context.gapLg),
+            _buildReviewCard(context, isDark, reviewCount),
+          ],
 
           // dimension bars
           ...List.generate(10, (i) => _buildDimBar(context, i, isDark)),
@@ -131,6 +140,49 @@ class _MyContent extends StatelessWidget {
         StatsCard(stats: coord.getReadingStats()),
         SizedBox(height: context.gapXxl),
       ],
+    );
+  }
+
+  Widget _buildReviewCard(BuildContext context, bool isDark, int count) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.gapXxl),
+      child: Material(
+        color: isDark ? AppTheme.darkCard : AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(4),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ReviewListPage()),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.assignment_late,
+                    size: 20, color: AppTheme.vermilion),
+                SizedBox(width: context.gapMedium),
+                Expanded(
+                  child: Text(
+                    '错题复习 · $count 道到期',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                        ),
+                  ),
+                ),
+                Icon(Icons.chevron_right,
+                    size: 20,
+                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
