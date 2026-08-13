@@ -130,10 +130,10 @@ flutter_app/
   lib/models/          user · text · question · version · reading_view_data
   lib/state/           5 个控制器（coordinator · navigation · reading · settings · user）
   lib/service/         history_service
-  lib/theme/           AppTheme —— 颜色/字体 Token
+  lib/theme/           AppTheme —— 颜色/字体 Token（强调色用户可调：context.accent = ColorScheme.primary）
   lib/pages/           read_hub · article_detail · my · settings · quiz · quiz_result · review_list
-  lib/widgets/         reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · dialogs
-  assets/              字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db
+  lib/widgets/         reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · empty_state · dialogs
+  assets/              字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db · icon/app_icon.png（App 图标源图，flutter_launcher_icons/flutter_native_splash 由 pubspec 配置生成各平台产物）
 ```
 
 ---
