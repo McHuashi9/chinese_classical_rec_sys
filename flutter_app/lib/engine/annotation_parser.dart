@@ -101,9 +101,10 @@ class AnnotatedTextBuilder {
     Map<int, String> annotations,
     TextStyle baseStyle, {
     bool isDark = false,
+    Color accentColor = AppTheme.vermilion,
   }) {
     final markerStyle = baseStyle.copyWith(
-      color: AppTheme.vermilion,
+      color: accentColor,
       fontSize: baseStyle.fontSize != null ? baseStyle.fontSize! * 0.75 : null,
       fontWeight: FontWeight.w600,
     );

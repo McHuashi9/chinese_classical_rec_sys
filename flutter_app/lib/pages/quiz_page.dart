@@ -166,8 +166,7 @@ class _QuizPageState extends State<QuizPage> {
                       minHeight: 4,
                       backgroundColor:
                           isDark ? AppTheme.borderLight : AppTheme.border,
-                      valueColor:
-                          const AlwaysStoppedAnimation(AppTheme.vermilion),
+                      valueColor: AlwaysStoppedAnimation(context.accent),
                     ),
                   ),
                 ],
@@ -194,7 +193,6 @@ class _QuizPageState extends State<QuizPage> {
                         text: q.context,
                         markStart: q.markStart,
                         markLen: q.markLen,
-                        isDark: isDark,
                         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                               height: 1.5,
                             ),
@@ -217,9 +215,7 @@ class _QuizPageState extends State<QuizPage> {
                       child: Text(
                         '还有 $_unansweredCount 题未作答，可返回补充后再提交',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isDark
-                                  ? AppTheme.darkVermilion
-                                  : AppTheme.vermilion,
+                              color: context.accent,
                             ),
                       ),
                     ),
@@ -238,7 +234,7 @@ class _QuizPageState extends State<QuizPage> {
                         flex: 2,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.vermilion,
+                            backgroundColor: context.accent,
                             foregroundColor: AppTheme.cardBg,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -290,19 +286,15 @@ class _QuizPageState extends State<QuizPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppTheme.darkVermilion.withAlpha(40)
-            : AppTheme.vermilion.withAlpha(20),
+        color: context.accent.withAlpha(isDark ? 40 : 20),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
-        ),
+        border: Border.all(color: context.accent),
       ),
       child: Text(
         label,
         style: TextStyle(
           fontSize: 12,
-          color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+          color: context.accent,
         ),
       ),
     );
@@ -315,41 +307,40 @@ class _QuizPageState extends State<QuizPage> {
       padding: EdgeInsets.only(bottom: context.gapMedium),
       child: Material(
         color: selected
-            ? (isDark
-                ? AppTheme.darkVermilion.withAlpha(60)
-                : AppTheme.vermilion.withAlpha(24))
+            ? context.accent.withAlpha(isDark ? 60 : 24)
             : (isDark ? AppTheme.darkCard : AppTheme.cardBg),
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
           onTap: () => _selectOption(i),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: selected
-                    ? (isDark ? AppTheme.darkVermilion : AppTheme.vermilion)
+                    ? context.accent
                     : (isDark ? AppTheme.borderLight : AppTheme.border),
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOut,
                   width: 22,
                   height: 22,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected
-                          ? (isDark ? AppTheme.darkVermilion : AppTheme.vermilion)
-                          : AppTheme.inkSecondary,
+                      color: selected ? context.accent : AppTheme.inkSecondary,
                     ),
-                    color: selected
-                        ? (isDark ? AppTheme.darkVermilion : AppTheme.vermilion)
-                        : Colors.transparent,
+                    color:
+                        selected ? context.accent : Colors.transparent,
                   ),
                   child: Text(
                     String.fromCharCode(0x41 + i),

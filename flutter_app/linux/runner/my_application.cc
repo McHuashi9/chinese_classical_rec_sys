@@ -54,6 +54,18 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // 窗口图标（占位）：与可执行文件同目录的 app_icon.png，缺失时不致命
+  g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
+    g_autofree gchar* icon_path =
+        g_build_filename(exe_dir, "app_icon.png", nullptr);
+    GError* icon_error = nullptr;
+    if (!gtk_window_set_icon_from_file(window, icon_path, &icon_error)) {
+      g_clear_error(&icon_error);
+    }
+  }
+
   GdkGeometry hints;
   hints.min_width = 600;
   hints.min_height = 400;
@@ -65,9 +77,8 @@ static void my_application_activate(GApplication* application) {
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  // 启动底色与设计规范 paper (#F5F0E8) 一致，避免首帧前黑屏闪烁
+  gdk_rgba_parse(&background_color, "#F5F0E8");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));

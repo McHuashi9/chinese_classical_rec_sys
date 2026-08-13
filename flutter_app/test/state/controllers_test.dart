@@ -1,6 +1,7 @@
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -66,6 +67,32 @@ void main() {
     });
     test('non-null fontScaleSteps', () {
       expect(SettingsController.fontScaleSteps, isNotEmpty);
+    });
+    test('accentColorValue starts at vermilion', () {
+      expect(ctrl.accentColorValue, AppTheme.vermilion.toARGB32());
+    });
+    test('setAccentColor updates and notifies', () {
+      var notified = 0;
+      ctrl.addListener(() => notified++);
+      ctrl.setAccentColor(0xFF3A6B8C);
+      expect(ctrl.accentColorValue, 0xFF3A6B8C);
+      expect(notified, 1);
+    });
+    test('accentColor persists through prefs and init', () async {
+      SharedPreferences.setMockInitialValues({'accentColor': 0xFF4A7B6B});
+      final prefs = await SharedPreferences.getInstance();
+      await ctrl.init(prefs, null);
+      expect(ctrl.accentColorValue, 0xFF4A7B6B);
+
+      ctrl.setAccentColor(0xFF8B5E3C);
+      expect((await SharedPreferences.getInstance()).getInt('accentColor'),
+          0xFF8B5E3C);
+    });
+    test('init without saved accentColor falls back to vermilion', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      await ctrl.init(prefs, null);
+      expect(ctrl.accentColorValue, AppTheme.vermilion.toARGB32());
     });
   });
 

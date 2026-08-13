@@ -10,7 +10,6 @@ class MarkedSentence extends StatelessWidget {
   final int markStart;
   final int markLen;
   final TextStyle style;
-  final bool isDark;
 
   const MarkedSentence({
     super.key,
@@ -18,7 +17,6 @@ class MarkedSentence extends StatelessWidget {
     required this.markStart,
     required this.markLen,
     required this.style,
-    this.isDark = false,
   });
 
   @override
@@ -30,7 +28,7 @@ class MarkedSentence extends StatelessWidget {
     if (start < 0) {
       return Text(text, style: style);
     }
-    final markColor = isDark ? AppTheme.darkVermilion : AppTheme.vermilion;
+    final markColor = context.accent;
     return Text.rich(
       TextSpan(
         children: [

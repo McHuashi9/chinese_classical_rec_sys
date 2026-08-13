@@ -121,7 +121,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                             ? '仅 $total 题计入能力（其余提交失败）'
                             : '能力已随作答更新',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppTheme.vermilion,
+                          color: context.accent,
                         ),
                   ),
                   if (!widget.isReview && correctCount < total) ...[
@@ -129,7 +129,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                     Text(
                       '错题已入复习队列（约 3 天后到期）',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AppTheme.vermilion,
+                            color: context.accent,
                           ),
                     ),
                   ],
@@ -152,7 +152,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.vermilion,
+                    backgroundColor: context.accent,
                     foregroundColor: AppTheme.cardBg,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -191,9 +191,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
           color: isDark ? AppTheme.darkCard : AppTheme.cardBg,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: a.correct
-                ? AppTheme.stoneGreen
-                : (isDark ? AppTheme.darkVermilion : AppTheme.vermilion),
+            color: a.correct ? AppTheme.stoneGreen : context.accent,
           ),
         ),
         child: Column(
@@ -206,7 +204,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   size: 18,
                   color: a.correct
                       ? AppTheme.stoneGreen
-                      : (isDark ? AppTheme.darkVermilion : AppTheme.vermilion),
+                      : context.accent,
                 ),
                 SizedBox(width: context.gapSmall),
                 Expanded(
@@ -240,7 +238,6 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 text: q.context,
                 markStart: q.markStart,
                 markLen: q.markLen,
-                isDark: isDark,
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                       height: 1.4,
                       color: isDark

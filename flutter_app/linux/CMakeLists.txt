@@ -129,6 +129,11 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
     COMPONENT Runtime)
 endif()
 
+# Install app icon (placeholder) alongside the executable; loaded at runtime
+# relative to the executable path (see my_application.cc)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/runner/resources/app_icon.png"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+
 # Install custom FFI library (libchinese_core.so) alongside Flutter's bundled libs
 set(CHINESE_CORE_SO "${CMAKE_SOURCE_DIR}/../../build/libchinese_core.so")
 if(EXISTS "${CHINESE_CORE_SO}")

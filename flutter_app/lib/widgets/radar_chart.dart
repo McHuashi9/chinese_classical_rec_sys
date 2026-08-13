@@ -50,6 +50,7 @@ class _RadarChartState extends State<RadarChart>
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accent;
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
@@ -66,6 +67,7 @@ class _RadarChartState extends State<RadarChart>
                     : null,
                 labels: abilityLabels,
                 progress: _anim.value,
+                accentColor: accent,
               ),
             );
           },
@@ -85,12 +87,14 @@ class _RadarChartPainter extends CustomPainter {
   final List<double>? overlayValues;
   final List<String> labels;
   final double progress;
+  final Color accentColor;
 
   _RadarChartPainter({
     required this.values,
     this.overlayValues,
     required this.labels,
     required this.progress,
+    required this.accentColor,
   });
 
   @override
@@ -196,20 +200,20 @@ class _RadarChartPainter extends CustomPainter {
     canvas.drawPath(
       dataPath,
       Paint()
-        ..color = AppTheme.vermilion.withAlpha(38)
+        ..color = accentColor.withAlpha(38)
         ..style = PaintingStyle.fill,
     );
 
     canvas.drawPath(
       dataPath,
       Paint()
-        ..color = AppTheme.vermilion
+        ..color = accentColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0,
     );
 
     // data points
-    final pointPaint = Paint()..color = AppTheme.vermilion;
+    final pointPaint = Paint()..color = accentColor;
     for (int i = 0; i < abilityCount; i++) {
       final angle = startAngle + i * angleStep;
       final r = radius * values[i].clamp(0.0, 1.0);
@@ -261,7 +265,7 @@ class _RadarChartPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(legendX, legendY),
       dotSize / 2,
-      Paint()..color = AppTheme.vermilion,
+      Paint()..color = accentColor,
     );
     _drawLegendText(canvas, '你的能力', legendX + 14, legendY, 0);
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
@@ -86,6 +87,8 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: (v) => settingsCtrl.setShowRuledLines(v),
               contentPadding: EdgeInsets.zero,
             ),
+            SizedBox(height: context.gapMedium),
+            const _AccentColorSelector(),
             SizedBox(height: context.gapMedium),
             const _FontScaleSelector(),
           ],
@@ -349,6 +352,161 @@ class _AboutLinkRow extends StatelessWidget {
                     .bodyMedium
                     ?.copyWith(color: color)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 主题色选择器：12 个预设色块 + "+" 自定义取色（flutter_colorpicker）
+class _AccentColorSelector extends StatelessWidget {
+  const _AccentColorSelector();
+
+  /// 预设主色（传统颜料色）：朱砂为默认，与 design-spec 强调色基调一致
+  static const _presets = <Color>[
+    Color(0xFFB33A3A), // 朱砂（默认）
+    Color(0xFF5B7B4A), // 石绿
+    Color(0xFF3A6B8C), // 靛蓝
+    Color(0xFF8B5E3C), // 赭石
+    Color(0xFF6B4E71), // 紫檀
+    Color(0xFF4A7B6B), // 松花绿
+    Color(0xFF3A4E6B), // 黛蓝
+    Color(0xFF7B3A55), // 绛紫
+    Color(0xFFA87E2B), // 藤黄
+    Color(0xFF4E7B5B), // 竹青
+    Color(0xFF2F4B66), // 藏青
+    Color(0xFF9C3A55), // 胭脂
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final current =
+        Color(context.select((SettingsController s) => s.accentColorValue));
+    final settingsCtrl = context.read<SettingsController>();
+    final isDark = context.select((SettingsController s) => s.darkMode);
+    final ringColor = isDark ? AppTheme.darkInk : AppTheme.ink;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('主题色', style: Theme.of(context).textTheme.labelLarge),
+        SizedBox(height: context.gapSmall),
+        Wrap(
+          spacing: context.gapMedium,
+          runSpacing: context.gapMedium,
+          children: [
+            for (final color in _presets)
+              _AccentSwatch(
+                key: ValueKey('accent-preset-${color.toARGB32()}'),
+                color: color,
+                selected: current == color,
+                onTap: () => settingsCtrl.setAccentColor(color.toARGB32()),
+                ringColor: ringColor,
+              ),
+            Tooltip(
+              message: '自定义颜色',
+              child: _AccentSwatch(
+                key: const ValueKey('accent-custom'),
+                color: current,
+                selected: !_presets.contains(current),
+                onTap: () => _pickCustomColor(context, settingsCtrl),
+                ringColor: ringColor,
+                isCustom: true,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickCustomColor(
+      BuildContext context, SettingsController settingsCtrl) async {
+    final current = Color(settingsCtrl.accentColorValue);
+    var picked = current;
+    final result = await showDialog<Color>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('自定义主题色'),
+        content: SizedBox(
+          width: 320,
+          child: ColorPicker(
+            pickerColor: current,
+            onColorChanged: (c) => picked = c,
+            enableAlpha: false,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(picked),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) settingsCtrl.setAccentColor(result.toARGB32());
+  }
+}
+
+/// 单个主题色块：点击选择；鼠标悬停 1.12 倍放大（150ms），触屏无 hover 不受影响
+class _AccentSwatch extends StatefulWidget {
+  const _AccentSwatch({
+    super.key,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    required this.ringColor,
+    this.isCustom = false,
+  });
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color ringColor;
+  final bool isCustom;
+
+  @override
+  State<_AccentSwatch> createState() => _AccentSwatchState();
+}
+
+class _AccentSwatchState extends State<_AccentSwatch> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final showAdd = widget.isCustom && !widget.selected;
+    final iconColor = widget.color.computeLuminance() > 0.5
+        ? Colors.black54
+        : Colors.white;
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: widget.onTap,
+      onHover: (hovering) {
+        if (hovering != _hovering) setState(() => _hovering = hovering);
+      },
+      child: AnimatedScale(
+        scale: _hovering ? 1.12 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: showAdd ? Colors.transparent : widget.color,
+            border: Border.all(
+              color: widget.ringColor,
+              width: widget.selected || showAdd ? 2 : 0,
+            ),
+          ),
+          child: showAdd
+              ? Icon(Icons.add, size: 16, color: widget.ringColor)
+              : widget.selected
+                  ? Icon(Icons.check, size: 16, color: iconColor)
+                  : null,
         ),
       ),
     );

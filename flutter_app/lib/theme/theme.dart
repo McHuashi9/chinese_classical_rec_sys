@@ -13,6 +13,8 @@ class AppTheme {
   static const Color cardBg = Color(0xFFFFFDF7);
   static const Color ink = Color(0xFF2C2416);
   static const Color inkSecondary = Color(0xFF5A5245);
+  /// 强调色默认值（朱砂红）；用户可在设置页自定义主色，
+  /// 实际生效值一律从 [AccentColor.accent] 取（ColorScheme.primary）
   static const Color vermilion = Color(0xFFB33A3A);
   static const Color vermilionHover = Color(0xFF932E2E);
   static const Color stoneGreen = Color(0xFF5B7B4A);
@@ -24,6 +26,7 @@ class AppTheme {
   static const Color darkCard = Color(0xFF2A251D);
   static const Color darkInk = Color(0xFFD4C9A8);
   static const Color darkInkSecondary = Color(0xFF9A9278);
+  /// 已被自定义色盘替代：暗色强调色由 fromSeed(accentColor, dark) 生成
   static const Color darkVermilion = Color(0xFFC75B5B);
 
   // ─── 字体 ─────────────────────────────────────────────────────
@@ -83,11 +86,13 @@ class AppTheme {
 
   // ─── Light Theme ──────────────────────────────────────────────
 
-  static ThemeData lightTheme(ScreenSize size, double fontScale) => ThemeData(
+  static ThemeData lightTheme(ScreenSize size, double fontScale,
+          {required Color accentColor}) =>
+      ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: vermilion,
+          seedColor: accentColor,
           brightness: Brightness.light,
           surface: paper,
         ),
@@ -157,11 +162,13 @@ class AppTheme {
 
   // ─── Dark Theme ───────────────────────────────────────────────
 
-  static ThemeData darkTheme(ScreenSize size, double fontScale) => ThemeData(
+  static ThemeData darkTheme(ScreenSize size, double fontScale,
+          {required Color accentColor}) =>
+      ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: darkVermilion,
+          seedColor: accentColor,
           brightness: Brightness.dark,
           surface: darkPaper,
         ),
@@ -228,6 +235,12 @@ class AppTheme {
               color: darkInkSecondary),
         ),
       );
+}
+
+/// 用户可调强调色：统一从当前主题 ColorScheme 取 primary（亮暗自动适配）。
+/// 取代历史上散落的 AppTheme.vermilion/darkVermilion 硬编码。
+extension AccentColor on BuildContext {
+  Color get accent => Theme.of(this).colorScheme.primary;
 }
 
 /// 响应式间距 / 尺度

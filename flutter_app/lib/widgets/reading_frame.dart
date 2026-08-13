@@ -224,6 +224,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
           widget.viewData.annotations,
           bodyStyle.copyWith(color: textColor),
           isDark: widget.viewData.isDark,
+          accentColor: Theme.of(ctx).colorScheme.primary,
         );
 
         return Container(
@@ -293,9 +294,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
             Icons.translate,
             size: 20,
             color: widget.viewData.showTranslation
-                ? (widget.viewData.isDark
-                    ? AppTheme.darkVermilion
-                    : AppTheme.vermilion)
+                ? Theme.of(context).colorScheme.primary
                 : (widget.viewData.isDark
                     ? AppTheme.darkInkSecondary
                     : AppTheme.inkSecondary),

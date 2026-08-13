@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io' show File, Platform;
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, Color;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator, rootBundle;
@@ -64,12 +64,15 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
       final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
       final isDark = context.select((SettingsController s) => s.darkMode);
       final fontScale = context.select((SettingsController s) => s.fontScale);
+      final accent = Color(context
+          .select((SettingsController s) => s.accentColorValue));
 
       return MaterialApp(
         title: '文言文推荐系统',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme(screenSize, fontScale),
-        darkTheme: AppTheme.darkTheme(screenSize, fontScale),
+        theme: AppTheme.lightTheme(screenSize, fontScale, accentColor: accent),
+        darkTheme:
+            AppTheme.darkTheme(screenSize, fontScale, accentColor: accent),
         themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
         home: const MainShell(),
       );

@@ -7,6 +7,7 @@ import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
 
 /// 错题复习列表页：到期错题按篇分组展示，整篇进入复习页（每组 ≤ quizBatchSize 分批）
 class ReviewListPage extends StatefulWidget {
@@ -84,15 +85,9 @@ class _ReviewListPageState extends State<ReviewListPage> {
         ),
       ),
       body: _due.isEmpty
-          ? Center(
-              child: Text(
-                '暂无到期错题',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: isDark
-                          ? AppTheme.darkInkSecondary
-                          : AppTheme.inkSecondary,
-                    ),
-              ),
+          ? const EmptyState(
+              title: '暂无到期错题',
+              subtitle: '答错的题会进入复习队列，约 3 天后到期',
             )
           : ListView(
               padding: EdgeInsets.all(context.pagePadding),
@@ -146,9 +141,7 @@ class _ReviewListPageState extends State<ReviewListPage> {
                       Text(
                         '${items.length} 道错题到期',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isDark
-                                  ? AppTheme.darkVermilion
-                                  : AppTheme.vermilion,
+                              color: context.accent,
                             ),
                       ),
                     ],

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/engine/update_checker.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
+import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 class SettingsController extends ChangeNotifier {
   bool _darkMode = false;
@@ -11,6 +12,8 @@ class SettingsController extends ChangeNotifier {
   bool _showRuledLines = true;
   double _fontScale = 1.0;
   String _logLevel = 'INFO';
+  /// 用户主色（ARGB int，默认朱砂红 AppTheme.vermilion）
+  int _accentColorValue = AppTheme.vermilion.toARGB32();
   String? _error;
   String? _notice;
   NativeBridge? _bridge;
@@ -22,6 +25,7 @@ class SettingsController extends ChangeNotifier {
   bool get showRuledLines => _showRuledLines;
   double get fontScale => _fontScale;
   String get logLevel => _logLevel;
+  int get accentColorValue => _accentColorValue;
   String? get error => _error;
   String? get notice => _notice;
   String? get updateCheckError => _updateChecker?.lastErrorReason;
@@ -48,6 +52,12 @@ class SettingsController extends ChangeNotifier {
     _fontScale = SettingsController.fontScaleSteps
         .reduce((a, b) => (value - a).abs() < (value - b).abs() ? a : b);
     _prefs?.setDouble('fontScale', _fontScale);
+    notifyListeners();
+  }
+
+  void setAccentColor(int colorValue) {
+    _accentColorValue = colorValue;
+    _prefs?.setInt('accentColor', colorValue);
     notifyListeners();
   }
 
@@ -88,6 +98,8 @@ class SettingsController extends ChangeNotifier {
     _darkMode = prefs.getBool('darkMode') ?? false;
     _showTranslation = prefs.getBool('showTranslation') ?? false;
     _showRuledLines = prefs.getBool('showRuledLines') ?? true;
+    _accentColorValue =
+        prefs.getInt('accentColor') ?? AppTheme.vermilion.toARGB32();
     final savedLevel = prefs.getString('logLevel') ?? 'INFO';
     _logLevel = savedLevel;
     final cLevel = savedLevel.toLowerCase();

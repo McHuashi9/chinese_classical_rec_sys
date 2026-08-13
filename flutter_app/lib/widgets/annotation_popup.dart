@@ -26,7 +26,7 @@ class AnnotationPopup extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
     final secondaryColor =
         isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
-    final accentColor = isDark ? AppTheme.darkVermilion : AppTheme.vermilion;
+    final accentColor = context.accent;
     final screenSize =
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width);
     final screenHeight = MediaQuery.sizeOf(context).height;

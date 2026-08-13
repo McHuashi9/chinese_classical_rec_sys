@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-14
+
+### Added
+
+- **自定义主题色**：设置页「外观」新增"主题色"选择——12 个传统颜料预设色（朱砂/石绿/靛蓝/赭石/紫檀/松花绿/黛蓝/绛紫/藤黄/竹青/藏青/胭脂）加自定义取色器，全应用强调色（主按钮/选中态/划线/雷达图/徽标/焦点线等）即时跟随所选主色，亮暗两种模式各自自动生成适配色阶，选择持久化、重启保持。
+- **App 图标与启动屏（占位版）**：朱砂底"文"字图标（右下角"测试版"小字标注）接入 Android/iOS/Windows/Linux 四平台；Android/iOS 启动屏改为纸色底 + 居中图标（Android 12+ 使用系统 SplashScreen，亮暗色各自适配）；Linux 窗口图标与启动底色一并接入（原黑底改为纸色，消除启动黑屏闪烁）。
+
+### Changed
+
+- **UI 美化：统一空状态 + 微交互 + 小动效**：文库搜索无结果、推荐为空、暂无到期错题三处空状态从纯文字改为几何卷轴图形 + 文案（推荐失败与暂无推荐两态区分，复习空态补充"约 3 天后到期"说明）；列表卡片悬停时边框强调主题色、设置页色块悬停放大；能力维度条生长动画（300ms）、推荐列表淡入、答题选项选中过渡（150ms）。
+
 ## [0.9.5] - 2026-08-14
 
 ### Changed
@@ -360,3 +371,4 @@ C++ CLI 原型。
 [0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
 [0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
 [0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
+[0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0

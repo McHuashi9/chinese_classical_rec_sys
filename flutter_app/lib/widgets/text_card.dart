@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-class TextCard extends StatelessWidget {
+/// 列表条目卡片：标题 + 副标题 + 尾随组件；
+/// 鼠标悬停时边框强调为当前主题色（150ms 过渡由 [AnimatedContainer] 提供）。
+class TextCard extends StatefulWidget {
   const TextCard({
     super.key,
     required this.title,
@@ -16,11 +18,29 @@ class TextCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<TextCard> createState() => _TextCardState();
+}
+
+class _TextCardState extends State<TextCard> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderColor = _hovering
+        ? context.accent
+        : (isDark ? AppTheme.borderLight : AppTheme.border);
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: BorderSide(color: borderColor, width: 1),
+      ),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (hovering != _hovering) setState(() => _hovering = hovering);
+        },
         borderRadius: BorderRadius.circular(4),
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -33,12 +53,13 @@ class TextCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
+                    Text(widget.title,
                         style: theme.textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    if (widget.subtitle != null &&
+                        widget.subtitle!.isNotEmpty) ...[
                       SizedBox(height: context.gapTiny),
-                      Text(subtitle!,
+                      Text(widget.subtitle!,
                           style: theme.textTheme.bodyMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
@@ -46,7 +67,7 @@ class TextCard extends StatelessWidget {
                   ],
                 ),
               ),
-              trailing,
+              widget.trailing,
             ],
           ),
         ),

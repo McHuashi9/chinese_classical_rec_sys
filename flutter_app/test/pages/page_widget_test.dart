@@ -87,8 +87,10 @@ void main() {
               Provider.value(value: coord),
             ],
             child: MaterialApp(
-              theme: AppTheme.lightTheme(ScreenSize.medium, 1.0),
-              darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0),
+              theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
+                  accentColor: AppTheme.vermilion),
+              darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
+                  accentColor: AppTheme.vermilion),
               themeMode:
                   settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
               home: const Scaffold(body: SettingsPage()),

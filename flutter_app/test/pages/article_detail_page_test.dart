@@ -136,7 +136,15 @@ void main() {
         ChangeNotifierProvider<UserController>.value(value: userCtrl),
         Provider<AppCoordinator>.value(value: coord),
       ],
-      child: MaterialApp(home: child),
+      child: MaterialApp(
+        theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
+            accentColor: AppTheme.vermilion),
+        darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
+            accentColor: AppTheme.vermilion),
+        themeMode:
+            settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+        home: child,
+      ),
     );
   }
 
@@ -313,14 +321,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('特征待定'), findsOneWidget);
-    // 暗色分支：徽标须用 darkVermilion 底色/描边（与亮色的 vermilion 不同）
+    // 暗色分支：徽标须用主题强调色（暗色 ColorScheme.primary，与亮色不同）
     final chip = tester.widget<Chip>(find.ancestor(
       of: find.text('特征待定'),
       matching: find.byType(Chip),
     ));
-    expect(chip.backgroundColor, AppTheme.darkVermilion.withAlpha(40));
-    expect(chip.side!.color, AppTheme.darkVermilion);
-    expect(chip.labelStyle!.color, AppTheme.darkVermilion);
+    final scheme =
+        Theme.of(tester.element(find.byType(ArticleDetailPage))).colorScheme;
+    expect(scheme.brightness, Brightness.dark);
+    expect(chip.backgroundColor, scheme.primary.withAlpha(40));
+    expect(chip.side!.color, scheme.primary);
+    expect(chip.labelStyle!.color, scheme.primary);
   });
 
   testWidgets('来源为空：不渲染来源与特征徽标区', (tester) async {

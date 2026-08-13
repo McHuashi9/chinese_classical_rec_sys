@@ -158,20 +158,17 @@ class _MyContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
-              ),
+              border: Border.all(color: context.accent),
             ),
             child: Row(
               children: [
-                const Icon(Icons.assignment_late,
-                    size: 20, color: AppTheme.vermilion),
+                Icon(Icons.assignment_late, size: 20, color: context.accent),
                 SizedBox(width: context.gapMedium),
                 Expanded(
                   child: Text(
                     '错题复习 · $count 道到期',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                          color: context.accent,
                         ),
                   ),
                 ),
@@ -231,14 +228,20 @@ class _MyContent extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
               child: Container(
                 height: 10,
-                color: AppTheme.vermilion.withAlpha(31),
+                color: context.accent.withAlpha(31),
                 alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: val,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: val),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  builder: (ctx, v, child) => FractionallySizedBox(
+                    widthFactor: v,
+                    child: child,
+                  ),
                   child: Container(
                     height: 10,
                     decoration: BoxDecoration(
-                      color: AppTheme.vermilion,
+                      color: context.accent,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),

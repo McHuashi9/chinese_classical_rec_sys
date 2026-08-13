@@ -88,7 +88,8 @@ class ReadingController extends ChangeNotifier {
   }
 
   void paginate(double pageWidth, double pageHeight, ScreenSize screenSize,
-      double fontScale, bool isDark) {
+      double fontScale, bool isDark,
+      {Color accentColor = AppTheme.vermilion}) {
     if (_readingText == null) return;
     final content = _showTranslation ? _interleavedText : _readingText!.content;
     if (content.isEmpty) {
@@ -98,8 +99,8 @@ class ReadingController extends ChangeNotifier {
 
     final bodyStyle = AppTheme.bodyReadingSize(screenSize, fontScale);
     final tp = TextPainter(
-      text: AnnotatedTextBuilder.build(
-          content, _annotations, bodyStyle, isDark: isDark),
+      text: AnnotatedTextBuilder.build(content, _annotations, bodyStyle,
+          isDark: isDark, accentColor: accentColor),
       textDirection: TextDirection.ltr,
     );
     tp.layout(maxWidth: pageWidth);

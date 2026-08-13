@@ -93,14 +93,11 @@ class ArticleDetailPage extends StatelessWidget {
                   if (text.background.startsWith('【特征待定】'))
                     Chip(
                       label: const Text('特征待定'),
-                      backgroundColor: isDark
-                          ? AppTheme.darkVermilion.withAlpha(40)
-                          : AppTheme.vermilion.withAlpha(20),
-                      side: BorderSide(
-                        color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
-                      ),
+                      backgroundColor:
+                          context.accent.withAlpha(isDark ? 40 : 20),
+                      side: BorderSide(color: context.accent),
                       labelStyle: TextStyle(
-                        color: isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
+                        color: context.accent,
                         fontSize: 12,
                       ),
                     ),
@@ -158,7 +155,7 @@ class ArticleDetailPage extends StatelessWidget {
               width: double.infinity,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.vermilion,
+                  backgroundColor: context.accent,
                   foregroundColor: AppTheme.cardBg,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -468,7 +465,7 @@ class _QuizSectionState extends State<_QuizSection> {
                 '${hasWrong ? ' · 错 ${summary.wrong}' : ''}$dueSuffix',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: hasWrong
-                          ? (isDark ? AppTheme.darkVermilion : AppTheme.vermilion)
+                          ? context.accent
                           : (isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
                     ),
               ),
@@ -491,12 +488,8 @@ class _QuizSectionState extends State<_QuizSection> {
                 Expanded(
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor:
-                          isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
-                      side: BorderSide(
-                        color:
-                            isDark ? AppTheme.darkVermilion : AppTheme.vermilion,
-                      ),
+                      foregroundColor: context.accent,
+                      side: BorderSide(color: context.accent),
                     ),
                     onPressed: _startReview,
                     child: const Text('复习错题'),

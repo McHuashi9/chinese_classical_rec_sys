@@ -22,7 +22,14 @@ Widget _wrap(Widget child) {
       ChangeNotifierProvider.value(value: settingsCtrl),
       ChangeNotifierProvider.value(value: userCtrl),
     ],
-    child: MaterialApp(home: child),
+    child: MaterialApp(
+      theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
+          accentColor: AppTheme.vermilion),
+      darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
+          accentColor: AppTheme.vermilion),
+      themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+      home: child,
+    ),
   );
 }
 
@@ -171,7 +178,10 @@ void main() {
     final markStyle = _findMarkStyle(rich.text, '旧');
     expect(markStyle, isNotNull);
     expect(markStyle!.decoration, TextDecoration.underline);
-    expect(markStyle.color, AppTheme.vermilion);
+    // 划线颜色随主题强调色（默认朱砂），断言取当前主题 primary 而非硬编码
+    final scheme =
+        Theme.of(tester.element(find.byType(QuizPage))).colorScheme;
+    expect(markStyle.color, scheme.primary);
   });
 
   testWidgets('无原句题目：不渲染额外句子', (tester) async {

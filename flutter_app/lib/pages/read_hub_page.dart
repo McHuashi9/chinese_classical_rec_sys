@@ -14,6 +14,7 @@ import 'package:chinese_classical_rec_sys/pages/article_detail_page.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
+import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
 import 'package:chinese_classical_rec_sys/widgets/text_card.dart';
 
 class ReadHubPage extends StatefulWidget {
@@ -148,7 +149,7 @@ class _ReadHubPageState extends State<ReadHubPage>
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                         border: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
                         enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
-                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.vermilion, width: 2)),
+                        focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: context.accent, width: 2)),
                       ),
                     ),
                     ),
@@ -179,7 +180,7 @@ class _ReadHubPageState extends State<ReadHubPage>
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                       border: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
                       enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
-                      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.vermilion, width: 2)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: context.accent, width: 2)),
                     ),
                   ),
                   ),
@@ -192,12 +193,7 @@ class _ReadHubPageState extends State<ReadHubPage>
           SizedBox(height: context.gapMedium),
           Expanded(
             child: filtered.isEmpty
-                ? Center(
-                    child: Text('未找到匹配篇目',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                        )),
-                  )
+                ? const EmptyState(title: '未找到匹配篇目')
                 : _filter.isNotEmpty
                     ? ListView.builder(
                         itemCount: filtered.length,
@@ -260,29 +256,35 @@ class _ReadHubPageState extends State<ReadHubPage>
             child: recs.isEmpty && _initialLoad
                 ? const Center(child: CircularProgressIndicator())
                 : recs.isEmpty
-                ? Center(
-                    child: Text(
-                      error != null ? '推荐失败，请稍后重试' : '能力变化时将自动生成推荐',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                      ),
-                    ),
+                ? EmptyState(
+                    title: error != null ? '推荐失败，请稍后重试' : '能力变化时将自动生成推荐',
                   )
-                : ListView.builder(
-                    itemCount: recs.length,
-                    itemBuilder: (ctx, i) {
-                      final prob = (recs[i].probability * 100).toStringAsFixed(1);
-                      return TextCard(
-                        title: recs[i].text.title,
-                        subtitle: '${recs[i].text.author} · ${recs[i].text.dynasty}',
-                        trailing: Text('$prob%',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.vermilion,
-                          )),
-                        onTap: () => _onSelectText(recs[i].text),
-                      );
-                    },
+                : TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 250),
+                    builder: (ctx, v, child) =>
+                        Opacity(opacity: v, child: child),
+                    child: ListView.builder(
+                      itemCount: recs.length,
+                      itemBuilder: (ctx, i) {
+                        final prob =
+                            (recs[i].probability * 100).toStringAsFixed(1);
+                        return TextCard(
+                          title: recs[i].text.title,
+                          subtitle:
+                              '${recs[i].text.author} · ${recs[i].text.dynasty}',
+                          trailing: Text('$prob%',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: context.accent,
+                                )),
+                          onTap: () => _onSelectText(recs[i].text),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],
@@ -409,6 +411,7 @@ class _ReadHubPageState extends State<ReadHubPage>
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
         settingsCtrl.fontScale,
         isDark,
+        accentColor: context.accent,
       ),
       onNextPage: readingCtrl.nextPage,
       onPrevPage: readingCtrl.prevPage,
