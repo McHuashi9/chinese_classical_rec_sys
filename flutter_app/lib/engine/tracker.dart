@@ -66,18 +66,6 @@ class KnowledgeTracker implements QuizTracker {
     return outUser;
   }
 
-  /// 应用遗忘效应到当前时刻
-  User? applyForgetting(User user) {
-    final outUser = User.allocate(calloc);
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final rc = _bridge.trackerApplyForgetting(user.ptr, now, outUser.ptr);
-    if (rc != BridgeError.ok) {
-      outUser.dispose();
-      return null;
-    }
-    return outUser;
-  }
-
   /// 清理过期增量，返回更新后的用户
   @override
   User? prune(User user) {

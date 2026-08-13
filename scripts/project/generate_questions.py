@@ -65,6 +65,19 @@ ANNO_RE = re.compile(r"〔(\d+)〕\s*(.*?)(?=〔\d+〕|$)", re.DOTALL)
 TONGJIA_RE = re.compile(r"[通同][“\"]([^”\"，。；]{1,4})[”\"]")
 PARA_SPLIT_RE = re.compile(r"\n\s*\n")
 
+# 一字多本字/异体组：取干扰项时排除"与借字成对的其他本字"（防异体同现判分争议）
+ZHENG_ALIAS_GROUPS = [
+    {"举", "欤", "歙"}, {"旒", "癞", "砺"}, {"嘱", "注"}, {"悌", "第"},
+    {"吁", "管"}, {"尝", "曾"}, {"掘", "缺"}, {"压", "餍"}, {"缧", "蔂"},
+    {"叙", "绪"}, {"腰", "邀"}, {"赈", "震"},
+]
+
+
+def strip_tail_zhu_yin(head: str) -> str:
+    """剥离词头尾部的注音括号（X（mǐn敏）→ X）；括号前置（（huān欢）合）不剥离"""
+    m = re.match(r"^([\u4e00-\u9fff]+)[（(][^）)]*[）)]$", head)
+    return m.group(1) if m else head
+
 
 def parse_article(path: Path) -> dict:
     raw = path.read_text(encoding="utf-8")
@@ -128,6 +141,10 @@ def parse_annotations(raw: str) -> list:
                 if items:
                     items[-1]["text"] += " " + part
                 continue
+            if head.startswith("按"):  # 注释者按语（如"按：这两句…"）不是词条，丢弃
+                continue
+            # 释义尾部混入的按语一并截断（如"水滨。按：以上写阁外之景。"）
+            meaning = re.split(r"按[：:].*$", meaning, maxsplit=1)[0].rstrip()
             items.append({"num": num, "head": head.strip(), "text": f"{head.strip()}：{meaning.strip()}"})
     return items
 
@@ -193,7 +210,9 @@ def gen_shici(art: dict, items: list) -> list:
     """实词解释：正确释义 + 同篇其他词头释义（张冠李戴式干扰项）"""
     qs = []
     seen = set()
-    cands = [i for i in items if is_literal_word(i) and len(i["text"]) <= 60]
+    # 排除释义含通假结构（[通同]"）的条目：归通假字题型出，避免题型错位
+    cands = [i for i in items if is_literal_word(i) and len(i["text"]) <= 60
+             and not re.search(r"[通同][“\"]", i["text"].split("：", 1)[-1])]
     if len(cands) < 4:
         return qs
     for item in cands:
@@ -222,41 +241,59 @@ def gen_shici(art: dict, items: list) -> list:
     return qs
 
 
-def gen_tongjia(art: dict, items: list) -> list:
-    """通假字还原：本字 + 同篇其他通假本字
+def gen_tongjia(art: dict, items: list, global_zhengzi: set = None) -> list:
+    """通假字还原：本字 + 全库本字池干扰项
 
-    通假字取词头去注音后的首字（如"堙（yīn因）灭"→堙、"蚤夭"→蚤），
-    并要求该字出现在"X，通'Y'""X同'Y'"结构中，防止张冠李戴。
+    候选判定（防张冠李戴）：
+    - 单字词头：释义必须 [通同]" 直启 才采信（X：通"Y" / X（注音）：同"Y"），
+      排除"词头并非借字"的条目（如"厉：带子下垂的部分。游：同'旒'"）
+    - 复合词头：首字必须紧邻"通/同"引号结构（X…：X，通'Y'），
+      排除"后字才是借字"的复合词头（如"顾反命：…反，同'返'"）
+    干扰项从全库本字池取（删除同篇 ≥4 候选门槛），并排除一字多本字/异体同现。
     """
     qs = []
     cands = []
     seen = set()
     for item in items:
-        word = re.sub(r"[（(][^）)]*[）)]", "", item["head"]).strip()
-        if not word or len(word) > 2:
+        bare = strip_tail_zhu_yin(item["head"])
+        if not bare:
             continue
-        word = word[0]
         m = TONGJIA_RE.search(item["text"])
-        if m and m.group(1) != word:
-            # X 必须紧邻"通/同"引号结构（word……，通'Y'）
-            if re.search(re.escape(word) + r"[，。；、]?[通同][“\"]", item["text"]) and word not in seen:
-                seen.add(word)
-                cands.append((item, word, m.group(1)))
-    if len(cands) < 4:
+        if not m:
+            continue
+        if re.fullmatch(r"[\u4e00-\u9fff]", bare):
+            # 单字词头：仅释义以"通/同"直启的条目（词头 = 借字）
+            meaning = item["text"].split("：", 1)[-1].strip()
+            if not re.search(r"^[通同][“\"]", meaning):
+                continue
+            word = bare
+        else:
+            # 复合词头：首字必须紧邻"通/同"引号结构
+            if not re.search(re.escape(bare[0]) + r"[，。；、]?[通同][“\"]",
+                             item["text"]):
+                continue
+            word = bare[0]
+        if word in seen:
+            continue
+        seen.add(word)
+        cands.append((item, word, m.group(1)))
+    if not cands:
         return qs
+    # 本字池必须排序（set 遍历顺序依赖进程 hash 随机化，会破坏 seed=42 可复现）
+    zheng_pool = sorted(global_zhengzi if global_zhengzi else {z for _, _, z in cands})
     for item, word, zhengzi in cands:
-        distractors = []
-        for _, _, z in cands:
-            if z != zhengzi and z not in distractors:
-                distractors.append(z)
-            if len(distractors) >= 3:
-                break
+        # 排除与借字成对的其他本字/异体（如"与"的本字含"举/欤/歙"，异体同现判分有争议）
+        banned = {zhengzi} | next((g for g in ZHENG_ALIAS_GROUPS if zhengzi in g), set())
+        pool = [z for z in zheng_pool if z not in banned]
+        if len(pool) < 3:
+            continue
+        distractors = random.sample(pool, 3)
         qs.append({
             "type": "tongjia", "dims": TYPE_DIMS["tongjia"],
             "stem": f"下列句中划线字「{word}」的本字，正确的一项是",
             "options": [zhengzi] + distractors,
             "answer": zhengzi,
-            "explanation": next(i["text"] for i in items if word in i["head"]),
+            "explanation": item["text"],
             **extract_context(art, item["num"], word),
         })
     return qs
@@ -302,8 +339,16 @@ def gen_fanyi(art: dict, items: list, sent_pool: list = None) -> list:
     by_num = {i["num"]: i for i in items}
     all_t = [s for p in trans_paras for s in re.split(r"[。！？]", p) if s.strip()]
     pool = sent_pool if sent_pool else all_t
+    # 段长比例过滤：对齐段对若译文/原文长度比例偏离整体水平过多，判定为错配对段
+    # （实测合法对段 r∈[0.66,1.05]，错配样本 r=2.32；阈值 [0.5,1.7] 不伤合法对段）
+    tot_o = sum(len(p) for p in orig_paras)
+    tot_t = sum(len(p) for p in trans_paras)
     for o_idx, t_idx in pairs:
         if t_idx < 0 or t_idx >= len(trans_paras):
+            continue
+        expected = len(orig_paras[o_idx]) * tot_t / tot_o
+        ratio = len(trans_paras[t_idx]) / expected if expected > 0 else 0
+        if not 0.5 <= ratio <= 1.7:
             continue
         o_sents = [s for s in re.split(r"[。！？]", orig_paras[o_idx]) if s.strip()]
         t_sents = [s for s in re.split(r"[。！？]", trans_paras[t_idx]) if s.strip()]
@@ -330,11 +375,13 @@ def gen_fanyi(art: dict, items: list, sent_pool: list = None) -> list:
             continue
         distractors = [t2 for t2 in all_t
                        if t2 != t_sent
-                       and abs(len(t2) - len(t_sent)) / max(len(t_sent), 1) < 0.8]
+                       and abs(len(t2) - len(t_sent)) / max(len(t_sent), 1) < 1.2
+                       and clean_markers(t2)]
         if len(distractors) < 3:  # 同篇不足，跨篇取真实译文句
             distractors = [t2 for t2 in pool
                            if t2 != t_sent and t2 not in all_t
-                           and abs(len(t2) - len(t_sent)) / max(len(t_sent), 1) < 0.8]
+                           and abs(len(t2) - len(t_sent)) / max(len(t_sent), 1) < 1.2
+                           and clean_markers(t2)]
         if len(distractors) < 3:
             continue
         random.shuffle(distractors)
@@ -366,6 +413,8 @@ def validate(q: dict) -> bool:
     opts = q["options"]
     if len(opts) != 4:
         return False
+    if any(not o or not o.strip() for o in opts):  # 格式：无空选项
+        return False
     if len(set(opts)) != 4:          # 格式：选项无重复
         return False
     if q["answer"] not in opts:      # 格式：答案在选项中
@@ -393,9 +442,15 @@ def main():
 
     # 全局译文句池（翻译题干扰项跨篇取材）
     sent_pool = []
+    # 全局通假本字池（tongjia 干扰项跨篇取材）
+    global_zhengzi = set()
     for f in files:
         a = parse_article(f)
         sent_pool += [s for p in split_paras(a["translation"]) for s in re.split(r"[。！？]", p) if s.strip()]
+        for item in parse_annotations(a["annotations_raw"]):
+            m = TONGJIA_RE.search(item["text"])
+            if m:
+                global_zhengzi.add(m.group(1))
 
     if args.sample:
         # 分层抽样：保证样本含通假/翻译题篇目，其余随机补足
@@ -403,7 +458,7 @@ def main():
         for f in files:
             a = parse_article(f)
             it = parse_annotations(a["annotations_raw"])
-            if gen_tongjia(a, it):
+            if gen_tongjia(a, it, global_zhengzi):
                 has_tj.add(f)
             if gen_fanyi(a, it, sent_pool):
                 has_fy.add(f)
@@ -420,7 +475,7 @@ def main():
         items = parse_annotations(art["annotations_raw"])
         qs = []
         qs += gen_shici(art, items)
-        qs += gen_tongjia(art, items)
+        qs += gen_tongjia(art, items, global_zhengzi)
         qs += gen_fanyi(art, items, sent_pool)
         for q in qs:
             random.shuffle(q["options"])  # 答案位置随机化（answer 为文本值，不受影响）

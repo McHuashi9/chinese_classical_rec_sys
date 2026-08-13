@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
-import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
@@ -8,12 +7,11 @@ import 'package:chinese_classical_rec_sys/models/text.dart';
 
 class UserController extends ChangeNotifier {
   QuizTracker? _tracker;
-  final ReadTracker _readTracker;
 
   User? _user;
   List<RecommendResult> _recommendations = [];
 
-  UserController(this._readTracker);
+  UserController();
 
   void initTracker(QuizTracker tracker) { _tracker = tracker; }
 
@@ -37,17 +35,10 @@ class UserController extends ChangeNotifier {
     return _updateUser(updated);
   }
 
-  void recordReading(int textId, double seconds) {
-    if (_user == null || _tracker == null) return;
-    final updated = _tracker!.applyRead(_user!, textId, seconds);
-    if (_updateUser(updated)) {
-      _readTracker.markEffectApplied(textId);
-      notifyListeners();
-    }
-  }
-
   bool _updateUser(User? updated) {
     if (updated == null) return false;
+    // 无变化（如空题组）：直接采纳，避免 dispose 后对悬垂指针 prune
+    if (identical(updated, _user)) return true;
     _user!.dispose();
     final pruned = _tracker!.prune(updated);
     if (pruned != null) {
@@ -96,10 +87,9 @@ class UserController extends ChangeNotifier {
         updated?.dispose();
         // 首题失败：无生效，保留 _user
         if (answers.isEmpty) return null;
-        // 部分成功：C++ 已落库前几题，同步内存态避免下次重复生效
+        // 部分成功：C++ 已落库前几题，同步内存态避免下次重复生效（与成功路径一致带 prune）
         if (i > 0) {
-          _user!.dispose();
-          _user = current;
+          _updateUser(current);
         }
         notifyListeners();
         return answers;
@@ -113,10 +103,8 @@ class UserController extends ChangeNotifier {
       if (i > 0) current.dispose();
       current = updated;
     }
-    if (!identical(current, _user)) {
-      _user!.dispose();
-      _user = current;
-    }
+    // 成功路径与阅读链路一致：prune 过期增量（quiz 增量同样会被裁剪合并）
+    _updateUser(current);
     notifyListeners();
     return answers;
   }

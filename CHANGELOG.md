@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-13
+
+### Changed
+
+- **通假字题产能大幅提升（11 → 374 题）**：此前通假字题仅覆盖 2 篇（出题需同篇 ≥4 个本字候选），现放宽候选判定（单字词头直接采信"X：通'Y'"格式、复合词头保留首字紧邻校验）并改用全库本字池取干扰项，覆盖 155 篇；同时修复合词头解析取错条目（约 4.5%）与张冠李戴风险（5 处词头非借字的条目不再出题）。
+- **实词题与通假题类型归位**：释义含通假结构的词条（此前 290 题混入实词题）改由通假字题型出题。
+- **注释按语不再出题**：注释中「按：…」开头的按语此前会被拆成独立词条（如"按"成题、滕王阁序两条释义混入按语），现从词条解析中丢弃并截断释义尾部按语。
+- **翻译题对齐加固**：新增段落长度比例校验，拦截"原文段 ↔ 错误译文段"的错配（此前已确认 1 例静默错答案）；同篇干扰项长度放宽，跨篇干扰项回退归零。
+- **随堂练习部分提交失败时直接展示结果**：判题中途失败时，不再停留在答题页（此前再次提交会把已生效题目重复计入能力画像），而是直接进入结果页，仅展示已计入能力的题目并注明"仅 N 题计入能力"；首题即失败仍可原地重试。
+- **C++ 告警全开**：根/Android/iOS 构建启用 `-Wall -Wextra -Werror`（MSVC 为 `/W4 /WX`），警告即错误。修复既有告警：`test_bridge.cpp` 多字符字符常量、`TextRepository` 未用参数、`DatabaseManager` 未用 lambda 捕获；`UserRepository` 的 `push_back` 改 `emplace_back` 规避 GCC 12/13 对 `std::variant` 的 `-Wmaybe-uninitialized` 误报（GCC PR 107138）。
+- **修复取题测试的死断言**：`question_get_by_text` 测试原用多字符常量 `'「'` 查词，触发 `-Wall` 后暴露出该断言从未真正执行（查到的「」位置错误导致条件恒假）。现已改为正确的 UTF-8 提取，并按其码点语义（与 Flutter/Dart `substring` 一致）比较划线区间与题干「」中的词。
+- **移除死代码**：删除未使用的 `KnowledgeTracker.applyForgetting`、`UserController.recordReading` 及 `UserController` 对 `ReadTracker` 的依赖（相关调用已由 `applyReadEffect` 取代）。
+
 ## [0.9.2] - 2026-08-12
 
 ### Added
@@ -319,3 +332,4 @@ C++ CLI 原型。
 [0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
 [0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
 [0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
+[0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3

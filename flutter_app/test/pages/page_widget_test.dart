@@ -17,7 +17,7 @@ Widget _wrap(Widget child) {
   final settingsCtrl = SettingsController();
   final readTracker = ReadTracker();
   final readingCtrl = ReadingController(readTracker);
-  final userCtrl = UserController(readTracker);
+  final userCtrl = UserController();
   final coord = AppCoordinator(
     navCtrl: navCtrl,
     settingsCtrl: settingsCtrl,
@@ -67,7 +67,7 @@ void main() {
       final navCtrl = NavigationController();
       final readTracker = ReadTracker();
       final readingCtrl = ReadingController(readTracker);
-      final userCtrl = UserController(readTracker);
+      final userCtrl = UserController();
       final coord = AppCoordinator(
         navCtrl: navCtrl,
         settingsCtrl: settingsCtrl,

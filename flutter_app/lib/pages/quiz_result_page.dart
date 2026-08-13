@@ -14,11 +14,16 @@ class QuizResultPage extends StatefulWidget {
   final List<QuizAnswer> answers;
   final List<Question> questions;
 
+  /// 原题组题数：部分判题失败时 [questions] 只含已生效题目，
+  /// 传入原题数以判定"部分失败"（展示时统计仍以已生效题数为准）
+  final int totalQuestions;
+
   const QuizResultPage({
     super.key,
     required this.articleTitle,
     required this.answers,
     required this.questions,
+    this.totalQuestions = 0,
   });
 
   @override
@@ -46,6 +51,9 @@ class _QuizResultPageState extends State<QuizResultPage> {
     final isDark = context.select((SettingsController s) => s.darkMode);
     final correctCount = widget.answers.where((a) => a.correct).length;
     final total = widget.answers.length;
+    // 部分失败判定：显式传入了原题数，且已生效题数不足
+    final partial = widget.totalQuestions > 0 &&
+        total < widget.totalQuestions;
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
@@ -103,7 +111,9 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   ),
                   SizedBox(height: context.gapSmall),
                   Text(
-                    '能力已随作答更新',
+                    partial
+                        ? '仅 $total 题计入能力（其余提交失败）'
+                        : '能力已随作答更新',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppTheme.vermilion,
                         ),

@@ -1,10 +1,37 @@
 #include <catch_amalgamated.hpp>
 #include "c_types.h"
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
+
+// UTF-8 码点索引 → 字节偏移（mark_start/mark_len 为码点语义，std::string::substr 为字节语义）
+size_t cpToBytes(const std::string& s, size_t cpIndex)
+{
+    size_t bytes = 0, cps = 0;
+    while (bytes < s.size() && cps < cpIndex) {
+        const unsigned char c = static_cast<unsigned char>(s[bytes]);
+        bytes += (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0xC0) ? 2 : 1;
+        cps++;
+    }
+    return bytes;
+}
+
+// 解析 dims CSV（如 "3,4,9"）→ 维度下标（0-based）
+std::vector<int> parseDimsCsv(const char* csv)
+{
+    std::vector<int> out;
+    std::istringstream ss(csv);
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+        if (!tok.empty()) out.push_back(std::atoi(tok.c_str()));
+    }
+    return out;
+}
 
 // 独立临时工作库（避免污染共享测试资产）
 std::string quizWorkDb(const std::string& tag)
@@ -113,20 +140,32 @@ TEST_CASE("bridge - tracker_apply_quiz 完整链路", "[bridge][smoke]") {
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
-    const double u_before = user.abilities[3];
+
+    // 取文章 1 的第一题作判题对象（题库重灌后 id/answer 不固定，动态获取）
+    QuestionData qs[1];
+    REQUIRE(question_get_by_text(1, qs, 1) == 1);
+    const int qid = qs[0].id;
+    const std::vector<int> dims = parseDimsCsv(qs[0].dims);
+    REQUIRE(dims.size() >= 1);
+    const double u_before = user.abilities[dims[0]];
 
     UserData out;
     // 题目不存在
     REQUIRE(tracker_apply_quiz(&user, 999999, 0, 1000000, &out, nullptr) == BRIDGE_ERR_TEXT);
 
-    // 题目 id=1（库中必有，dims=3,4,9，answer_index=2）：答对 → 首维能力上调，dims 覆盖维度 quiz_count 自增
+    // 答 choice=0（合法）→ 判题成功；对错随题库而定，能力方向与判定一致
     int correct = -1;
-    REQUIRE(tracker_apply_quiz(&user, 1, 2, 1000000, &out, &correct) == BRIDGE_OK);
-    REQUIRE(correct == 1);
-    REQUIRE(out.quiz_counts[3] >= 1);
-    REQUIRE(out.quiz_counts[4] >= 1);
-    REQUIRE(out.quiz_counts[9] >= 1);
-    REQUIRE(out.abilities[3] >= u_before - 1e-12);
+    REQUIRE(tracker_apply_quiz(&user, qid, 0, 1000000, &out, &correct) == BRIDGE_OK);
+    REQUIRE(correct >= 0);
+    REQUIRE(correct <= 1);
+    if (correct == 1) {
+        REQUIRE(out.abilities[dims[0]] >= u_before - 1e-12);
+    } else {
+        REQUIRE(out.abilities[dims[0]] <= u_before + 1e-12);
+    }
+    for (int j : dims) {
+        REQUIRE(out.quiz_counts[j] >= 1);
+    }
     // η 不越界
     REQUIRE(out.eta >= 0.02);
     REQUIRE(out.eta <= 0.15);
@@ -137,7 +176,7 @@ TEST_CASE("bridge - tracker_apply_quiz 完整链路", "[bridge][smoke]") {
     REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
     UserData reloaded;
     REQUIRE(user_load(&reloaded) == BRIDGE_OK);
-    REQUIRE(reloaded.quiz_counts[3] == out.quiz_counts[3]);
+    REQUIRE(reloaded.quiz_counts[dims[0]] == out.quiz_counts[dims[0]]);
 
     db_close();
 }
@@ -150,21 +189,37 @@ TEST_CASE("bridge - tracker_apply_quiz 答错拉低能力与参数校验", "[bri
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
-    const double u_before = user.abilities[3];
+
+    // 取文章 1 的第一题，探测出一个必然答错的选项（独立 user 副本试 0-3）
+    QuestionData qs[1];
+    REQUIRE(question_get_by_text(1, qs, 1) == 1);
+    const int qid = qs[0].id;
+    const std::vector<int> dims = parseDimsCsv(qs[0].dims);
+    int wrong_choice = -1;
+    for (int c = 0; c < 4; c++) {
+        UserData probe = user;
+        int correct = -1;
+        UserData probeOut;
+        REQUIRE(tracker_apply_quiz(&probe, qid, c, 1000000, &probeOut, &correct) == BRIDGE_OK);
+        if (correct == 0) { wrong_choice = c; break; }
+    }
+    REQUIRE(wrong_choice >= 0);
+
+    const double u_before = user.abilities[dims[0]];
     const double eta_before = user.eta;
 
+    // 答错 → 首维能力下调，η 下降
     UserData out;
-    // 答错（answer_index=2，故意选 0）→ 首维能力下调，η 下降
     int correct = -1;
-    REQUIRE(tracker_apply_quiz(&user, 1, 0, 1000000, &out, &correct) == BRIDGE_OK);
+    REQUIRE(tracker_apply_quiz(&user, qid, wrong_choice, 1000000, &out, &correct) == BRIDGE_OK);
     REQUIRE(correct == 0);
-    REQUIRE(out.abilities[3] <= u_before - 1e-12);
+    REQUIRE(out.abilities[dims[0]] <= u_before - 1e-12);
     REQUIRE(out.eta <= eta_before + 1e-12);
-    REQUIRE(out.quiz_counts[3] >= 1);
+    REQUIRE(out.quiz_counts[dims[0]] >= 1);
 
     // 非法选项被拒绝（user_choice 越界）
-    REQUIRE(tracker_apply_quiz(&user, 1, -1, 1000000, &out, nullptr) == BRIDGE_ERR_GENERIC);
-    REQUIRE(tracker_apply_quiz(&user, 1, 4, 1000000, &out, nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_quiz(&user, qid, -1, 1000000, &out, nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_quiz(&user, qid, 4, 1000000, &out, nullptr) == BRIDGE_ERR_GENERIC);
 
     db_close();
 }
@@ -200,10 +255,13 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
             REQUIRE(qs[i].mark_len > 0);
             REQUIRE(qs[i].mark_start + qs[i].mark_len <= static_cast<int>(ctx.size()));
             const std::string stem(qs[i].stem);
-            const size_t b = stem.find('「'), e = stem.find('」');
+            const size_t b = stem.find("「"), e = stem.find("」");
             if (b != std::string::npos && e != std::string::npos && e > b) {
-                const std::string word = stem.substr(b + 1, e - b - 1);
-                REQUIRE(ctx.substr(qs[i].mark_start, qs[i].mark_len) == word);
+                // 「」各占 3 字节 UTF-8，跳过括号取词
+                const std::string word = stem.substr(b + 3, e - b - 3);
+                const size_t sB = cpToBytes(ctx, qs[i].mark_start);
+                const size_t eB = cpToBytes(ctx, qs[i].mark_start + qs[i].mark_len);
+                REQUIRE(ctx.substr(sB, eB - sB) == word);
             }
         }
         // 每题 id 都可通过 tracker_apply_quiz 判题
@@ -215,8 +273,8 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     // 文章不存在返回错误（区别于"无题"返回 0）
     REQUIRE(question_get_by_text(999999, qs, 5) == BRIDGE_ERR_TEXT);
 
-    // 无题文章（存在但无题）返回 0
-    REQUIRE(question_get_by_text(76, qs, 5) == 0);
+    // 无题文章（存在但无题）返回 0：诫兄子严敦书（id=120）为新题库 4 篇零产出之一
+    REQUIRE(question_get_by_text(120, qs, 5) == 0);
 
     // 参数校验
     REQUIRE(question_get_by_text(1, nullptr, 5) == BRIDGE_ERR_GENERIC);

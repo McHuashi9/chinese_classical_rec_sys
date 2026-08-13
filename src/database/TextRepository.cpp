@@ -214,6 +214,7 @@ int TextRepository::getCount() {
     int count = 0;
     
     auto callback = [](void* data, int argc, char** argv, char** azColName) -> int {
+        (void)azColName;
         int* cnt = static_cast<int*>(data);
         if (argc > 0 && argv[0]) {
             *cnt = std::atoi(argv[0]);

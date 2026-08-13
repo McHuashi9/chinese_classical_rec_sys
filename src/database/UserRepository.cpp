@@ -191,16 +191,16 @@ bool UserRepository::saveUser(const User& user) {
     auto buildUserParams = [&user]() -> std::vector<SqlParam> {
         std::vector<SqlParam> p;
         for (int i = 0; i < 10; ++i) {
-            p.push_back(user.getAbility(i));
+            p.emplace_back(user.getAbility(i));
         }
         for (int i = 0; i < 10; ++i) {
-            p.push_back(user.getBaseAbility(i));
+            p.emplace_back(user.getBaseAbility(i));
         }
-        p.push_back(user.getEta());
+        p.emplace_back(user.getEta());
         for (int i = 0; i < 10; ++i) {
-            p.push_back(user.getQuizCount(i));
+            p.emplace_back(user.getQuizCount(i));
         }
-        p.push_back(static_cast<double>(user.getLastReadTime()));
+        p.emplace_back(static_cast<double>(user.getLastReadTime()));
         return p;
     };
 

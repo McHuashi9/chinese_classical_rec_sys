@@ -48,6 +48,8 @@
 | 古文库 | 270 篇古文分页浏览，搜索作者/标题，已读/未读标记 |
 | 个性推荐 | 高斯 i+1 推荐引擎，推荐数量可调 |
 | 阅读器 | 乌丝栏版框、8 档字号、计时器、键盘翻页、阅读锁定 |
+| 译文对照 | 阅读器内逐段对照现代文译文（开关可在设置页关闭） |
+| 随文答题 | 每篇随堂练习：原句划线标注、知识追踪计分，反馈能力成长 |
 | 能力雷达 | 10 维能力雷达图 + 综合评分，追踪学习成长 |
 | 亮/暗主题 | 清爽开关切换，全局统一 |
 | 数据自动同步 | 启动时自动检查并下载最新文言文库数据包（prerelease），无需等待 App 更新 |
@@ -118,18 +120,18 @@ src/database/          SQLite 访问封装
 tests/                 Catch2 单元测试
 third_party/           供应商库（sqlite3.c · spdlog · Catch2 · Boost.Nowide）
 articles/              应用数据源 — 270 篇古文（anthology 202 + textbook 68）
-scripts/               Python 数据管线（scripts/project/：init_data.py · features.json · gen_db_version.sh · bump_version.sh · publish_data.sh · build_ios_core.sh；subset_fonts.py 字体子集化）
+scripts/               Python 数据管线（scripts/project/：init_data.py · generate_questions.py · features.json · gen_db_version.sh · bump_version.sh · publish_data.sh · build_ios_core.sh；subset_fonts.py 字体子集化 · summarize_cov.py · test_coverage_cpp.sh 覆盖率）
 packaging/             AppImage / iOS 打包脚本
 flutter_app/
   lib/main.dart        入口 · MainShell (NavigationRail + IndexedStack)
   lib/bridge/          dart:ffi 绑定（ffi_bindings · c_types）
-  lib/engine/          FFI 封装（tracker · recommendation · read_tracker · text_repository · annotation_parser · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config）
-  lib/models/          user · text · version · reading_view_data
+  lib/engine/          FFI 封装（tracker · recommendation · read_tracker · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config）
+  lib/models/          user · text · question · version · reading_view_data
   lib/state/           5 个控制器（coordinator · navigation · reading · settings · user）
   lib/service/         history_service
   lib/theme/           AppTheme —— 颜色/字体 Token
-  lib/pages/           read_hub · article_detail · my · settings
-  lib/widgets/         reading_frame · radar_chart · annotation_popup · stats_card · recent_reading_list · text_card · dialogs
+  lib/pages/           read_hub · article_detail · my · settings · quiz · quiz_result
+  lib/widgets/         reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · dialogs
   assets/              字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db
 ```
 

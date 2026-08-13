@@ -32,7 +32,7 @@ void main() {
   final navCtrl = NavigationController();
   final settingsCtrl = SettingsController();
   final readingCtrl = ReadingController(readTracker);
-  final userCtrl = UserController(readTracker);
+  final userCtrl = UserController();
   final coordinator = AppCoordinator(
     navCtrl: navCtrl,
     settingsCtrl: settingsCtrl,

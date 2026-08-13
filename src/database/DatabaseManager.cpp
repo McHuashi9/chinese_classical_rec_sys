@@ -194,7 +194,7 @@ bool DatabaseManager::bindMixedParameters(sqlite3_stmt* stmt,
     for (size_t i = 0; i < params.size(); ++i) {
         int paramIndex = static_cast<int>(i + 1);
         
-        std::visit([this, &rc, stmt, paramIndex](auto&& arg) {
+        std::visit([&rc, stmt, paramIndex](auto&& arg) {
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, std::string>) {
                 rc = sqlite3_bind_text(stmt, paramIndex, arg.c_str(), -1, SQLITE_TRANSIENT);

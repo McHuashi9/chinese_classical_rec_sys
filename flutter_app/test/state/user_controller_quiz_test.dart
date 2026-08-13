@@ -3,7 +3,6 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
-import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -13,6 +12,9 @@ import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 /// 内存契约：每次 applyQuiz 必须返回新分配的 User（submitQuiz 会 dispose）
 class _ScriptedQuizTracker implements QuizTracker {
   final List<(User?, bool?)> results = [];
+
+  /// prune 返回值：null = 不裁剪（直接采纳传入 user）；非 null = 裁剪后的 user
+  User? pruneResult;
 
   @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice) {
@@ -30,7 +32,7 @@ class _ScriptedQuizTracker implements QuizTracker {
   List<Question> getQuestionsForText(int textId) => [];
 
   @override
-  User? prune(User user) => null;
+  User? prune(User user) => pruneResult;
 }
 
 void main() {
@@ -40,7 +42,7 @@ void main() {
     late Pointer<QuestionData> block;
 
     setUp(() {
-      ctrl = UserController(ReadTracker());
+      ctrl = UserController();
       tracker = _ScriptedQuizTracker();
       ctrl.initTracker(tracker);
     });
@@ -153,6 +155,36 @@ void main() {
       expect(answers, isNotNull);
       expect(answers!.length, 2);
       expect(notified, 1);
+    });
+
+    test('提交成功后 prune 生效（与阅读链路一致，quiz 增量也被裁剪）', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), true)]);
+      final pruned = User.allocate(calloc);
+      tracker.pruneResult = pruned;
+
+      var notified = 0;
+      ctrl.addListener(() => notified++);
+      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+
+      expect(answers, isNotNull);
+      expect(answers!.length, 2);
+      // prune 返回非 null → 采纳裁剪后的 user（模拟增量被合并进基础能力）
+      expect(identical(ctrl.user, pruned), isTrue);
+      expect(notified, 1);
+    });
+
+    test('部分失败路径同样 prune（已生效部分与成功路径行为一致）', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true), (null, null)]);
+      final pruned = User.allocate(calloc);
+      tracker.pruneResult = pruned;
+
+      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+
+      expect(answers, isNotNull);
+      expect(answers!.length, 1);
+      expect(identical(ctrl.user, pruned), isTrue);
     });
   });
 }

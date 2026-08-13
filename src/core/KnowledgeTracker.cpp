@@ -87,15 +87,25 @@ void KnowledgeTracker::applyQuizEffect(User& user, const Text& text,
         LOG_WARN("答题效应: dims 为空，跳过");
         return;
     }
+    // 防御：dims 去重（正常题库每题型维度不重复；若脏数据含重复维度，
+    // 不去重会导致该维被应用两次、答题次数 N_j 自增两次，静默污染）
+    std::vector<int> uniqueDims(dims);
+    std::sort(uniqueDims.begin(), uniqueDims.end());
+    uniqueDims.erase(std::unique(uniqueDims.begin(), uniqueDims.end()),
+                     uniqueDims.end());
     if (timestamp == 0) {
         timestamp = std::time(nullptr);
     }
     const double s = (correct != 0) ? 1.0 : 0.0;
+    // 预期正确率的参考点 d̂_j 取文章第 j 维标准化特征（0~1）。
+    // 题目 difficulty 字段是同篇文章各维特征的加权摘要，篇内同题型没有区分度，
+    // 因此答题效应不按题目 difficulty 计算，统一以文章特征为参考；
+    // difficulty 仅用于题目展示与跨篇聚合，不参与答题效应。
     auto features = FeatureExtractor::getNormalizedFeatures(text);
     double sumError = 0.0;
     int applied = 0;
 
-    for (int j : dims) {
+    for (int j : uniqueDims) {
         if (j < 0 || j >= 10) {
             LOG_WARN("答题效应: 维度越界 {}", j);
             continue;
@@ -132,7 +142,7 @@ void KnowledgeTracker::applyQuizEffect(User& user, const Text& text,
     }
 
     std::string dimStr;
-    for (int j : dims) dimStr += std::to_string(j) + " ";
+    for (int j : uniqueDims) dimStr += std::to_string(j) + " ";
     LOG_DEBUG("答题效应完成: dims=[{}], s={}, 更新后平均能力={:.3f}, η={:.3f}",
               dimStr, s, user.getAverageAbility(), user.getEta());
 }

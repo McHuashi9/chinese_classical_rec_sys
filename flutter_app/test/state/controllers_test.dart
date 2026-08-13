@@ -269,12 +269,10 @@ void main() {
   });
 
   group('UserController', () {
-    late ReadTracker tracker;
     late UserController ctrl;
 
     setUp(() {
-      tracker = ReadTracker();
-      ctrl = UserController(tracker);
+      ctrl = UserController();
     });
     tearDown(() => ctrl.dispose());
 
@@ -282,9 +280,6 @@ void main() {
     test('averageAbility defaults to 0.3', () => expect(ctrl.averageAbility, 0.3));
     test('applyReadEffect is safe without tracker', () {
       expect(ctrl.applyReadEffect(1, 60), false);
-    });
-    test('recordReading is safe without tracker', () {
-      ctrl.recordReading(1, 60);
     });
     test('setUser updates user（真实 User 对象，旧用户被释放）', () {
       final u1 = User.allocate(calloc);

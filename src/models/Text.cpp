@@ -8,40 +8,40 @@ Text::Text() : id(0), title(""), author(""), dynasty(""), content(""),
                f10PplModern(0.0), f11Mattr(0.0), f12AllusionDensity(0.0),
                f13SemanticComplexity(0.0) {}
 
-void Text::setId(int id) {
-    this->id = id;
+void Text::setId(int newId) {
+    this->id = newId;
 }
 
 int Text::getId() const {
     return id;
 }
 
-void Text::setTitle(const std::string& title) {
-    this->title = title;
+void Text::setTitle(const std::string& newTitle) {
+    this->title = newTitle;
 }
 
 std::string Text::getTitle() const {
     return title;
 }
 
-void Text::setAuthor(const std::string& author) {
-    this->author = author;
+void Text::setAuthor(const std::string& newAuthor) {
+    this->author = newAuthor;
 }
 
 std::string Text::getAuthor() const {
     return author;
 }
 
-void Text::setDynasty(const std::string& dynasty) {
-    this->dynasty = dynasty;
+void Text::setDynasty(const std::string& newDynasty) {
+    this->dynasty = newDynasty;
 }
 
 std::string Text::getDynasty() const {
     return dynasty;
 }
 
-void Text::setContent(const std::string& content) {
-    this->content = content;
+void Text::setContent(const std::string& newContent) {
+    this->content = newContent;
 }
 
 std::string Text::getContent() const {

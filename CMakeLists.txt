@@ -13,10 +13,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# MSVC 编译选项（UTF-8 编码支持）
+# MSVC 编译选项（UTF-8 编码支持 + 告警开关）
 if(MSVC)
-    add_compile_options(/utf-8)
+    add_compile_options(/utf-8 /W4 /WX)
+    # strncpy 截断为刻意设计（定长缓冲+手动补 \0），豁免安全 CRT 弃用告警
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+else()
+    # GCC/Clang 告警开关（告警即错误）
+    add_compile_options(-Wall -Wextra -Werror)
 endif()
 
 # 包含头文件目录

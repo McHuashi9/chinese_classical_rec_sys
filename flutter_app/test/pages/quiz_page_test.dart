@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
-import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -17,7 +16,7 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 Widget _wrap(Widget child) {
   final settingsCtrl = SettingsController();
-  final userCtrl = UserController(ReadTracker());
+  final userCtrl = UserController();
   return MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: settingsCtrl),
@@ -32,6 +31,9 @@ Widget _wrap(Widget child) {
 class _FakeQuizTracker implements QuizTracker {
   int _calls = 0;
   int failFrom = 0; // 第 N 次起判题失败（0 表示全成功）
+
+  /// disposeQuestions 调用次数（验证题目内存恰好释放一次）
+  int disposeCount = 0;
 
   @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice) {
@@ -56,7 +58,9 @@ class _FakeQuizTracker implements QuizTracker {
   List<Question> getQuestionsForText(int textId) => [];
 
   @override
-  void disposeQuestions(List<Question> questions) {}
+  void disposeQuestions(List<Question> questions) {
+    disposeCount++;
+  }
 }
 
 List<Question> _fakeQuestions(int n) {
@@ -278,8 +282,9 @@ void main() {
     addTearDown(() => calloc.free(questions.first.owner));
 
     final settingsCtrl = SettingsController();
-    final userCtrl = UserController(ReadTracker());
-    userCtrl.initTracker(_FakeQuizTracker());
+    final userCtrl = UserController();
+    final tracker = _FakeQuizTracker();
+    userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
     await tester.pumpWidget(MultiProvider(
@@ -312,9 +317,14 @@ void main() {
     expect(find.textContaining('第2题解析'), findsOneWidget);
     expect(find.textContaining('你的答案'), findsNWidgets(2));
     expect(find.text('返回文库'), findsOneWidget);
+    expect(find.textContaining('能力已随作答更新'), findsOneWidget);
+
+    // 题目内存所有权恰好一次释放：拆树后 QuizPage（已置位转移）与结果页都只释放一次
+    await tester.pumpWidget(const SizedBox());
+    expect(tracker.disposeCount, 1);
   });
 
-  testWidgets('部分判题失败：留在答题页并提示已计入题数', (tester) async {
+  testWidgets('部分判题失败：跳转结果页，展示已计入题数且不重提', (tester) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -325,7 +335,7 @@ void main() {
     addTearDown(() => calloc.free(questions.first.owner));
 
     final settingsCtrl = SettingsController();
-    final userCtrl = UserController(ReadTracker());
+    final userCtrl = UserController();
     final tracker = _FakeQuizTracker()..failFrom = 1; // 第 2 题起失败
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
@@ -351,10 +361,18 @@ void main() {
     await tester.tap(find.text('选项2释义'));
     await tester.pump();
     await tester.tap(find.text('提交'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('部分题目提交失败，仅 1 题已计入能力'), findsOneWidget);
-    // 未跳转结果页，仍停留在答题页
-    expect(find.text('第 2/2 题'), findsOneWidget);
+    // 进入结果页而非留在答题页（留在答题页重提会重复计分）
+    expect(find.textContaining('仅 1 题计入能力'), findsOneWidget);
+    expect(find.text('答题结果 · 岳阳楼记'), findsOneWidget);
+    // 只展示已生效的第 1 题，第 2 题不展示
+    expect(find.textContaining('第1题解析'), findsOneWidget);
+    expect(find.textContaining('第2题解析'), findsNothing);
+    expect(find.textContaining('你的答案'), findsOneWidget);
+
+    // 部分失败路径：sublist 共享同一 owner 块，仍恰好释放一次
+    await tester.pumpWidget(const SizedBox());
+    expect(tracker.disposeCount, 1);
   });
 }

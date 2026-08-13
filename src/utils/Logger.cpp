@@ -19,6 +19,8 @@ Logger& Logger::getInstance() {
 }
 
 bool Logger::init(const std::string& logDir, const std::string& logFileName) {
+    (void)logDir;
+    (void)logFileName;
     if (initialized_) {
         return true;
     }

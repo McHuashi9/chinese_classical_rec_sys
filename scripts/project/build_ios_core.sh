@@ -30,14 +30,14 @@ for src in $SOURCES; do
     echo "  CC $src -> $obj"
     case "$src" in
         *.c)
-            xcrun clang -c -arch "$ARCH" -isysroot "$SDK_PATH" \
+            xcrun clang -c -Wall -Wextra -Werror -arch "$ARCH" -isysroot "$SDK_PATH" \
                 -miphoneos-version-min="$MIN_IOS" \
                 -I . -I include -I third_party/sqlite3 \
                 -DSQLITE_OS_UNIX=1 \
                 "$src" -o "$obj"
             ;;
         *)
-            xcrun clang++ -c -arch "$ARCH" -isysroot "$SDK_PATH" \
+            xcrun clang++ -c -Wall -Wextra -Werror -arch "$ARCH" -isysroot "$SDK_PATH" \
                 -miphoneos-version-min="$MIN_IOS" \
                 -I . -I include -I bridge -I third_party/spdlog-1.17.0/include \
                 -I third_party/sqlite3 -I third_party/nowide/include \

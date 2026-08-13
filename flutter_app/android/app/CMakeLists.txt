@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.22)
 project(chinese_core_android)
 set(CMAKE_CXX_STANDARD 17)
 
+# 告警开关（NDK 为 Clang，告警即错误）
+add_compile_options(-Wall -Wextra -Werror)
+
 # 从 pubspec.yaml 读取版本号，唯一源
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../../flutter_app/pubspec.yaml" _PUBSPEC)
 string(REGEX MATCH "version: ([0-9]+\\.[0-9]+\\.[0-9]+)" _ ${_PUBSPEC})

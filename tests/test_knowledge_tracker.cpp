@@ -286,6 +286,20 @@ TEST_CASE_METHOD(KTFixture, "applyQuizEffect", "[tracker][quiz]") {
         REQUIRE(user.getEta() >= Config::ETA_MIN);
         REQUIRE(user.getEta() <= Config::ETA_MAX);
     }
+
+    SECTION("重复维度去重（防脏数据重复应用/计数）") {
+        const std::vector<int> dupDims = {3, 3, 4, 4, 9};
+        tracker.applyQuizEffect(user, text, dupDims, 1, now);
+        for (int j : dims) {
+            REQUIRE(user.getQuizCount(j) == 1);  // 只计一次
+        }
+        // 效果与单次应用一致（非重复应用两倍增量）
+        for (int j : dims) {
+            REQUIRE(user.getAbility(j) > 0.3);
+            REQUIRE(user.getAbility(j) < 0.3 + Config::QUIZ_K0 + EPS);
+        }
+        REQUIRE(repo.getIncrementCount(USER_ID) == static_cast<int>(dims.size()));
+    }
 }
 
 // =============================================================================

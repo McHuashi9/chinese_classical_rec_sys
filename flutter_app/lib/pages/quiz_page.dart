@@ -81,29 +81,26 @@ class _QuizPageState extends State<QuizPage> {
     );
     if (!mounted) return;
     if (answers == null) {
+      // 首题即判题失败：无任何题生效，留在答题页可重试（不会重复计分）
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('提交失败，请重试')),
       );
       return;
     }
-    if (answers.length != widget.questions.length) {
-      // 部分题目判分失败（C++ 逐题落库，成功部分不回滚）
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('部分题目提交失败，仅 ${answers.length} 题已计入能力'),
-        ),
-      );
-      return;
-    }
+    // 部分判题失败时 C++ 逐题落库、成功部分不回滚：结果页只展示已生效的前 N 题，
+    // 不留在答题页——否则再次提交会把已生效题目重复计入能力
+    final credited = answers.length;
     // 题目内存所有权转移给结果页（结果页销毁时释放），本页 dispose 不再释放
     _ownershipTransferred = true;
-    // 结果页展示后返回（不回到答题页）
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => QuizResultPage(
           articleTitle: widget.articleTitle,
           answers: answers,
-          questions: widget.questions,
+          questions: credited < widget.questions.length
+              ? widget.questions.sublist(0, credited)
+              : widget.questions,
+          totalQuestions: widget.questions.length,
         ),
       ),
     );
