@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.41+-02569B?logo=flutter" alt="Flutter">
+  <img src="https://img.shields.io/badge/Flutter-3.47+-02569B?logo=flutter" alt="Flutter">
   <img src="https://img.shields.io/badge/C++-17-00599C?logo=c%2B%2B" alt="C++17">
   <img src="https://img.shields.io/badge/Linux-✓-FCC624?logo=linux" alt="Linux">
   <img src="https://img.shields.io/badge/Windows-✓-0078D6?logo=windows" alt="Windows">
