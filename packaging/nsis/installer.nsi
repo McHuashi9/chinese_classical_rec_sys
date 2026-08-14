@@ -10,8 +10,10 @@ InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 RequestExecutionLevel admin
 
 ; 安装包本体/卸载器图标（BMP 帧 .ico，16/32/48，NSIS 全版本兼容）
-Icon "${__FILEDIR__}\app_icon.ico"
-UninstallIcon "${__FILEDIR__}\app_icon.ico"
+; 注意：Icon/UninstallIcon 相对脚本所在目录解析；CI 从仓库根调用时
+; ${__FILEDIR__} 会展开为相对路径导致 packaging\nsis\packaging\nsis 重复，故用单段路径
+Icon "app_icon.ico"
+UninstallIcon "app_icon.ico"
 
 !ifndef RELEASE_DIR
   !define RELEASE_DIR "flutter_app\build\windows\x64\runner\Release"
