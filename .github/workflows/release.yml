@@ -190,6 +190,9 @@ jobs:
         with:
           name: ios-ipa
           path: output/Runner.ipa
+          # IPA 已同步上传到 Release（下一步 softprops），artifact 仅供留档：
+          # 保留 1 天即过期，避免默认 90 天冗余占用
+          retention-days: 1
       - name: Upload IPA to Release
         uses: softprops/action-gh-release@v3
         with:
