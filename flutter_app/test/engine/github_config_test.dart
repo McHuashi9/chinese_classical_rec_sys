@@ -18,11 +18,11 @@ void main() {
       );
     });
 
-    test('releaseApiList 每页 10 条', () {
+    test('releaseApiList 每页 100 条', () {
       expect(
         GithubConfig.releaseApiList,
         'https://api.github.com/repos/McHuashi9/chinese_classical_rec_sys'
-        '/releases?per_page=10',
+        '/releases?per_page=100',
       );
     });
 
