@@ -62,7 +62,7 @@
 
 ```bash
 # 1. 数据初始化（生成 classical.db 并同步到应用资产）
-python3 scripts/project/export_question_id_map.py   # 维护者：重建前从旧库导出 q_key→id 映射（保老用户复习数据 id 稳定；首次建库可跳过）
+python3 scripts/project/export_question_id_map.py   # 维护者：重建前从旧库导出 q_key→id 映射（保老用户复习数据 id 稳定；首次建库可跳过）。默认读 build/data/classical.db；旧库仅存在于应用资产时请显式传 flutter_app/assets/data/classical.db
 python3 scripts/project/generate_questions.py --json   # 生成题库 questions.json（可选，只跑 init_data.py 则 questions 表为空）
 python3 scripts/project/init_data.py --id-map build/data/question_id_map.json   # 无映射时省略 --id-map
 cp build/data/classical.db flutter_app/assets/data/
