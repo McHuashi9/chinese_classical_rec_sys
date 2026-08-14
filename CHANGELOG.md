@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-08-14
+
+### Added
+
+- **Windows 安装包升级现代向导界面**：安装流程改为标准向导（欢迎页 → 可选安装目录 → 安装进度 → 完成页），全程简体中文；完成页可勾选"立即运行"（默认不勾选）；安装过程中取消会弹确认；卸载时增加确认步骤。
+- **Windows 安装信息补全**：控制面板"程序和功能"显示应用图标、发布者、安装体积与"不可修改/修复"标记；安装包 exe 属性页与 UAC/防火墙弹窗显示应用名称与版本（不再显示原始文件名）；安装目录可自定义且升级/重装自动记住上次位置；桌面与开始菜单快捷方式改为所有用户可见；卸载时文件被占用会在重启后自动清除。
+
+### Fixed
+
+- **修复 Windows 安装包中文乱码**：v0.10.1 起安装包的应用名、安装路径、桌面/开始菜单快捷方式等中文显示为乱码——NSIS 脚本丢失 UTF-8 BOM，CI（英文系统）编译时按系统字符集误读中文所致；已恢复脚本 BOM 并在 CI 增加守卫防止复发。
+
 ## [0.10.1] - 2026-08-14
 
 ### Changed
@@ -382,3 +393,4 @@ C++ CLI 原型。
 [0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
 [0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
 [0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1
+[0.10.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.2

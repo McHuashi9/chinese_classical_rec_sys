@@ -28,7 +28,14 @@ sed -i "s/currentVersion = '[^']*'/currentVersion = '$NEW_VERSION'/" \
   "$ROOT/flutter_app/lib/state/coordinator.dart"
 echo "[bump_version] coordinator.dart -> $NEW_VERSION"
 
-# ── 3. CHANGELOG.md ──────────────────────────────────────────────────────────
+# ── 3. installer.nsi（NSIS 安装包版本，与 pubspec 同源）────────────────────
+NSIS="$ROOT/packaging/nsis/installer.nsi"
+sed -i "s/!define PRODUCT_VERSION \".*\"/!define PRODUCT_VERSION \"$NEW_VERSION\"/" "$NSIS"
+# VIProductVersion 需四段（X.Y.Z.0），Windows 属性页/UAC 弹窗显示
+sed -i "s/VIProductVersion \".*\"/VIProductVersion \"$NEW_VERSION.0\"/" "$NSIS"
+echo "[bump_version] packaging/nsis/installer.nsi -> $NEW_VERSION"
+
+# ── 4. CHANGELOG.md ──────────────────────────────────────────────────────────
 CHANGELOG="$ROOT/CHANGELOG.md"
 # 将首个 ## [Unreleased] 替换为 ## [Unreleased]\n\n## [X.Y.Z] - date
 awk -v ver="$NEW_VERSION" -v date="$RELEASE_DATE" '
@@ -52,6 +59,7 @@ echo "  1. 整理 CHANGELOG.md 的 release 描述（把开发细节转化为用�
 echo "  2. 用户确认后，执行:"
 echo "     git add flutter_app/pubspec.yaml \\"
 echo "           flutter_app/lib/state/coordinator.dart \\"
+echo "           packaging/nsis/installer.nsi \\"
 echo "           CHANGELOG.md \\"
 echo "           scripts/project/bump_version.sh"
 echo "     git commit -m \"release: v${NEW_VERSION}\" && git push origin dev"

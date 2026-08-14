@@ -2,7 +2,7 @@ name: 'Build Flutter Windows'
 description: 'Build Flutter Windows app with native DLL and NSIS installer'
 inputs:
   version:
-    description: 'Version string for NSIS installer (e.g. 0.3.0)'
+    description: 'Version string for NSIS installer (verified against installer.nsi; bump_version.sh keeps it in sync)'
     required: true
 runs:
   using: composite
@@ -44,10 +44,21 @@ runs:
       shell: bash
       run: choco install nsis -y
 
-    - name: Inject version into NSIS script
+    - name: Verify NSIS script (UTF-8 BOM + version match)
       shell: bash
       run: |
-        sed -i "s/!define PRODUCT_VERSION \".*\"/!define PRODUCT_VERSION \"${{ inputs.version }}\"/" packaging/nsis/installer.nsi
+        # Unicode true 要求脚本带 UTF-8 BOM；无 BOM 时 makensis 按系统 ANSI 代码页误读，
+        # windows-2022 上是 CP1252 → 中文字符串全部乱码（v0.10.1 踩过；编辑器重写文件会剥掉 BOM）
+        if [ "$(head -c 3 packaging/nsis/installer.nsi | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
+          echo "::error::packaging/nsis/installer.nsi 缺少 UTF-8 BOM（前 3 字节应为 EF BB BF），请以 UTF-8 with BOM 重新保存"
+          exit 1
+        fi
+        # 版本号唯一源是 pubspec.yaml（bump_version.sh 同步各文件）；这里只校验不注入，
+        # 防止漏跑 bump 直接打 tag 时打出错误版本号的安装包
+        if ! grep -q "!define PRODUCT_VERSION \"${{ inputs.version }}\"" packaging/nsis/installer.nsi; then
+          echo "::error::installer.nsi 的 PRODUCT_VERSION 与 ${{ inputs.version }} 不一致，请先运行 scripts/project/bump_version.sh ${{ inputs.version }}"
+          exit 1
+        fi
 
     - name: Build NSIS installer
       shell: pwsh
