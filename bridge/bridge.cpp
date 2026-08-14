@@ -43,7 +43,7 @@ static std::mutex g_mtx;
 static constexpr uint32_t kQuizShuffleSeed = 42;
 
 // C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）。
-// 7 个结构全覆盖（Dart 侧见 flutter_app/test/engine/c_types_layout_test.dart 的 sizeOf 断言）
+// 6 个结构全覆盖（Dart 侧见 flutter_app/test/engine/c_types_layout_test.dart 的 sizeOf 断言）
 static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(TextInfo) == 516, "TextInfo ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(TextDetail) == 68184, "TextDetail ABI 尺寸不符，检查 #pragma pack");
