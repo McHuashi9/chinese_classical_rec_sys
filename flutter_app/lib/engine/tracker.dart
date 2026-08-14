@@ -76,6 +76,10 @@ abstract class QuizTracker {
   /// 到期错题列表（textId=0 取全部）
   List<ReviewItem> getDueReviews(int textId);
 
+  /// 到期错题总数（textId=0 取全部）：COUNT 聚合，不受列表上限截断
+  /// （徽标等"只要数字"的场景用，避免拿截断后的明细长度冒充总数）
+  int getDueReviewCount(int textId);
+
   /// 按 id 取题（复习通道，不受"排除已答"影响）
   List<Question> getQuestionsByIds(List<int> ids);
 
@@ -158,7 +162,9 @@ class KnowledgeTracker implements QuizTracker {
     calloc.free(questions.first.owner);
   }
 
-  /// 到期错题列表（textId=0 全部），按到期时间升序
+  /// 到期错题列表（textId=0 全部），按到期时间升序。
+  /// cap 为明细展示上限：超出部分不在此列出（总数请用 [getDueReviewCount]，
+  /// 徽标等场景不要拿本列表长度冒充总数）
   @override
   List<ReviewItem> getDueReviews(int textId) {
     const cap = 500;
@@ -180,6 +186,14 @@ class KnowledgeTracker implements QuizTracker {
     ];
     calloc.free(block);
     return items;
+  }
+
+  /// 到期错题总数：COUNT 聚合通道，无 500 上限（N15 方案 B）
+  /// 失败（未初始化/参数非法）返回 0，与"无到期错题"同语义
+  @override
+  int getDueReviewCount(int textId) {
+    final n = _bridge.quizGetDueReviewCount(textId);
+    return n < 0 ? 0 : n;
   }
 
   /// 按 id 取题（复习通道），缺失 id 被跳过

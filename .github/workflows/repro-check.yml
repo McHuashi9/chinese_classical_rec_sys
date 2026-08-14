@@ -1,0 +1,31 @@
+name: Question Generator Reproducibility
+
+# 题库生成器可复现性检查（N19）：同一环境连跑两次 generate_questions.py --json，
+# 比对 questions.json 哈希——防随机流漂移/掉题（前科：4770→4769）。
+# 触发：
+# - dev/main 上生成器/语料/特征变更（paths 过滤，只跑相关变更）
+# - publish_data.sh 发布数据后显式触发（gh workflow run repro-check.yml）
+# - 手动 workflow_dispatch
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'scripts/project/generate_questions.py'
+      - 'scripts/project/features.json'
+      - 'scripts/project/check_questions_reproducible.sh'
+      - 'articles/**'
+      - '.github/workflows/repro-check.yml'
+  workflow_dispatch:
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install generator dependencies
+        # pypinyin 缺失时换质自动关闭，检查会退化为"无换质模式"——必须装上
+        run: pip install numpy pypinyin
+
+      - name: Reproducibility check (generate twice, compare hashes)
+        run: bash scripts/project/check_questions_reproducible.sh

@@ -80,6 +80,7 @@ extern "C" {
                            int64_t timestamp, UserData* out_user, int* out_correct, int is_review);
     int question_get_by_text(int text_id, QuestionData* out, int max_count, int* answered_all);
     int quiz_get_review_items(int text_id, ReviewItemData* out, int max_count);
+    int quiz_get_due_review_count(int text_id);
     int quiz_get_questions_by_ids(const int* ids, int count, QuestionData* out, int max_count);
     int quiz_get_attempt_summary(int text_id, int* total, int* answered, int* wrong);
     int history_add_record(int text_id, double read_time, int64_t timestamp);
@@ -116,6 +117,7 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
     QuestionData qout[2];
     int t = 0, a = 0, w = 0;
     REQUIRE(quiz_get_review_items(0, ritems, 2) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(quiz_get_due_review_count(0) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(quiz_get_questions_by_ids(qids, 2, qout, 2) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(quiz_get_attempt_summary(1, &t, &a, &w) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(history_add_record(1, 30.0, now) == BRIDGE_ERR_NOT_INIT);
@@ -425,6 +427,7 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     // 未到期：复习列表为空（3 天后才到期）
     ReviewItemData items[8];
     REQUIRE(quiz_get_review_items(0, items, 8) == 0);
+    REQUIRE(quiz_get_due_review_count(0) == 0);
 
     // 用过去时间戳再答错（模拟 3 天前）→ 已到期，wrong_count 累计
     const int64_t past = now - 4LL * 24 * 3600;
@@ -435,6 +438,10 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(items[0].text_id == 1);
     REQUIRE(items[0].wrong_count == 2);
     REQUIRE(items[0].next_review_at <= now);
+    // 到期总数与列表同源（COUNT 聚合，徽标通道不受列表上限截断）
+    REQUIRE(quiz_get_due_review_count(0) == 1);
+    REQUIRE(quiz_get_due_review_count(1) == 1);
+    REQUIRE(quiz_get_due_review_count(2) == 0);
     // 按篇过滤
     REQUIRE(quiz_get_review_items(2, items, 8) == 0);
     REQUIRE(quiz_get_review_items(1, items, 8) == 1);
@@ -457,6 +464,7 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(outReview.eta == eta_before);
     // streak=1 → 下次到期在将来 → 到期列表为空
     REQUIRE(quiz_get_review_items(0, items, 8) == 0);
+    REQUIRE(quiz_get_due_review_count(0) == 0);
 
     // 连续答对 2 次（累计 streak=3）→ 从复习队列移除
     REQUIRE(tracker_apply_quiz(&user, qid, right_choice, past, &outReview, &correct, 1) == BRIDGE_OK);
@@ -479,6 +487,97 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     // 参数校验
     REQUIRE(quiz_get_review_items(0, nullptr, 8) == BRIDGE_ERR_GENERIC);
     REQUIRE(quiz_get_questions_by_ids(nullptr, 1, rq, 1) == BRIDGE_ERR_GENERIC);
+
+    db_close();
+}
+
+TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）", "[bridge][smoke]") {
+    db_close();
+    const std::string work = quizWorkDb("quiz_txn_rollback");
+    // 预埋失败触发器：review_items 插入即 ABORT（模拟事务中途失败）
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        REQUIRE(sqlite3_exec(db,
+            "CREATE TRIGGER fail_review_insert BEFORE INSERT ON review_items "
+            "BEGIN SELECT RAISE(ABORT, 'test: force txn failure'); END",
+            nullptr, nullptr, &err) == SQLITE_OK);
+        sqlite3_free(err);
+        sqlite3_close(db);
+    }
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    UserData user;
+    REQUIRE(user_load(&user) == BRIDGE_OK);
+    QuestionData qs[1];
+    REQUIRE(question_get_by_text(1, qs, 1, nullptr) == 1);
+    const int qid = qs[0].id;
+    const std::vector<int> dims = parseDimsCsv(qs[0].dims);
+    REQUIRE(!dims.empty());
+    const int d0 = dims[0];
+    const int ans_idx = quizAnswerIndex(work, qid);
+    REQUIRE(ans_idx >= 0);
+    const int wrong_choice = (ans_idx + 1) % 4;
+    const double ability_before = user.abilities[d0];
+    const int qc_before = user.quiz_counts[d0];
+
+    UserData out;
+    int correct = -1;
+    const int64_t now = static_cast<int64_t>(time(nullptr));
+    // 事务失败 → GENERIC（不静默成功）
+    REQUIRE(tracker_apply_quiz(&user, qid, wrong_choice, now, &out, &correct, 0) == BRIDGE_ERR_GENERIC);
+
+    // 效应未落库：能力/quiz_count 与作答前一致（重试不会双计）
+    UserData reloaded;
+    REQUIRE(user_load(&reloaded) == BRIDGE_OK);
+    REQUIRE(reloaded.abilities[d0] == Catch::Approx(ability_before));
+    REQUIRE(reloaded.quiz_counts[d0] == qc_before);
+    // 流水未写入（事务整体回滚）
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+    sqlite3_stmt* stmt = nullptr;
+    int attempts = -1;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM quiz_attempts", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) attempts = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    REQUIRE(attempts == 0);
+
+    db_close();
+}
+
+TEST_CASE("bridge - 老库缺 questions 表：取题/判题优雅降级（不报 GENERIC）", "[bridge][smoke]") {
+    db_close();
+    const std::string work = quizWorkDb("no_questions");
+    // 从资产库副本删掉 questions 表，模拟"手动替换的旧库"
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        REQUIRE(sqlite3_exec(db, "DROP TABLE questions", nullptr, nullptr, &err) == SQLITE_OK);
+        sqlite3_free(err);
+        sqlite3_close(db);
+    }
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 取题：按"无题"降级（返回 0 而非 GENERIC）
+    QuestionData qs[1];
+    int answered_all = -1;
+    REQUIRE(question_get_by_text(1, qs, 1, &answered_all) == 0);
+
+    // 判题：按"题目不存在"降级（BRIDGE_ERR_TEXT，Dart 侧已有处理）
+    UserData u;
+    REQUIRE(user_load(&u) == BRIDGE_OK);
+    UserData out;
+    int correct = -1;
+    REQUIRE(tracker_apply_quiz(&u, 1, 0, 1700000000LL, &out, &correct, 0) == BRIDGE_ERR_TEXT);
+
+    // 摘要：不报错，total 保持 0
+    int total = -1, answered = -1, wrong = -1;
+    REQUIRE(quiz_get_attempt_summary(1, &total, &answered, &wrong) == BRIDGE_OK);
+    REQUIRE(total == 0);
 
     db_close();
 }

@@ -71,6 +71,9 @@ class _QuizFakeTracker implements QuizTracker {
   List<ReviewItem> getDueReviews(int textId) => due;
 
   @override
+  int getDueReviewCount(int textId) => due.length;
+
+  @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice,
           {bool isReview = false}) =>
       (null, null);

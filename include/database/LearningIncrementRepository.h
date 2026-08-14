@@ -47,26 +47,11 @@ public:
                       time_t timestamp, const std::string& type = "read");
     
     /**
-     * @brief 获取某维度的所有增量
-     * @param userId 用户ID
-     * @param dimension 维度索引 (1-10)
-     * @return 增量列表
-     */
-    std::vector<LearningIncrement> getIncrements(int userId, int dimension);
-    
-    /**
      * @brief 获取用户所有增量
      * @param userId 用户ID
      * @return 增量列表
      */
     std::vector<LearningIncrement> getAllIncrements(int userId);
-    
-    /**
-     * @brief 删除单个增量
-     * @param id 增量ID
-     * @return true 成功
-     */
-    bool deleteIncrement(int id);
     
     /**
      * @brief 批量删除增量

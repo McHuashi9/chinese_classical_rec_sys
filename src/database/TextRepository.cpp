@@ -14,20 +14,8 @@
     "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, " \
     "f11_mattr, f12_allusion_density, f13_semantic_complexity"
 
-#define TEXT_INSERT_COLUMNS \
-    "title, author, dynasty, background, source, content, char_count, " \
-    "f1_avg_sentence_length, f3_sentence_count, " \
-    "f5_function_word_ratio, f6_avg_char_log_freq, " \
-    "f8_tongjiazi_density, f9_ppl_ancient, f10_ppl_modern, " \
-    "f11_mattr, f12_allusion_density, f13_semantic_complexity"
-
-#define TEXT_UPDATE_SET \
-    "title = ?, author = ?, dynasty = ?, background = ?, source = ?, content = ?, " \
-    "char_count = ?, " \
-    "f1_avg_sentence_length = ?, f3_sentence_count = ?, " \
-    "f5_function_word_ratio = ?, f6_avg_char_log_freq = ?, " \
-    "f8_tongjiazi_density = ?, f9_ppl_ancient = ?, f10_ppl_modern = ?, " \
-    "f11_mattr = ?, f12_allusion_density = ?, f13_semantic_complexity = ?"
+// （saveText/updateText/deleteText/getTextById/getTextsByIdRange 为死代码，
+// 已于 08-14 清理，TEXT_INSERT_COLUMNS / TEXT_UPDATE_SET 宏随之移除）
 
 TextRepository::TextRepository(DatabaseManager* dbManager) : db(dbManager) {}
 
@@ -95,36 +83,12 @@ static void populateTextFromRow(Text& text, int argc, char** argv, char** azColN
     }
 }
 
-static int textCallback(void* data, int argc, char** argv, char** azColName) {
-    Text* text = static_cast<Text*>(data);
-    populateTextFromRow(*text, argc, argv, azColName);
-    return 0;
-}
-
 static int textsCallback(void* data, int argc, char** argv, char** azColName) {
     std::vector<Text>* texts = static_cast<std::vector<Text>*>(data);
     Text text;
     populateTextFromRow(text, argc, argv, azColName);
     texts->push_back(text);
     return 0;
-}
-
-bool TextRepository::getTextById(int id, Text& text) {
-    if (!db || !db->getConnection()) {
-        return false;
-    }
-    
-    const char* sql = 
-        "SELECT " TEXT_SELECT_COLUMNS " FROM classical_text WHERE id = ?;";
-    
-    std::vector<double> params = {static_cast<double>(id)};
-    
-    if (!db->executeQuery(sql, std::vector<std::string>(), params, textCallback, &text)) {
-        LOG_ERROR("查询古文失败: {}", db->getLastError());
-        return false;
-    }
-    
-    return text.getId() != 0;
 }
 
 std::vector<Text> TextRepository::getAllTexts() {
@@ -142,62 +106,6 @@ std::vector<Text> TextRepository::getAllTexts() {
     }
     
     return texts;
-}
-
-bool TextRepository::saveText(const Text& text) {
-    std::vector<std::string> textParams = {
-        text.getTitle(),
-        text.getAuthor(),
-        text.getDynasty(),
-        text.getBackground(),
-        text.getSource(),
-        text.getContent()
-    };
-    
-    std::vector<double> realParams;
-    realParams.push_back(static_cast<double>(text.getCharCount()));
-    for (int i = 0; i < 10; i++) {
-        realParams.push_back(text.getDifficulty(i));
-    }
-    
-    return db->executeSQL(
-        "INSERT INTO classical_text (" TEXT_INSERT_COLUMNS ") "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        textParams,
-        realParams
-    );
-}
-
-bool TextRepository::updateText(const Text& text) {
-    std::vector<std::string> textParams = {
-        text.getTitle(),
-        text.getAuthor(),
-        text.getDynasty(),
-        text.getBackground(),
-        text.getSource(),
-        text.getContent()
-    };
-    
-    std::vector<double> realParams;
-    realParams.push_back(static_cast<double>(text.getCharCount()));
-    for (int i = 0; i < 10; i++) {
-        realParams.push_back(text.getDifficulty(i));
-    }
-    realParams.push_back(static_cast<double>(text.getId()));
-    
-    return db->executeSQL(
-        "UPDATE classical_text SET " TEXT_UPDATE_SET " WHERE id = ?;",
-        textParams,
-        realParams
-    );
-}
-
-bool TextRepository::deleteText(int id) {
-    std::vector<double> params = {static_cast<double>(id)};
-    return db->executeSQL(
-        "DELETE FROM classical_text WHERE id = ?;",
-        params
-    );
 }
 
 bool TextRepository::isEmpty() {
@@ -233,21 +141,3 @@ int TextRepository::getCount() {
     return count;
 }
 
-std::vector<Text> TextRepository::getTextsByIdRange(int startId, int endId) {
-    std::vector<Text> texts;
-    
-    if (!db || !db->getConnection()) {
-        return texts;
-    }
-    
-    const char* sql = 
-        "SELECT " TEXT_SELECT_COLUMNS " FROM classical_text WHERE id >= ? AND id <= ? ORDER BY id;";
-    
-    std::vector<double> params = {static_cast<double>(startId), static_cast<double>(endId)};
-    
-    if (!db->executeQuery(sql, std::vector<std::string>(), params, textsCallback, &texts)) {
-        LOG_ERROR("查询古文区间失败: {}", db->getLastError());
-    }
-    
-    return texts;
-}

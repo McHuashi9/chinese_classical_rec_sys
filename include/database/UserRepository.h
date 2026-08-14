@@ -33,19 +33,6 @@ public:
      */
     bool saveUser(const User& user);
     
-    /**
-     * @brief 获取最后阅读时间
-     * @return Unix时间戳，失败返回0
-     */
-    time_t getLastReadTime();
-    
-    /**
-     * @brief 更新最后阅读时间
-     * @param time Unix时间戳
-     * @return true 成功，false 失败
-     */
-    bool updateLastReadTime(time_t time);
-    
 private:
     DatabaseManager* db;
 };

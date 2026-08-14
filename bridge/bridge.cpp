@@ -1,5 +1,6 @@
 #include "c_types.h"
 #include "export.h"
+#include "user_tables.h"
 #include "database/DatabaseManager.h"
 #include "database/UserRepository.h"
 #include "database/TextRepository.h"
@@ -41,8 +42,12 @@ static std::mutex g_mtx;
 // 取题随机轮换的固定种子（Catch2 可复现；轮换由"排除已答"驱动，种子只保证批次内顺序确定）
 static constexpr uint32_t kQuizShuffleSeed = 42;
 
-// C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）
+// C ABI 结构尺寸断言：与 Dart @Packed(1) 布局保持一致（一旦 pack 丢失会静默错位）。
+// 7 个结构全覆盖（Dart 侧见 flutter_app/test/engine/c_types_layout_test.dart 的 sizeOf 断言）
 static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(TextInfo) == 516, "TextInfo ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(TextDetail) == 68184, "TextDetail ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(ReadingRecordData) == 24, "ReadingRecordData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(QuestionData) == 6244, "QuestionData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(ReviewItemData) == 24, "ReviewItemData ABI 尺寸不符，检查 #pragma pack");
 
@@ -162,25 +167,7 @@ struct ExportedTable {
     std::vector<std::vector<std::optional<std::string>>> rows;  // 值按列对齐；null = SQL NULL
 };
 
-// 需要跨替换保留的用户数据表及其列白名单（未来 schema 漂移：未知列忽略、缺列取默认）
-const std::unordered_map<std::string, std::vector<std::string>> kUserTableColumns = {
-    {"user", {"id",
-              "d1_ability", "d2_ability", "d3_ability", "d4_ability", "d5_ability",
-              "d6_ability", "d7_ability", "d8_ability", "d9_ability", "d10_ability",
-              "d1_base_ability", "d2_base_ability", "d3_base_ability", "d4_base_ability",
-              "d5_base_ability", "d6_base_ability", "d7_base_ability", "d8_base_ability",
-              "d9_base_ability", "d10_base_ability", "eta",
-              "d1_quiz_count", "d2_quiz_count", "d3_quiz_count", "d4_quiz_count",
-              "d5_quiz_count", "d6_quiz_count", "d7_quiz_count", "d8_quiz_count",
-              "d9_quiz_count", "d10_quiz_count", "last_read_time"}},
-    {"reading_history", {"id", "user_id", "text_id", "read_time", "read_timestamp"}},
-    {"text_tracking", {"text_id", "tracked_at"}},
-    {"learning_increments", {"id", "user_id", "dimension", "delta", "timestamp", "type"}},
-    // 测验闭环（quiz_attempts 作答流水 / review_items 错题复习队列）：
-    // 缺表则跳过导出（源库表不存在时兼容旧库），导入侧由 openDatabase 的 initTable 幂等建表
-    {"quiz_attempts", {"id", "question_id", "text_id", "correct", "is_review", "answered_at"}},
-    {"review_items", {"question_id", "text_id", "correct_streak", "wrong_count", "next_review_at"}},
-};
+// 用户表白名单见 user_tables.h（独立 header 供 tests/test_db_replace.cpp 做完整性断言）
 
 static bool sqliteExec(sqlite3* db, const char* sql)
 {
@@ -653,13 +640,17 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
                                      effective_ts);
     user_to_c(cpp_user, out_user);
 
+    // 历史两写沿用现有容错（阅读记录失败不影响知识追踪主链路）
     g_state.historyRepo->markAsTracked(text_id);
     g_state.historyRepo->addRecord(text_id, read_time, effective_ts);
     LOG_INFO("bridge: 知识追踪完成 — text_id={}, read_time={:.1f}s, avg_ability={:.3f}→{:.3f}",
              text_id, read_time, g_state.user->getAverageAbility(), cpp_user.getAverageAbility());
 
-    // 持久化
-    g_state.userRepo->saveUser(cpp_user);
+    // 持久化（失败则不更新内存态，保持与磁盘一致，避免重启丢阅读效应）
+    if (!g_state.userRepo->saveUser(cpp_user)) {
+        LOG_ERROR("bridge: 阅读效应落库失败 text_id={}", text_id);
+        return BRIDGE_ERR_GENERIC;
+    }
     g_state.user = std::make_unique<User>(cpp_user);
     return BRIDGE_OK;
 }
@@ -695,6 +686,14 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
     return BRIDGE_OK;
 }
 
+// questions 表缺失（手动替换的旧库/损坏资产）时优雅降级：取题按"无题"、判题按"题目不存在"，
+// 与 text_get_translation 的 Dart 侧空降级保持一致（不把"表缺失"当成 GENERIC 硬错误）
+static bool questionsTableExists()
+{
+    if (!g_state.db || !g_state.db->getConnection()) return false;
+    return tableExists(g_state.db->getConnection(), "questions");
+}
+
 // 取题：按 text_id 返回该文题目（排除已答含复习记录 → 固定种子随机轮换，上限 max_count；
 // 不下发 answer_index，判题只在 C++ 侧）
 // 返回：题数（≥0）；文章不存在返回 BRIDGE_ERR_TEXT；参数非法返回 BRIDGE_ERR_GENERIC
@@ -717,6 +716,10 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT COUNT(*) FROM questions WHERE text_id = ?";
         if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            if (!questionsTableExists()) {
+                LOG_WARN("bridge: question_get_by_text 无 questions 表，按无题处理 text_id={}", text_id);
+                return 0;
+            }
             LOG_ERROR("bridge: question_get_by_text count prepare 失败: {}",
                       sqlite3_errmsg(g_state.db->getConnection()));
             return BRIDGE_ERR_GENERIC;
@@ -825,6 +828,10 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT text_id, answer_index, dims FROM questions WHERE id = ?";
         if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            if (!questionsTableExists()) {
+                LOG_WARN("bridge: tracker_apply_quiz 无 questions 表 question_id={}", question_id);
+                return BRIDGE_ERR_TEXT;
+            }
             LOG_ERROR("bridge: tracker_apply_quiz prepare 失败: {}", sqlite3_errmsg(g_state.db->getConnection()));
             return BRIDGE_ERR_GENERIC;
         }
@@ -876,33 +883,33 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         return BRIDGE_ERR_GENERIC;
     }
 
-    // 3. 判题 + 应用答题效应（复习跳过效应）
+    // 3. 判题（答题效应在步骤 4 事务内应用）
     User cpp_user;
     c_to_user(user, cpp_user);
 
     const int correct = (user_choice == ans_idx) ? 1 : 0;
     if (out_correct) *out_correct = correct;
     time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
+
+    // 4. 答题效应 + 落库 + 作答流水 + 复习状态（同一事务；失败回滚且返回错误）。
+    // 防双计：若事务失败，能力/quiz_count/eta/增量与流水一起回滚，用户重试同一题不会二次生效
+    sqlite3* db = g_state.db->getConnection();
+    if (!execRawSql(db, "BEGIN")) return BRIDGE_ERR_GENERIC;
+    bool ok = true;
+
     if (!is_review) {
         g_state.tracker->applyQuizEffect(cpp_user, (*g_state.texts)[it->second], dim_list,
                                          correct, effective_ts);
         user_to_c(cpp_user, out_user);
-
-        // 持久化（失败则不更新内存态，保持与磁盘一致）
         if (!g_state.userRepo->saveUser(cpp_user)) {
             LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
+            execRawSql(db, "ROLLBACK");
             return BRIDGE_ERR_GENERIC;
         }
-        g_state.user = std::make_unique<User>(cpp_user);
     } else {
         // 复习无效应：原样回传（调用方仍按契约接管返回的 user 内存）
         user_to_c(cpp_user, out_user);
     }
-
-    // 4. 作答流水 + 复习状态（同锁同事务；失败回滚且返回错误）
-    sqlite3* db = g_state.db->getConnection();
-    if (!execRawSql(db, "BEGIN")) return BRIDGE_ERR_GENERIC;
-    bool ok = true;
 
     {
         sqlite3_stmt* stmt = nullptr;
@@ -1018,10 +1025,12 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         return BRIDGE_ERR_GENERIC;
     }
 
+    // 事务成功后才更新内存态（与磁盘一致；失败时保持旧值，重试不会双计）
     if (!is_review) {
+        const double avg_before = g_state.user->getAverageAbility();
+        g_state.user = std::make_unique<User>(cpp_user);
         LOG_INFO("bridge: 答题效应完成 — question_id={}, correct={}, avg_ability={:.3f}→{:.3f}",
-                 question_id, correct, g_state.user->getAverageAbility(),
-                 cpp_user.getAverageAbility());
+                 question_id, correct, avg_before, cpp_user.getAverageAbility());
     } else {
         LOG_INFO("bridge: 复习作答完成 — question_id={}, correct={}（无答题效应）",
                  question_id, correct);
@@ -1038,12 +1047,17 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT question_id, text_id, correct_streak, wrong_count, next_review_at "
+    // 内容库删题后 review_items 会留下悬空条目（db_replace 合并后引用已不存在的
+    // question_id）→ questions 表存在时过滤掉，避免复习列表出现点击无效的"文章 #N"组
+    const bool hasQuestions = questionsTableExists();
+    std::string sql = "SELECT question_id, text_id, correct_streak, wrong_count, next_review_at "
                       "FROM review_items WHERE next_review_at <= ? "
-                      "AND (? = 0 OR text_id = ?) "
-                      "ORDER BY next_review_at ASC LIMIT ?";
-    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+                      "AND (? = 0 OR text_id = ?)";
+    if (hasQuestions) sql += " AND question_id IN (SELECT id FROM questions)";
+    sql += " ORDER BY next_review_at ASC LIMIT ?";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         LOG_ERROR("bridge: quiz_get_review_items prepare 失败: {}",
                   sqlite3_errmsg(g_state.db->getConnection()));
         return BRIDGE_ERR_GENERIC;
@@ -1068,6 +1082,37 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
     return count;
 }
 
+// 到期错题总数：与 quiz_get_review_items 同一过滤条件（含悬空过滤），
+// COUNT 聚合不走行缓冲 → 无上限截断，徽标数字真实（N15 方案 B：
+// "总数"与"明细"语义分离，reviewCount 走此通道，列表仍走 quiz_get_review_items）
+extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (text_id < 0) return BRIDGE_ERR_GENERIC;
+
+    const bool hasQuestions = questionsTableExists();
+    std::string sql = "SELECT COUNT(*) FROM review_items WHERE next_review_at <= ? "
+                      "AND (? = 0 OR text_id = ?)";
+    if (hasQuestions) sql += " AND question_id IN (SELECT id FROM questions)";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: quiz_get_due_review_count prepare 失败: {}",
+                  sqlite3_errmsg(g_state.db->getConnection()));
+        return BRIDGE_ERR_GENERIC;
+    }
+    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
+    sqlite3_bind_int(stmt, 2, text_id);
+    sqlite3_bind_int(stmt, 3, text_id);
+
+    int count = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        count = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return count;
+}
 // 按 id 取题专用通道（复习用）：复习题是已答题，question_get_by_text 排除已答后拿不到，
 // 此通道不受排除已答影响。按输入顺序返回，上限 max_count（不校验 id 是否存在，
 // 缺失 id 被跳过）。返回实际条数
@@ -1128,6 +1173,12 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* to
 
     sqlite3* db = g_state.db->getConnection();
 
+    // 输出先归零：查询失败（如老库缺 questions 表）时返回 0 而非调用者初值，
+    // 与"表缺失=优雅降级"协议一致（N3）
+    if (total) *total = 0;
+    if (answered) *answered = 0;
+    if (wrong) *wrong = 0;
+
     if (total) {
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT COUNT(*) FROM questions WHERE text_id = ?";
@@ -1175,6 +1226,8 @@ extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordDa
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized || !out) return BRIDGE_ERR_NOT_INIT;
+    // 钳制：非正 limit/max_count 按"无结果"处理（SQLite LIMIT -1 视为无限制，必须拦下）
+    if (limit <= 0 || max_count <= 0) return 0;
 
     auto records = g_state.historyRepo->getRecentRecords(limit);
     int n = std::min(static_cast<int>(records.size()), max_count);

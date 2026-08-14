@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
@@ -80,6 +81,14 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _submit() async {
+    final coord = context.read<AppCoordinator>();
+    // 数据库替换窗口（引擎关闭重开）内提交会静默 NOT_INIT：短路并提示重试
+    if (coord.syncing.value) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('数据同步中，请稍后重试')),
+      );
+      return;
+    }
     final userCtrl = context.read<UserController>();
     final answers = userCtrl.submitQuiz(
       widget.questions,

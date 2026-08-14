@@ -22,7 +22,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '0.10.0';
+  static const currentVersion = '0.10.1';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -31,6 +31,12 @@ class AppCoordinator {
   final ReadTracker readTracker;
 
   final ValueNotifier<bool> initialized = ValueNotifier(false);
+
+  /// 数据库替换窗口（引擎 g_state 关闭重开期间）为 true。
+  /// 当前实现替换段内无 await（原子），该闸门是防御性的：
+  /// 防未来在替换/回滚/重开之间插入异步间隙时，答题/阅读效应 FFI 调用落到
+  /// 已关闭的引擎上静默 NOT_INIT。UI 侧（quiz 提交、阅读效应）据此短路。
+  final ValueNotifier<bool> syncing = ValueNotifier(false);
 
   NativeBridge? _bridge;
   late TextRepository _textRepo;
@@ -151,6 +157,8 @@ class AppCoordinator {
   }
 
   void applyReadingEffect() {
+    // 替换窗口内引擎关闭：跳过阅读效应（防静默失败；当前窗口为原子段，正常不可达）
+    if (syncing.value) return;
     final textId = readingCtrl.readingTextId;
     final seconds = readingCtrl.elapsedSeconds;
     final text = readingCtrl.readingText;
@@ -172,7 +180,9 @@ class AppCoordinator {
       return;
     }
     try {
-      userCtrl.getRecommendations(_engine, _textRepo.texts, topK);
+      // 已读篇目不进推荐位（读满 30s 且效应已应用）；UserController 侧过取+过滤补足 topK
+      userCtrl.getRecommendations(_engine, _textRepo.texts, topK,
+          excludeTextIds: readTracker.getAllTrackedIds().toSet());
       settingsCtrl.clearError();
     } catch (e) {
       settingsCtrl.setError('推荐失败: $e');
@@ -206,44 +216,53 @@ class AppCoordinator {
     }
 
     final dbPath = _dbPathAfterSync!;
-    final rc = _replaceDb(tmpPath, dbPath);
-    if (rc != BridgeError.ok) {
-      AppLogger().error('remoteSyncDb: db_replace 失败 rc=$rc，已保留旧库');
-      _deleteFile(tmpPath);
-      // db_replace 失败后引擎已关闭，必须重开旧库，否则本会话假死
-      if (_openDb(dbPath) != BridgeError.ok) {
-        AppLogger().error('remoteSyncDb: 失败后重开旧库失败，请重启');
-        settingsCtrl.setError('数据库同步失败，已保留当前数据。请重启应用。');
-        return;
-      }
-      settingsCtrl.setError('数据库同步失败，已保留当前数据。');
-      return;
-    }
-
-    var restored = false;
-    var openRc = _openDb(dbPath);
-    if (openRc != BridgeError.ok) {
-      AppLogger().error('remoteSyncDb: 重开新库失败 rc=$openRc，尝试回滚 .bak');
-      await _restoreBak(dbPath);
-      restored = true;
-      openRc = _openDb(dbPath);
-      if (openRc != BridgeError.ok) {
+    // 替换窗口：db_replace 关闭引擎 → 文件替换 → db_open 重开。窗口内任何 FFI
+    // 调用都会 NOT_INIT，置 syncing 闸门短路测验/阅读效应入口。
+    // 当前窗口为同步连续段（回滚也是同步文件操作，无 await），UI 事件无法插入，
+    // 闸门防御未来引入异步间隙的情况。
+    syncing.value = true;
+    try {
+      final rc = _replaceDb(tmpPath, dbPath);
+      if (rc != BridgeError.ok) {
+        AppLogger().error('remoteSyncDb: db_replace 失败 rc=$rc，已保留旧库');
         _deleteFile(tmpPath);
-        settingsCtrl.setError('数据库同步后无法打开数据库，请重启应用。');
+        // db_replace 失败后引擎已关闭，必须重开旧库，否则本会话假死
+        if (_openDb(dbPath) != BridgeError.ok) {
+          AppLogger().error('remoteSyncDb: 失败后重开旧库失败，请重启');
+          settingsCtrl.setError('数据库同步失败，已保留当前数据。请重启应用。');
+          return;
+        }
+        settingsCtrl.setError('数据库同步失败，已保留当前数据。');
         return;
       }
-    }
 
-    _textRepo.loadTextCache();
-    _loadUser();
-    _loadTextTrackedStates();
-    // db_replace 已合并用户表：错题队列/作答流水可能变化，置脏懒查缓存并通知刷新
-    userCtrl.invalidateQuizData();
-    if (restored) {
-      // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
-      AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');
-      settingsCtrl.setError('数据库同步失败，已恢复原数据。');
-      return;
+      var restored = false;
+      var openRc = _openDb(dbPath);
+      if (openRc != BridgeError.ok) {
+        AppLogger().error('remoteSyncDb: 重开新库失败 rc=$openRc，尝试回滚 .bak');
+        _restoreBak(dbPath);
+        restored = true;
+        openRc = _openDb(dbPath);
+        if (openRc != BridgeError.ok) {
+          _deleteFile(tmpPath);
+          settingsCtrl.setError('数据库同步后无法打开数据库，请重启应用。');
+          return;
+        }
+      }
+
+      _textRepo.loadTextCache();
+      _loadUser();
+      _loadTextTrackedStates();
+      // db_replace 已合并用户表：错题队列/作答流水可能变化，置脏懒查缓存并通知刷新
+      userCtrl.invalidateQuizData();
+      if (restored) {
+        // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
+        AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');
+        settingsCtrl.setError('数据库同步失败，已恢复原数据。');
+        return;
+      }
+    } finally {
+      syncing.value = false;
     }
 
     // 先落版本号再写冷却：缩小"库已更新但版本文件未更新"的降级窗口
@@ -277,13 +296,15 @@ class AppCoordinator {
     return rc;
   }
 
-  Future<void> _restoreBak(String dbPath) async {
+  /// 从 .bak 回滚数据库。同步文件操作：保证回滚在引擎关闭窗口内原子完成
+  /// （若为异步，await 间隙内引擎已关闭，用户交互的 FFI 调用会静默 NOT_INIT）
+  void _restoreBak(String dbPath) {
     try {
       final cur = File(dbPath);
       final bak = File('$dbPath.bak');
-      if (await bak.exists()) {
-        if (await cur.exists()) await cur.delete();
-        await bak.rename(dbPath);
+      if (bak.existsSync()) {
+        if (cur.existsSync()) cur.deleteSync();
+        bak.renameSync(dbPath);
         AppLogger().info('remoteSyncDb: 已从 .bak 回滚数据库');
       }
     } catch (e) {
@@ -315,5 +336,6 @@ class AppCoordinator {
     navCtrl.dispose();
     settingsCtrl.dispose();
     initialized.dispose();
+    syncing.dispose();
   }
 }

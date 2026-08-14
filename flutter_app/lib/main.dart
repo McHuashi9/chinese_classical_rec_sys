@@ -238,6 +238,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
 
     final releases = jsonDecode(resp.body) as List<dynamic>;
+    // 是否至少完整评估过一个含资产的 release（版本文件下载成功 + 方向判断完成）
+    var evaluatedAnyAsset = false;
     for (final r in releases) {
       final release = r as Map<String, dynamic>;
       final assets = release['assets'] as List<dynamic>?;
@@ -259,6 +261,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         AppLogger().warn('DB 检查: db_version.txt 下载失败 HTTP ${verResp.statusCode}');
         continue;
       }
+      evaluatedAnyAsset = true;
       final remoteVer = verResp.body.trim();
 
       final localVer = await _readLocalDbVersion();
@@ -273,8 +276,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return (remoteVer, dbUrl);
     }
     AppLogger().info('DB 检查: 最近的 release 中未找到数据资产，跳过');
-    // 检查本身成功（有可下载的 release 但无数据卷）：写入冷却
-    await prefs.setInt('db_check_last_ms', now);
+    // 仅当至少完整评估过一个含资产的 release 才写冷却：
+    // 版本文件持续下载失败说明检查未真正成功，不冷却，下次启动可重试
+    if (evaluatedAnyAsset) {
+      await prefs.setInt('db_check_last_ms', now);
+    }
     return null;
   }
 
@@ -339,6 +345,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           }
         } else {
           AppLogger().info('DB 检查: 内置数据 $assetVer 不新于本地 $localVer，跳过替换');
+          // 上次替换留下的 .bak 已无用途（本地库保持最新），顺手清理（N21）
+          try {
+            if (await bakFile.exists()) await bakFile.delete();
+          } catch (_) {}
         }
       }
       return (dbPath, replaced);

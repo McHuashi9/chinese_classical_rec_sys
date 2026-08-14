@@ -118,6 +118,24 @@ void main() {
       expect(prefs.getInt(UpdateChecker.prefKeyLastManual), isNotNull);
     });
 
+    test('拉取失败不写 last_manual，可立即重试（不冷却 5 分钟）', () async {
+      var succeed = false;
+      final c = MockClient((_) async => succeed
+          ? http.Response(jsonEncode({'tag_name': 'v9.9.9'}), 200,
+              headers: {'etag': '"abc"'})
+          : http.Response('', 500));
+      final chk = checker(c);
+      final failed = await chk.checkManually('0.9.1');
+      expect(failed, isNull);
+      expect(prefs.getInt(UpdateChecker.prefKeyLastManual), isNull);
+
+      // 未拨冷却时间也能立刻重试成功（修复前会被 5 分钟手动冷却拦截）
+      succeed = true;
+      final ok = await chk.checkManually('0.9.1');
+      expect(ok, const Version(9, 9, 9));
+      expect(prefs.getInt(UpdateChecker.prefKeyLastManual), isNotNull);
+    });
+
 test('新一轮手动检查前清空上次失败原因', () async {
       var succeed = false;
       final c = MockClient((_) async => succeed

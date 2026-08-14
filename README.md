@@ -74,9 +74,9 @@ cmake -B build && cmake --build build -j$(nproc) --target chinese_core
 cd flutter_app && flutter pub get && flutter run -d linux
 ```
 
-> 第 1 步需要 Python 3 + numpy + pypinyin（本机开发可用 `source venv/bin/activate`，或 `pip install -r requirements-ci.txt` 后补装 pypinyin）。题库生成依赖 `external/tongjiazi`（未入库素材）：缺失时通假字干扰项换质自动关闭、退化为纯本字池，不影响建库。
+> 第 1 步需要 Python ≥ 3.10（脚本使用 PEP 604 联合类型语法）+ numpy + pypinyin（本机开发可用 `source venv/bin/activate`，或 `pip install -r requirements-ci.txt` 后补装 pypinyin）。题库生成依赖 `external/tongjiazi`（未入库素材）：缺失时通假字干扰项换质自动关闭、退化为纯本字池，不影响建库。
 >
-> （维护者操作：DB 版本号生成见 `scripts/project/gen_db_version.sh`，按"先提交 → 执行 → amend"顺序；DB Schema 变更时先 `rm build/data/classical.db` 再重跑第 1 步，最后用 `git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.txt` 显式提交。数据更新对外发布见 `scripts/project/publish_data.sh`——一键压缩 DB 并发布为 prerelease，客户端自动同步，无需发 App 新版本。）
+> （维护者操作：DB 版本号生成见 `scripts/project/gen_db_version.sh`（`publish_data.sh` 会自动调用并 amend 进数据提交，无需手动执行）；DB Schema 变更时先 `rm build/data/classical.db` 再重跑第 1 步，最后用 `git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.txt` 显式提交。数据更新对外发布见 `scripts/project/publish_data.sh`——数据 commit 后一键完成：刷新版本号 + amend + 题库可复现性检查（`check_questions_reproducible.sh`，连跑两次生成比对哈希，`SKIP_REPRO_CHECK=1` 可跳过）+ 压缩 DB 发布为 prerelease（`SKIP_AMEND=1` 可跳过版本号刷新），客户端自动同步，无需发 App 新版本。）
 
 Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`。iOS 见下方。
 
@@ -121,7 +121,7 @@ src/database/          SQLite 访问封装
 tests/                 Catch2 单元测试
 third_party/           供应商库（sqlite3.c · spdlog · Catch2 · Boost.Nowide）
 articles/              应用数据源 — 270 篇古文（anthology 202 + textbook 68）
-scripts/               Python 数据管线（scripts/project/：init_data.py · generate_questions.py · features.json · gen_db_version.sh · bump_version.sh · publish_data.sh · build_ios_core.sh；subset_fonts.py 字体子集化 · summarize_cov.py · test_coverage_cpp.sh 覆盖率）
+scripts/               Python 数据管线（scripts/project/：init_data.py · generate_questions.py · features.json · gen_db_version.sh · bump_version.sh · publish_data.sh · check_questions_reproducible.sh · build_ios_core.sh；subset_fonts.py 字体子集化 · summarize_cov.py · test_coverage_cpp.sh 覆盖率）
 packaging/             AppImage / iOS 打包脚本
 flutter_app/
   lib/main.dart        入口 · MainShell (NavigationRail + IndexedStack)

@@ -23,8 +23,10 @@ gcovr -r "$ROOT" \
   --json -o "$OUT/coverage/coverage.json" >/dev/null
 
 # JSON 汇总 + HTML 报告
+# CI 中存在 $GITHUB_STEP_SUMMARY 时，把覆盖率数字同时写进 step summary
+# （workflow run 页面该步骤的 Summary 折叠区直接可见，不用翻日志）；本地跑不受影响
 python3 - "$OUT/coverage/coverage.json" <<'EOF'
-import json, sys
+import json, os, sys
 data = json.load(open(sys.argv[1]))
 rows = []
 for f in data['files']:
@@ -34,10 +36,19 @@ for f in data['files']:
     rows.append((f['file'], covered, total))
 sum_total = sum(r[2] for r in rows)
 sum_cov = sum(r[1] for r in rows)
-print(f"C++ 行覆盖率: {sum_cov}/{sum_total} ({sum_cov/sum_total*100:.1f}%)")
+pct = sum_cov / sum_total * 100 if sum_total else 0.0
+print(f"C++ 行覆盖率: {sum_cov}/{sum_total} ({pct:.1f}%)")
 for name, cov, tot in sorted(rows, key=lambda r: -r[1]/max(r[2], 1)):
-    pct = cov/max(tot, 1)*100
-    print(f"  {name:60s} {pct:5.1f}%  ({cov}/{tot})")
+    p = cov/max(tot, 1)*100
+    print(f"  {name:60s} {p:5.1f}%  ({cov}/{tot})")
+summary = os.environ.get('GITHUB_STEP_SUMMARY')
+if summary:
+    with open(summary, 'a', encoding='utf-8') as f:
+        f.write("## C++ 行覆盖率\n\n```text\n")
+        f.write(f"C++ 行覆盖率: {sum_cov}/{sum_total} ({pct:.1f}%)\n")
+        for name, cov, tot in sorted(rows, key=lambda r: -r[1]/max(r[2], 1)):
+            f.write(f"  {name:60s} {cov/max(tot, 1)*100:5.1f}%  ({cov}/{tot})\n")
+        f.write("```\n")
 EOF
 if ! gcovr -r "$ROOT" \
   --exclude 'third_party/' \

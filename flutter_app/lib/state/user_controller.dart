@@ -22,21 +22,32 @@ class UserController extends ChangeNotifier {
   double get averageAbility => _user?.averageAbility ?? 0.3;
   List<RecommendResult> get recommendations => _recommendations;
 
-  /// 到期错题数（懒查 quiz_get_review_items 计数，MyPage 等通过 watch/select 消费）
+  /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
+  /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）
   /// 懒加载可能发生在 build 期，只缓存不通知；置脏与通知走 _afterQuizSubmit
   int get reviewCount {
     if (_tracker == null) return 0;
-    if (_reviewCount < 0) _reviewCount = _tracker!.getDueReviews(0).length;
+    if (_reviewCount < 0) _reviewCount = _tracker!.getDueReviewCount(0);
     return _reviewCount;
   }
 
-  void getRecommendations(RecommendationEngine engine, List<ChineseText> textCache, int topK) {
+  void getRecommendations(RecommendationEngine engine, List<ChineseText> textCache, int topK,
+      {Set<int>? excludeTextIds}) {
     if (_user == null) {
       _recommendations = [];
       notifyListeners();
       return;
     }
-    _recommendations = engine.getRecommendations(_user!, topK, textCache);
+    final exclude = excludeTextIds ?? const <int>{};
+    if (exclude.isEmpty) {
+      _recommendations = engine.getRecommendations(_user!, topK, textCache);
+    } else {
+      // 过取：推荐引擎对全量文章算分后才截断，多要名额成本≈0；
+      // 取 topK + 已读篇数，最多被滤掉 fetchK 内全部已读篇目，过滤后仍保证 topK 个
+      final fetchK = (topK + exclude.length).clamp(1, textCache.length);
+      final all = engine.getRecommendations(_user!, fetchK, textCache);
+      _recommendations = filterRecommendations(all, exclude, topK);
+    }
     notifyListeners();
   }
 

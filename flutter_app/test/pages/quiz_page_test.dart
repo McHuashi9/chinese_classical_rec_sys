@@ -10,24 +10,41 @@ import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-Widget _wrap(Widget child) {
-  final settingsCtrl = SettingsController();
-  final userCtrl = UserController();
+Widget _wrap(Widget child,
+    {AppCoordinator? coord,
+    SettingsController? settingsCtrl,
+    UserController? userCtrl}) {
+  final sCtrl = settingsCtrl ?? SettingsController();
+  final uCtrl = userCtrl ?? UserController();
+  // QuizPage._submit 读取 AppCoordinator.syncing（数据同步闸门）；测试默认非同步中
+  final appCoord = coord ??
+      AppCoordinator(
+        navCtrl: NavigationController(),
+        settingsCtrl: sCtrl,
+        readingCtrl: ReadingController(ReadTracker()),
+        userCtrl: uCtrl,
+        readTracker: ReadTracker(),
+      );
   return MultiProvider(
     providers: [
-      ChangeNotifierProvider.value(value: settingsCtrl),
-      ChangeNotifierProvider.value(value: userCtrl),
+      ChangeNotifierProvider.value(value: sCtrl),
+      ChangeNotifierProvider.value(value: uCtrl),
+      Provider.value(value: appCoord),
     ],
     child: MaterialApp(
       theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
           accentColor: AppTheme.vermilion),
       darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
           accentColor: AppTheme.vermilion),
-      themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: sCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
       home: child,
     ),
   );
@@ -67,6 +84,9 @@ class _FakeQuizTracker implements QuizTracker {
 
   @override
   List<ReviewItem> getDueReviews(int textId) => [];
+
+  @override
+  int getDueReviewCount(int textId) => 0;
 
   @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
@@ -254,6 +274,46 @@ void main() {
     expect(find.text('提交失败，请重试'), findsOneWidget);
   });
 
+  testWidgets('数据同步中（syncing）提交被短路：提示稍后重试，不判分', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final userCtrl = UserController();
+    final tracker = _FakeQuizTracker();
+    userCtrl.initTracker(tracker);
+    final coord = AppCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: SettingsController(),
+      readingCtrl: ReadingController(ReadTracker()),
+      userCtrl: userCtrl,
+      readTracker: ReadTracker(),
+    );
+    addTearDown(coord.dispose);
+    coord.syncing.value = true; // 模拟 db_replace 替换窗口
+
+    await tester.pumpWidget(_wrap(
+      QuizPage(articleTitle: '岳阳楼记', questions: questions),
+      coord: coord,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('提交'));
+    await tester.pump();
+
+    expect(find.text('数据同步中，请稍后重试'), findsOneWidget);
+    expect(tracker.disposeCount, 0, reason: '未进入判题链路，题目内存未被释放');
+    // 页面未跳转（仍在答题页）
+    expect(find.byType(QuizPage), findsOneWidget);
+  });
+
   testWidgets('回改后前进：已答答案保留（提交可用而非被清空）', (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -309,17 +369,13 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: settingsCtrl),
-        ChangeNotifierProvider<UserController>.value(value: userCtrl),
-      ],
-      child: MaterialApp(
-        home: QuizPage(
-          articleTitle: '岳阳楼记',
-          questions: questions,
-        ),
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
       ),
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
     ));
     await tester.pumpAndSettle();
 
@@ -362,18 +418,14 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: settingsCtrl),
-        ChangeNotifierProvider<UserController>.value(value: userCtrl),
-      ],
-      child: MaterialApp(
-        home: QuizPage(
-          articleTitle: '岳阳楼记',
-          questions: questions,
-          isReview: true,
-        ),
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
+        isReview: true,
       ),
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
     ));
     await tester.pumpAndSettle();
 
@@ -412,17 +464,13 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: settingsCtrl),
-        ChangeNotifierProvider<UserController>.value(value: userCtrl),
-      ],
-      child: MaterialApp(
-        home: QuizPage(
-          articleTitle: '岳阳楼记',
-          questions: questions,
-        ),
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
       ),
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
     ));
     await tester.pumpAndSettle();
 
@@ -457,17 +505,13 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: settingsCtrl),
-        ChangeNotifierProvider<UserController>.value(value: userCtrl),
-      ],
-      child: MaterialApp(
-        home: QuizPage(
-          articleTitle: '岳阳楼记',
-          questions: questions,
-        ),
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
       ),
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
     ));
     await tester.pumpAndSettle();
 

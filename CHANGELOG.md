@@ -2,8 +2,12 @@
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-14
+
 ### Changed
 
+- **错题徽标显示真实数量**：「我的」页到期错题数改为独立计数查询，超过 500 条时不再截断显示（复习列表仍按到期时间展示最紧急的一批）。
+- **推荐列表排除已读篇目**：「为你推荐」不再显示已读满 30 秒且生效的文章，推荐位自动补足（已读篇目较多时按剩余可用篇目展示）。
 - **Windows 安装包图标**：NSIS 安装器与卸载器改用应用图标（16/32/48 多帧 .ico），下载的安装包文件不再显示 NSIS 默认图标（桌面快捷方式的图标取自已安装的应用 exe，本身已是新图标）。
 - **Linux AppImage 图标对齐占位稿**：清理已淘汰的旧图标目录（根目录 assets/icon/），AppImage 打包改用新占位图标（下一版发布生效）。
 
@@ -361,7 +365,6 @@ C++ CLI 原型。
 [0.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.0
 [0.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.4.0
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
-[0.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.1.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
 [0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
 [0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
@@ -377,3 +380,4 @@ C++ CLI 原型。
 [0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
 [0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
 [0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
+[0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1

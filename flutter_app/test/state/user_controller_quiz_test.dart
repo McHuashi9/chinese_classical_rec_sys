@@ -22,6 +22,10 @@ class _ScriptedQuizTracker implements QuizTracker {
   /// getDueReviews 的替代实现（reviewCount 测试用）；null 走默认空列表
   List<ReviewItem> Function()? dueReviewOverride;
 
+  /// getDueReviewCount 的替代实现（N15 方案 B 后 reviewCount 走 count 通道）；
+  /// null 走默认 0
+  int Function()? dueReviewCountOverride;
+
   @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice,
       {bool isReview = false}) {
@@ -42,6 +46,10 @@ class _ScriptedQuizTracker implements QuizTracker {
   @override
   List<ReviewItem> getDueReviews(int textId) =>
       dueReviewOverride?.call() ?? [];
+
+  @override
+  int getDueReviewCount(int textId) =>
+      dueReviewCountOverride?.call() ?? 0;
 
   @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
@@ -224,13 +232,13 @@ void main() {
       expect(tracker.lastIsReview, isFalse);
     });
 
-    test('提交后 reviewCount 置脏重查（复习状态可能已变）', () {
+    test('提交后 reviewCount 置脏重查（复习状态可能已变；走 count 通道）', () {
       freshUser();
       tracker.results.addAll([(User.allocate(calloc), true)]);
       var reviewQueries = 0;
-      tracker.dueReviewOverride = () {
+      tracker.dueReviewCountOverride = () {
         reviewQueries++;
-        return [];
+        return 0;
       };
 
       expect(ctrl.reviewCount, 0); // 懒查第一次
@@ -238,6 +246,14 @@ void main() {
       ctrl.submitQuiz(questions(1), [0]);
       expect(ctrl.reviewCount, 0); // 提交后置脏 → 重查
       expect(reviewQueries, 2);
+    });
+
+    test('reviewCount 显示真实总数（不受列表上限影响）', () {
+      freshUser();
+      questions(1); // 分配 block 供 tearDown 统一释放（避免复用上一测试已释放指针）
+      // 模拟到期 523 条（> 旧实现 500 上限）：count 通道返回真实数字
+      tracker.dueReviewCountOverride = () => 523;
+      expect(ctrl.reviewCount, 523);
     });
   });
 }

@@ -76,6 +76,6 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号与 CHANGELOG）。
 
-数据更新独立于 App 发版：`bash scripts/project/publish_data.sh` 一键压缩 DB 并发布为 prerelease，客户端启动时自动同步（详见 [README.md#快速开始](README.md#快速开始) 维护者操作说明）。
+数据更新独立于 App 发版：数据变更 commit 后运行 `bash scripts/project/publish_data.sh`——自动刷新 db_version 并 amend 进数据提交、题库可复现性检查、压缩 DB 发布为 prerelease，客户端启动时自动同步（详见 [README.md#快速开始](README.md#快速开始) 维护者操作说明；`SKIP_AMEND=1` / `SKIP_REPRO_CHECK=1` 可分别跳过版本号刷新与可复现性检查）。
 
 发版仅维护者操作，贡献者不要在自己 fork 里执行。

@@ -71,6 +71,9 @@ class _FakeReviewTracker implements QuizTracker {
       textId == 0 ? due : due.where((r) => r.textId == textId).toList();
 
   @override
+  int getDueReviewCount(int textId) => getDueReviews(textId).length;
+
+  @override
   List<Question> getQuestionsByIds(List<int> ids) {
     byIdsCalls++;
     return byIdsResult;

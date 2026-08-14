@@ -36,10 +36,11 @@ bool ReadingHistoryRepository::initTable() {
 
 bool ReadingHistoryRepository::addRecord(int textId, double readTime, time_t timestamp) {
     if (!db || !db->getConnection()) return false;
+    // textId/timestamp 按整数绑定（int64_t），避免 double 泛型绑定的精度回环（N6）
     return db->executeSQL(
         "INSERT INTO reading_history (user_id, text_id, read_time, read_timestamp) "
         "VALUES (1, ?, ?, ?);",
-        std::vector<double>{static_cast<double>(textId), readTime, static_cast<double>(timestamp)}
+        std::vector<SqlParam>{textId, readTime, static_cast<int64_t>(timestamp)}
     );
 }
 
@@ -105,7 +106,7 @@ bool ReadingHistoryRepository::markAsTracked(int textId) {
     time_t now = time(nullptr);
     return db->executeSQL(
         "INSERT OR IGNORE INTO text_tracking (text_id, tracked_at) VALUES (?, ?);",
-        std::vector<double>{static_cast<double>(textId), static_cast<double>(now)}
+        std::vector<SqlParam>{textId, static_cast<int64_t>(now)}
     );
 }
 

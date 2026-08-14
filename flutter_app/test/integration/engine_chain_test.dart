@@ -119,6 +119,16 @@ void main() {
       }
       expect(verified, greaterThan(0), reason: '资产库应存在带原句的题目');
     });
+
+    test('quiz_get_due_review_count：新库无错题返回 0，与列表通道同源', () {
+      // 资产库无用户数据：COUNT 通道与列表通道应一致为空
+      // （符号存在性 + ABI 签名验证：lookup 失败/签名错位会在此抛错）
+      final b = bridge!;
+      expect(b.quizGetDueReviewCount(0), 0);
+      final block = calloc<ReviewItemData>(16);
+      expect(b.quizGetReviewItems(0, block, 16), 0);
+      calloc.free(block);
+    });
   });
 
   group('RecommendationEngine（真实 .so + 资产库）', () {

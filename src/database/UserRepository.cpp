@@ -264,31 +264,3 @@ bool UserRepository::saveUser(const User& user) {
     );
 }
 
-time_t UserRepository::getLastReadTime() {
-    if (!db || !db->getConnection()) {
-        return 0;
-    }
-    
-    const char* sql = "SELECT last_read_time FROM user WHERE id = 1;";
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        return 0;
-    }
-    
-    time_t result = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        result = static_cast<time_t>(sqlite3_column_int64(stmt, 0));
-    }
-    
-    sqlite3_finalize(stmt);
-    return result;
-}
-
-bool UserRepository::updateLastReadTime(time_t time) {
-    return db->executeSQL(
-        "UPDATE user SET last_read_time = ? WHERE id = 1;",
-        std::vector<double>{static_cast<double>(time)}
-    );
-}

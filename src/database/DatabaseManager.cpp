@@ -202,6 +202,8 @@ bool DatabaseManager::bindMixedParameters(sqlite3_stmt* stmt,
                 rc = sqlite3_bind_double(stmt, paramIndex, arg);
             } else if constexpr (std::is_same_v<T, int>) {
                 rc = sqlite3_bind_int(stmt, paramIndex, arg);
+            } else if constexpr (std::is_same_v<T, int64_t>) {
+                rc = sqlite3_bind_int64(stmt, paramIndex, arg);
             }
         }, params[i]);
         

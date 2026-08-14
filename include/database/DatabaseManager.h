@@ -7,9 +7,9 @@
 #include <variant>
 
 /**
- * @brief SQL 参数类型（支持文本、实数、整数）
+ * @brief SQL 参数类型（支持文本、实数、32 位整数、64 位整数——时间戳用 int64_t 绑定，避免 double 精度回环）
  */
-using SqlParam = std::variant<std::string, double, int>;
+using SqlParam = std::variant<std::string, double, int, int64_t>;
 
 /**
  * @brief 简单的 SQLite 数据库管理器

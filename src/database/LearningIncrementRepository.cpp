@@ -65,44 +65,6 @@ bool LearningIncrementRepository::addIncrement(int userId, int dimension, double
     return true;
 }
 
-std::vector<LearningIncrement> LearningIncrementRepository::getIncrements(int userId, int dimension) {
-    std::vector<LearningIncrement> increments;
-    
-    if (!db || !db->getConnection()) {
-        return increments;
-    }
-    
-    const char* sql = "SELECT id, user_id, dimension, delta, timestamp, type "
-                      "FROM learning_increments WHERE user_id = ? AND dimension = ? "
-                      "ORDER BY timestamp ASC;";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("准备查询增量语句失败: {}", sqlite3_errmsg(db->getConnection()));
-        return increments;
-    }
-    
-    sqlite3_bind_int(stmt, 1, userId);
-    sqlite3_bind_int(stmt, 2, dimension);
-    
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        LearningIncrement inc;
-        inc.id = sqlite3_column_int(stmt, 0);
-        inc.userId = sqlite3_column_int(stmt, 1);
-        inc.dimension = sqlite3_column_int(stmt, 2);
-        inc.delta = sqlite3_column_double(stmt, 3);
-        inc.timestamp = static_cast<time_t>(sqlite3_column_int64(stmt, 4));
-        const char* typeStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        inc.type = typeStr ? typeStr : "read";
-        increments.push_back(inc);
-    }
-    
-    sqlite3_finalize(stmt);
-    return increments;
-}
-
 std::vector<LearningIncrement> LearningIncrementRepository::getAllIncrements(int userId) {
     std::vector<LearningIncrement> increments;
     
@@ -138,27 +100,6 @@ std::vector<LearningIncrement> LearningIncrementRepository::getAllIncrements(int
     
     sqlite3_finalize(stmt);
     return increments;
-}
-
-bool LearningIncrementRepository::deleteIncrement(int id) {
-    if (!db || !db->getConnection()) {
-        return false;
-    }
-    
-    const char* sql = "DELETE FROM learning_increments WHERE id = ?;";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        return false;
-    }
-    
-    sqlite3_bind_int(stmt, 1, id);
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
-    return rc == SQLITE_DONE;
 }
 
 bool LearningIncrementRepository::deleteIncrements(const std::vector<int>& ids) {

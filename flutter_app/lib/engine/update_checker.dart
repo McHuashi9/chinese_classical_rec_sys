@@ -56,9 +56,10 @@ class UpdateChecker {
       return null;
     }
 
-    await _prefs.setInt(prefKeyLastManual, now);
+    // 拉取成功后才写手动检查冷却（失败不冷却，用户可立即重试）
     final result = await _fetchLatestVersion();
     if (result == null) return null;
+    await _prefs.setInt(prefKeyLastManual, now);
     await _prefs.setInt(prefKeyLastCheck, now);
     return result.toVersion();
   }

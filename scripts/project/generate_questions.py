@@ -26,7 +26,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 ARTICLES_DIR = Path(__file__).resolve().parents[2] / "articles"
 FEATURES_FILE = Path(__file__).resolve().parent / "features.json"
 EXTERNAL_TJ = Path(__file__).resolve().parents[2] / "external" / "tongjiazi" / "knowledge_base"
-OUT_DIR = Path("/tmp/opencode/questions_sample")
+# --sample 产物输出目录（相对仓库，与 --json 的 build/data/questions.json 同风格）
+OUT_DIR = Path(__file__).resolve().parents[2] / "build" / "data" / "questions_sample"
 
 # CRITIC 权重（与 include/core/Config.h 一致，d1..d10）
 CRITIC_WEIGHTS = [0.09215, 0.09382, 0.13107, 0.09247, 0.10341,
@@ -688,7 +689,10 @@ def main():
     if args.sample:
         md = ["# 出题样本抽验\n"]
         for f in files:
-            art_qs = [q for q in all_qs if q["title"] == f.stem]
+            art = parse_article(f)
+            # 按 front matter title+author 精确匹配：文件名==title 是命名铁律，
+            # 但同名异篇靠括号消歧（六国论（苏辙）等）时 stem ≠ title，不能只比 stem
+            art_qs = [q for q in all_qs if q["title"] == art["title"] and q["author"] == art["author"]]
             if not art_qs:
                 continue
             md.append(f"\n## {f.stem}（{art_qs[0]['source']}）\n")

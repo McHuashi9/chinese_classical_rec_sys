@@ -1,10 +1,12 @@
 #include <catch_amalgamated.hpp>
 #include "c_types.h"
+#include "user_tables.h"
 #include <sqlite3.h>
 
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 extern "C" {
@@ -362,5 +364,36 @@ TEST_CASE("db_replace - 目标缺列：tmp 打开时表迁移补列，导入交�
     REQUIRE(sqliteDouble(work, "SELECT d10_base_ability FROM user WHERE id=1") == Catch::Approx(0.49).margin(1e-6));
     REQUIRE(sqliteCount(work, "SELECT last_read_time FROM user WHERE id=1") == 1700000000LL);
 
+    db_close();
+}
+
+TEST_CASE("db_replace - 白名单完整性：资产库用户表集合 == 白名单键集合（新增用户表必补白名单）", "[db_replace]") {
+    db_close();
+    const std::string work = makeWorkDb("whitelist");
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+    std::set<std::string> tables;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master WHERE type='table'", -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char* t = sqlite3_column_text(stmt, 0);
+            if (t) tables.insert(reinterpret_cast<const char*>(t));
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+
+    // 内容库表（db_replace 不合并）与系统表排除后，剩余应恰为白名单键集合：
+    // 漏加白名单的新用户表会在这里暴露（静默清空用户数据的铁律变成测试失败）
+    tables.erase("classical_text");
+    tables.erase("questions");
+    tables.erase("sqlite_sequence");
+
+    std::set<std::string> whitelistKeys;
+    for (const auto& [k, v] : kUserTableColumns) whitelistKeys.insert(k);
+
+    REQUIRE(tables == whitelistKeys);
     db_close();
 }
