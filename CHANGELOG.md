@@ -263,8 +263,6 @@
 - **作者朝代 overflow 保护**：阅读页、详情页、卡片 subtitle 均加 `overflow: ellipsis, maxLines: 1`
 - **CMakeLists 消除重复编译**：10 个 `.cpp` 在静态库和共享库中各编译一次，浪费约 30% 编译时间。现已改为共享库只编译桥接代码并链接静态库
 
-[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
-
 ## [0.5.1] - 2026-05-15
 
 ### Fixed
@@ -373,24 +371,25 @@ C++ CLI 原型。
 - 知识追踪（IRT 模型）
 - SQLite 本地存储
 
+[0.10.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.2
+[0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1
+[0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
+[0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
+[0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
+[0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
+[0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
+[0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
+[0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
+[0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
+[0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1
+[0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0
+[0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
+[0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
+[0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
+[0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
+[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
 [0.5.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.1
 [0.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.0
 [0.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.4.0
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
-[0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
-[0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
-[0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
-[0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
-[0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0
-[0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1
-[0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
-[0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
-[0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
-[0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
-[0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
-[0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
-[0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
-[0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
-[0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1
-[0.10.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.2
