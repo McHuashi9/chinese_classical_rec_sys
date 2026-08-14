@@ -21,7 +21,7 @@ jobs:
   repro:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install generator dependencies
         # pypinyin 缺失时换质自动关闭，检查会退化为"无换质模式"——必须装上
