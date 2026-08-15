@@ -14,6 +14,7 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -41,8 +42,10 @@ class AppCoordinator {
   NativeBridge? _bridge;
   late TextRepository _textRepo;
   late RecommendationEngine _engine;
+  late ProfileRepository _profileRepo;
   RemoteDbSync? _remoteDbSync;
   HistoryService? _historyService;
+  SharedPreferences? _prefs;
 
   String? _dbPathAfterSync;
 
@@ -84,10 +87,13 @@ class AppCoordinator {
       _textRepo = TextRepository(_bridge!);
       _textRepo.loadTextCache();
       _engine = RecommendationEngine(_bridge!);
+      _profileRepo = FfiProfileRepository(_bridge!);
 
       final tracker = KnowledgeTracker(_bridge!);
       userCtrl.initTracker(tracker);
+      userCtrl.initProfiles(_profileRepo);
       _loadUser();
+      userCtrl.refreshProfiles();
       _loadTextTrackedStates();
       _historyService = HistoryService(_bridge!, _textRepo);
 
@@ -116,6 +122,59 @@ class AppCoordinator {
   void _initDefaultUser() {
     _bridge!.userInitDefault();
     _loadUser(fromDefaultInit: true);
+  }
+
+  /// 启动时恢复上次档案（prefs active_user_id）；失败回退到引擎当前档案并落 prefs
+  void activateSavedProfile() {
+    final saved = _prefs?.getInt('active_user_id');
+    if (saved != null && saved != userCtrl.activeUserId) {
+      if (!switchProfile(saved)) {
+        AppLogger().warn('启动恢复档案 $saved 失败，回退到当前档案 ${userCtrl.activeUserId}');
+      }
+    }
+    userCtrl.refreshProfiles();
+    final active = userCtrl.activeUserId;
+    if (active != null) {
+      _prefs?.setInt('active_user_id', active);
+    }
+  }
+
+  /// 切换当前档案：C++ user_switch 重载用户 → 失效已读集合/推荐/统计缓存 → 重拉推荐
+  bool switchProfile(int id) {
+    if (!isInitialized || _bridge == null) return false;
+    if (syncing.value) return false;
+    if (id == userCtrl.activeUserId) return true;
+
+    final rc = _bridge!.userSwitch(id);
+    if (rc != BridgeError.ok) return false;
+
+    _loadUser();
+    readTracker.clear();
+    _loadTextTrackedStates();
+    userCtrl.refreshProfiles();
+    userCtrl.invalidateQuizData();
+    _cachedStats = null;
+    _statsGeneration++;
+    _prefs?.setInt('active_user_id', id);
+    getRecommendations(10);
+    return true;
+  }
+
+  /// 新建档案（不切换；UI 成功后调用 [switchProfile]）。
+  /// 未初始化时 UserController 没有档案仓库，自然返回 null。
+  int? createProfile(String name) {
+    return userCtrl.createProfile(name);
+  }
+
+  /// 重命名档案
+  bool renameProfile(int id, String name) {
+    return userCtrl.renameProfile(id, name);
+  }
+
+  /// 软删档案（拒绝删除当前档案）
+  bool deleteProfile(int id) {
+    if (id == userCtrl.activeUserId) return false;
+    return userCtrl.deleteProfile(id);
   }
 
   void _loadTextTrackedStates() {
@@ -251,9 +310,11 @@ class AppCoordinator {
       }
 
       _textRepo.loadTextCache();
+      _restoreActiveProfile();
       _loadUser();
       _loadTextTrackedStates();
-      // db_replace 已合并用户表：错题队列/作答流水可能变化，置脏懒查缓存并通知刷新
+      // db_replace 已合并用户表：错题队列/作答流水/档案列表可能变化，刷新缓存
+      userCtrl.refreshProfiles();
       userCtrl.invalidateQuizData();
       if (restored) {
         // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
@@ -326,7 +387,18 @@ class AppCoordinator {
   }
 
   void initRemoteDbSync(SharedPreferences prefs, String dbDirPath) {
+    _prefs = prefs;
     _remoteDbSync = RemoteDbSync(prefs, dbDirPath);
+  }
+
+  /// db_replace 重开引擎后恢复上次档案（openDatabase 默认落在 id=1）
+  void _restoreActiveProfile() {
+    final saved = _prefs?.getInt('active_user_id');
+    if (saved == null || saved <= 0 || _bridge == null) return;
+    final rc = _bridge!.userSwitch(saved);
+    if (rc != BridgeError.ok) {
+      AppLogger().warn('remoteSyncDb: 恢复档案 $saved 失败 rc=$rc，回落默认档案');
+    }
   }
 
   void dispose() {

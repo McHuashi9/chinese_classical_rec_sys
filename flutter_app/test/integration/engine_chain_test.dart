@@ -11,6 +11,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
+import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
@@ -236,6 +237,54 @@ void main() {
       final stats = HistoryService.computeStats(const []);
       expect(stats.totalSeconds, 0);
       expect(stats.longestStreak, 0);
+    });
+  });
+
+  group('ProfileRepository（真实 .so + 资产库）', () {
+    late Directory work;
+    late FfiProfileRepository repo;
+
+    setUp(() {
+      if (bridge == null) {
+        markTestSkipped('未找到 libchinese_core.so，跳过');
+        return;
+      }
+      work = Directory.systemTemp.createTempSync('engine_chain_profile');
+      _copyAssetDb('${work.path}/classical.db');
+      expect(bridge!.dbOpen('${work.path}/classical.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
+      repo = FfiProfileRepository(bridge!);
+    });
+
+    tearDown(() {
+      bridge?.dbClose();
+      try {
+        work.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('默认档案存在，CRUD 与切换按 FFI 通道工作', () {
+      final initial = repo.listProfiles();
+      expect(initial.length, 1);
+      expect(initial.first.id, 1);
+      expect(initial.first.name, '默认用户');
+      expect(repo.activeUserId(), 1);
+
+      final id = repo.createProfile('小明');
+      expect(id, greaterThan(1));
+      expect(repo.listProfiles().length, 2);
+
+      expect(repo.switchProfile(id!), isTrue);
+      expect(repo.activeUserId(), id);
+
+      expect(repo.renameProfile(id, '小红'), isTrue);
+      expect(repo.listProfiles().map((p) => p.name), contains('小红'));
+
+      // 当前档案不可删除；切回默认后可软删
+      expect(repo.deleteProfile(id), isFalse);
+      expect(repo.switchProfile(1), isTrue);
+      expect(repo.deleteProfile(id), isTrue);
+      expect(repo.listProfiles().length, 1);
     });
   });
 }

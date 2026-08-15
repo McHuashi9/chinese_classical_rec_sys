@@ -73,7 +73,7 @@ void KnowledgeTracker::applyReadEffect(User& user, const Text& text, double read
         
         // 记录增量到数据库（如果 Repository 可用）
         if (incrementRepo && delta > Config::MIN_DELTA_THRESHOLD) {
-            incrementRepo->addIncrement(1, j + 1, delta, timestamp, "read");
+            incrementRepo->addIncrement(userId_, j + 1, delta, timestamp, "read");
         }
     }
     
@@ -132,7 +132,7 @@ void KnowledgeTracker::applyQuizEffect(User& user, const Text& text,
 
         // 记录增量（答题增量可为负——答错真实拉低能力，负数也入库）
         if (incrementRepo && std::abs(delta) > Config::MIN_DELTA_THRESHOLD) {
-            incrementRepo->addIncrement(1, j + 1, delta, timestamp, "quiz");
+            incrementRepo->addIncrement(userId_, j + 1, delta, timestamp, "quiz");
         }
     }
 
@@ -184,7 +184,7 @@ void KnowledgeTracker::applyForgettingEffect(User& user, time_t currentTime) con
     }
     
     // 获取所有增量
-    std::vector<LearningIncrement> allIncrements = incrementRepo->getAllIncrements(1);
+    std::vector<LearningIncrement> allIncrements = incrementRepo->getAllIncrements(userId_);
     
     if (allIncrements.empty()) {
         LOG_DEBUG("无增量记录，跳过遗忘效应");
@@ -214,7 +214,7 @@ int KnowledgeTracker::pruneOldIncrements(User& user, time_t currentTime) const {
     }
     
     // 获取所有增量
-    std::vector<LearningIncrement> allIncrements = incrementRepo->getAllIncrements(1);
+    std::vector<LearningIncrement> allIncrements = incrementRepo->getAllIncrements(userId_);
     
     std::vector<int> toDelete;
     std::array<double, 10> baseAbilityAdditions = {0};

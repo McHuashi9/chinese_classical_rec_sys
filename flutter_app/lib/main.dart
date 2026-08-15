@@ -165,12 +165,13 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       coord.settingsCtrl.setNotice('内容已更新，学习进度已保留');
     }
     coord.setDbPathAfterSync(dbPath);
-    coord.getRecommendations(10);
 
     final prefs = await SharedPreferences.getInstance();
     final dbDir = File(dbPath).parent.path;
     _dbDirPath = dbDir;
     coord.initRemoteDbSync(prefs, dbDir);
+    coord.activateSavedProfile();
+    coord.getRecommendations(10);
     await coord.settingsCtrl.init(prefs, coord.bridge);
     _postInit(coord);
   }

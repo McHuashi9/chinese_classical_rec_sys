@@ -4,16 +4,101 @@
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
+#include <ctime>
+#include <set>
 #include <unordered_map>
 #include <functional>
+#include <utility>
+#include <vector>
+
+namespace {
+
+bool tableExists(sqlite3* db, const std::string& table)
+{
+    if (!db) return false;
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
+    const bool exists = (sqlite3_step(stmt) == SQLITE_ROW);
+    sqlite3_finalize(stmt);
+    return exists;
+}
+
+std::string tableSql(sqlite3* db, const std::string& table)
+{
+    if (!db) return {};
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return {};
+    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
+    std::string out;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* t = sqlite3_column_text(stmt, 0);
+        if (t) out = reinterpret_cast<const char*>(t);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+}
+
+std::set<std::string> tableColumns(sqlite3* db, const std::string& table)
+{
+    std::set<std::string> cols;
+    if (!db) return cols;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, ("PRAGMA table_info(" + table + ")").c_str(), -1, &stmt, nullptr)
+        != SQLITE_OK) {
+        return cols;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* name = sqlite3_column_text(stmt, 1);
+        if (name) cols.insert(reinterpret_cast<const char*>(name));
+    }
+    sqlite3_finalize(stmt);
+    return cols;
+}
+
+// 把 from 表中与 to 表共有的列按名复制（to 缺列时取 to 默认值）。
+// 仅复制列名集合，与 db_replace 的白名单容错同一思路。
+bool copyCommonColumns(sqlite3* db, const std::string& from, const std::string& to)
+{
+    if (!db) return false;
+    const std::set<std::string> fromCols = tableColumns(db, from);
+    const std::set<std::string> toCols = tableColumns(db, to);
+    std::vector<std::string> cols;
+    for (const auto& c : fromCols) {
+        if (toCols.count(c)) cols.push_back(c);
+    }
+    if (cols.empty()) return true;
+
+    std::string sql = "INSERT INTO " + to + " (";
+    for (size_t i = 0; i < cols.size(); i++) sql += (i ? ", " : "") + cols[i];
+    sql += ") SELECT ";
+    for (size_t i = 0; i < cols.size(); i++) sql += (i ? ", " : "") + cols[i];
+    sql += " FROM " + from + ";";
+
+    char* err = nullptr;
+    const int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("UserRepository: 列复制失败 {} -> {}: {}", from, to, err ? err : "?");
+        sqlite3_free(err);
+        return false;
+    }
+    return true;
+}
+
+}  // namespace
 
 UserRepository::UserRepository(DatabaseManager* dbManager) : db(dbManager) {}
 
 bool UserRepository::initTable() {
-    // 论文10维能力向量：d1-d10
-    const char* sql = 
+    sqlite3* c = db->getConnection();
+    if (!c) return false;
+
+    // 论文10维能力向量：d1-d10；多用户化：id 为普通主键，无 CHECK(id=1)
+    const char* newUserSql =
         "CREATE TABLE IF NOT EXISTS user ("
-        "id INTEGER PRIMARY KEY CHECK (id = 1), "
+        "id INTEGER PRIMARY KEY, "
         "d1_ability REAL DEFAULT 0.0, "  // f1 平均句长
         "d2_ability REAL DEFAULT 0.0, "  // f3 句子数
         "d3_ability REAL DEFAULT 0.0, "  // f5 虚词比例
@@ -47,21 +132,54 @@ bool UserRepository::initTable() {
         "d10_quiz_count INTEGER DEFAULT 0, "
         "last_read_time INTEGER DEFAULT 0"  // 最后阅读时间戳
         ");";
-    
-    bool result = db->executeSQL(sql);
-    if (!result) {
-        LOG_ERROR("UserRepository::initTable failed: {}", db->getLastError());
+
+    // 档案元数据表（多用户）
+    const char* profilesSql =
+        "CREATE TABLE IF NOT EXISTS profiles ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "name TEXT NOT NULL, "
+        "created_at INTEGER NOT NULL, "
+        "last_used_at INTEGER NOT NULL, "
+        "deleted INTEGER NOT NULL DEFAULT 0"
+        ");";
+
+    if (!db->executeSQL(profilesSql)) {
+        LOG_ERROR("UserRepository::initTable profiles failed: {}", db->getLastError());
         return false;
     }
-    
+
+    // 老库迁移：user 表带 CHECK(id=1) → 重建为普通主键多行表（SQLite 无法直接删 CHECK）
+    if (tableExists(c, "user")) {
+        const std::string oldSql = tableSql(c, "user");
+        if (oldSql.find("CHECK") != std::string::npos) {
+            LOG_INFO("UserRepository: 检测到 user 表 CHECK(id=1)，迁移为多用户 schema");
+            if (!db->executeSQL("ALTER TABLE user RENAME TO user_old;")) {
+                LOG_ERROR("UserRepository: user 重命名失败: {}", db->getLastError());
+                return false;
+            }
+            if (!db->executeSQL(newUserSql)) {
+                LOG_ERROR("UserRepository: 新 user 表创建失败: {}", db->getLastError());
+                return false;
+            }
+            if (!copyCommonColumns(c, "user_old", "user")) {
+                return false;
+            }
+            if (!db->executeSQL("DROP TABLE user_old;")) {
+                LOG_ERROR("UserRepository: 删除 user_old 失败: {}", db->getLastError());
+                return false;
+            }
+        }
+    } else if (!db->executeSQL(newUserSql)) {
+        LOG_ERROR("UserRepository::initTable user failed: {}", db->getLastError());
+        return false;
+    }
+
     // 迁移：为旧数据库添加 last_read_time 列（如果不存在）
-    const char* migrateSql = "ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;";
-    db->executeSQL(migrateSql);  // 忽略错误
+    db->executeSQL("ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;");  // 忽略错误
 
     // 迁移：移除已弃用的 name 列（如果存在）
-    const char* dropNameSql = "ALTER TABLE user DROP COLUMN name;";
-    db->executeSQL(dropNameSql);  // 忽略错误（列不存在或 SQLite < 3.35.0）
-    
+    db->executeSQL("ALTER TABLE user DROP COLUMN name;");  // 忽略错误（列不存在或 SQLite < 3.35.0）
+
     // 迁移：添加基础能力字段（如果不存在）
     const char* baseAbilityMigrations[] = {
         "ALTER TABLE user ADD COLUMN d1_base_ability REAL DEFAULT 0.0;",
@@ -75,11 +193,10 @@ bool UserRepository::initTable() {
         "ALTER TABLE user ADD COLUMN d9_base_ability REAL DEFAULT 0.0;",
         "ALTER TABLE user ADD COLUMN d10_base_ability REAL DEFAULT 0.0;"
     };
-    
     for (const char* migrate : baseAbilityMigrations) {
         db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
     }
-    
+
     // 迁移：悟性 η 与累计答题次数 N_j（答题效应，论文§5.3）
     const char* quizMigrations[] = {
         "ALTER TABLE user ADD COLUMN eta REAL DEFAULT 0.08;",
@@ -99,30 +216,75 @@ bool UserRepository::initTable() {
     }
 
     // 测验闭环（作答流水 + 错题复习状态）：用户库无版本号机制，
-    // CREATE IF NOT EXISTS 幂等建表，旧库打开即自动迁移
+    // CREATE IF NOT EXISTS 幂等建表 + ALTER 补列，旧库打开即自动迁移
     const char* quizAttemptsSql =
         "CREATE TABLE IF NOT EXISTS quiz_attempts ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "question_id INTEGER NOT NULL, "     // questions.id（内容库）
+        "user_id INTEGER NOT NULL DEFAULT 1, "   // 多用户：当前档案 id
+        "question_id INTEGER NOT NULL, "          // questions.id（内容库）
         "text_id INTEGER NOT NULL, "
-        "correct INTEGER NOT NULL, "         // 0/1
-        "is_review INTEGER DEFAULT 0, "      // 0=正式测验 1=错题复习
-        "answered_at INTEGER NOT NULL"       // unix 秒
+        "correct INTEGER NOT NULL, "              // 0/1
+        "is_review INTEGER DEFAULT 0, "           // 0=正式测验 1=错题复习
+        "answered_at INTEGER NOT NULL"            // unix 秒
         ");";
     const char* reviewItemsSql =
         "CREATE TABLE IF NOT EXISTS review_items ("
-        "question_id INTEGER PRIMARY KEY, "  // 错题（quiz_attempts 中答错过的题）
+        "question_id INTEGER NOT NULL, "          // 错题（quiz_attempts 中答错过的题）
+        "user_id INTEGER NOT NULL DEFAULT 1, "    // 多用户：当前档案 id
         "text_id INTEGER NOT NULL, "
-        "correct_streak INTEGER DEFAULT 0, " // 连续答对次数（调度翻倍用）
+        "correct_streak INTEGER DEFAULT 0, "      // 连续答对次数（调度翻倍用）
         "wrong_count INTEGER DEFAULT 0, "
-        "next_review_at INTEGER NOT NULL"    // 下次到期时间
+        "next_review_at INTEGER NOT NULL, "       // 下次到期时间
+        "PRIMARY KEY (user_id, question_id)"
         ");";
     const char* quizAttemptsIdxSql =
         "CREATE INDEX IF NOT EXISTS idx_quiz_attempts_text ON quiz_attempts(text_id, question_id);";
+    const char* quizAttemptsUserIdxSql =
+        "CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_text ON quiz_attempts(user_id, text_id, question_id);";
 
-    if (!db->executeSQL(quizAttemptsSql) || !db->executeSQL(reviewItemsSql) ||
-        !db->executeSQL(quizAttemptsIdxSql)) {
+    if (!db->executeSQL(quizAttemptsSql) || !db->executeSQL(reviewItemsSql)) {
         LOG_ERROR("UserRepository::initTable quiz tables failed: {}", db->getLastError());
+        return false;
+    }
+
+    // 旧 quiz_attempts 表补 user_id 列（必须先于依赖该列的索引创建）
+    db->executeSQL("ALTER TABLE quiz_attempts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1;");  // 忽略错误
+
+    if (!db->executeSQL(quizAttemptsIdxSql) || !db->executeSQL(quizAttemptsUserIdxSql)) {
+        LOG_ERROR("UserRepository::initTable quiz index failed: {}", db->getLastError());
+        return false;
+    }
+
+    // 旧 review_items 表（单列主键 question_id）→ 重建为复合主键 (user_id, question_id)
+    if (tableExists(c, "review_items")) {
+        const std::string oldSql = tableSql(c, "review_items");
+        const bool oldPk = oldSql.find("question_id INTEGER PRIMARY KEY") != std::string::npos;
+        const bool hasUserId = tableColumns(c, "review_items").count("user_id") != 0;
+        if (oldPk || !hasUserId) {
+            LOG_INFO("UserRepository: 检测到 review_items 旧主键，迁移为 (user_id, question_id)");
+            if (!db->executeSQL("ALTER TABLE review_items RENAME TO review_items_old;")) {
+                LOG_ERROR("UserRepository: review_items 重命名失败: {}", db->getLastError());
+                return false;
+            }
+            if (!db->executeSQL(reviewItemsSql)) {
+                LOG_ERROR("UserRepository: 新 review_items 创建失败: {}", db->getLastError());
+                return false;
+            }
+            if (!copyCommonColumns(c, "review_items_old", "review_items")) {
+                return false;
+            }
+            if (!db->executeSQL("DROP TABLE review_items_old;")) {
+                LOG_ERROR("UserRepository: 删除 review_items_old 失败: {}", db->getLastError());
+                return false;
+            }
+        }
+    }
+
+    // 档案行与 user 行对齐：老库 id=1 数据归入"默认用户"档案
+    if (!db->executeSQL(
+        "INSERT OR IGNORE INTO profiles (id, name, created_at, last_used_at, deleted) "
+        "SELECT id, '默认用户', strftime('%s','now'), strftime('%s','now'), 0 FROM user;")) {
+        LOG_ERROR("UserRepository::initTable 档案对齐失败: {}", db->getLastError());
         return false;
     }
 
@@ -186,12 +348,12 @@ static int getUserCallback(void* data, int argc, char** argv, char** azColName) 
     return 0;
 }
 
-bool UserRepository::getUser(User& user) {
+bool UserRepository::getUser(User& user, int userId) {
     if (!db || !db->getConnection()) {
         return false;
     }
     
-    const char* sql = "SELECT d1_ability, d2_ability, d3_ability, d4_ability, "
+    const std::string sql = "SELECT d1_ability, d2_ability, d3_ability, d4_ability, "
                       "d5_ability, d6_ability, d7_ability, d8_ability, d9_ability, d10_ability, "
                       "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
                       "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
@@ -199,12 +361,12 @@ bool UserRepository::getUser(User& user) {
                       "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
                       "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
                       "last_read_time "
-                      "FROM user WHERE id = 1;";
+                      "FROM user WHERE id = " + std::to_string(userId) + ";";
     char* errMsg = nullptr;
 
     struct GetUserData { User* user; bool found = false; } gd = {&user, false};
     
-    int rc = sqlite3_exec(db->getConnection(), sql, getUserCallback, &gd, &errMsg);
+    int rc = sqlite3_exec(db->getConnection(), sql.c_str(), getUserCallback, &gd, &errMsg);
     
     if (rc != SQLITE_OK) {
         LOG_ERROR("查询用户失败: {}", errMsg);
@@ -215,7 +377,7 @@ bool UserRepository::getUser(User& user) {
     return gd.found;
 }
 
-bool UserRepository::saveUser(const User& user) {
+bool UserRepository::saveUser(const User& user, int userId) {
     auto buildUserParams = [&user]() -> std::vector<SqlParam> {
         std::vector<SqlParam> p;
         for (int i = 0; i < 10; ++i) {
@@ -234,6 +396,7 @@ bool UserRepository::saveUser(const User& user) {
 
     auto userParams = buildUserParams();
     std::vector<SqlParam> params;
+    params.emplace_back(userId);
     params.insert(params.end(), userParams.begin(), userParams.end());
     params.insert(params.end(), userParams.begin(), userParams.end());
     
@@ -247,7 +410,7 @@ bool UserRepository::saveUser(const User& user) {
         "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
         "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
         "last_read_time) "
-        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
         "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(id) DO UPDATE SET "
         "d1_ability = ?, d2_ability = ?, d3_ability = ?, d4_ability = ?, "
@@ -264,3 +427,149 @@ bool UserRepository::saveUser(const User& user) {
     );
 }
 
+std::vector<ProfileInfo> UserRepository::listProfiles() {
+    std::vector<ProfileInfo> out;
+    if (!db || !db->getConnection()) return out;
+
+    const char* sql = "SELECT id, name, deleted, created_at, last_used_at "
+                      "FROM profiles WHERE deleted = 0 ORDER BY id ASC;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("查询档案列表失败: {}", db->getLastError());
+        return out;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ProfileInfo p;
+        p.id = sqlite3_column_int(stmt, 0);
+        const unsigned char* name = sqlite3_column_text(stmt, 1);
+        if (name) p.name = reinterpret_cast<const char*>(name);
+        p.deleted = sqlite3_column_int(stmt, 2);
+        p.createdAt = sqlite3_column_int64(stmt, 3);
+        p.lastUsedAt = sqlite3_column_int64(stmt, 4);
+        out.push_back(std::move(p));
+    }
+    sqlite3_finalize(stmt);
+    return out;
+}
+
+bool UserRepository::createProfile(const std::string& name, int& outId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+
+    char* err = nullptr;
+    if (sqlite3_exec(c, "BEGIN IMMEDIATE", nullptr, nullptr, &err) != SQLITE_OK) {
+        LOG_ERROR("createProfile BEGIN 失败: {}", err ? err : "?");
+        sqlite3_free(err);
+        return false;
+    }
+
+    bool ok = true;
+    sqlite3_stmt* stmt = nullptr;
+    const int64_t now = static_cast<int64_t>(time(nullptr));
+    if (sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
+                              "VALUES (?, ?, ?, 0);", -1, &stmt, nullptr) != SQLITE_OK) {
+        ok = false;
+    } else {
+        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 2, now);
+        sqlite3_bind_int64(stmt, 3, now);
+        ok = sqlite3_step(stmt) == SQLITE_DONE;
+        sqlite3_finalize(stmt);
+    }
+    if (ok) {
+        outId = static_cast<int>(sqlite3_last_insert_rowid(c));
+        // 能力等数据仍按 id 存 user 表：先建默认行，切换/首读时再初始化能力默认值
+        sqlite3_stmt* u = nullptr;
+        if (sqlite3_prepare_v2(c, "INSERT OR IGNORE INTO user(id) VALUES (?);", -1, &u, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            sqlite3_bind_int(u, 1, outId);
+            ok = sqlite3_step(u) == SQLITE_DONE;
+            sqlite3_finalize(u);
+        }
+    }
+
+    if (ok) {
+        ok = sqlite3_exec(c, "COMMIT", nullptr, nullptr, &err) == SQLITE_OK;
+    } else {
+        sqlite3_exec(c, "ROLLBACK", nullptr, nullptr, nullptr);
+    }
+    sqlite3_free(err);
+    return ok;
+}
+
+bool UserRepository::renameProfile(int userId, const std::string& name) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "UPDATE profiles SET name = ? WHERE id = ? AND deleted = 0;";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("renameProfile prepare 失败: {}", sqlite3_errmsg(c));
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, userId);
+    const int rc = sqlite3_step(stmt);
+    const int changes = sqlite3_changes(c);
+    sqlite3_finalize(stmt);
+    return rc == SQLITE_DONE && changes > 0;
+}
+
+bool UserRepository::deleteProfile(int userId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "UPDATE profiles SET deleted = 1 WHERE id = ? AND deleted = 0;";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("deleteProfile prepare 失败: {}", sqlite3_errmsg(c));
+        return false;
+    }
+    sqlite3_bind_int(stmt, 1, userId);
+    const int rc = sqlite3_step(stmt);
+    const int changes = sqlite3_changes(c);
+    sqlite3_finalize(stmt);
+    return rc == SQLITE_DONE && changes > 0;
+}
+
+bool UserRepository::isProfileActive(int userId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, userId);
+    const bool active = (sqlite3_step(stmt) == SQLITE_ROW);
+    sqlite3_finalize(stmt);
+    return active;
+}
+
+bool UserRepository::touchProfile(int userId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "UPDATE profiles SET last_used_at = ? WHERE id = ? AND deleted = 0;";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
+    sqlite3_bind_int(stmt, 2, userId);
+    const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool UserRepository::ensureProfileExists(int userId, const std::string& name) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const int64_t now = static_cast<int64_t>(time(nullptr));
+    const char* sql = "INSERT OR IGNORE INTO profiles(id, name, created_at, last_used_at, deleted) "
+                      "VALUES (?, ?, ?, ?, 0);";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, userId);
+    sqlite3_bind_text(stmt, 2, name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 3, now);
+    sqlite3_bind_int64(stmt, 4, now);
+    const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}

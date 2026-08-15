@@ -18,6 +18,14 @@ final class NativeBridge {
   late final int Function(Pointer<UserData> inp) userSave;
   late final int Function() userInitDefault;
 
+  // ─── 本地多档案 ──────────────────────────────────────────────
+  late final int Function(Pointer<ProfileData> out, int maxCount) userList;
+  late final int Function() userActiveId;
+  late final int Function(Pointer<Utf8> name) userCreate;
+  late final int Function(int id) userSwitch;
+  late final int Function(int id, Pointer<Utf8> name) userRename;
+  late final int Function(int id) userDelete;
+
   // ─── 文本 ────────────────────────────────────────────────────
   late final int Function() textGetCount;
   late final void Function(Pointer<TextInfo> out, int maxCount) textGetAll;
@@ -143,6 +151,30 @@ final class NativeBridge {
     userInitDefault = _lib.lookupFunction<
         Int32 Function(),
         int Function()>('user_init_default');
+
+    userList = _lib.lookupFunction<
+        Int32 Function(Pointer<ProfileData>, Int32),
+        int Function(Pointer<ProfileData>, int)>('user_list');
+
+    userActiveId = _lib.lookupFunction<
+        Int32 Function(),
+        int Function()>('user_active_id');
+
+    userCreate = _lib.lookupFunction<
+        Int32 Function(Pointer<Utf8>),
+        int Function(Pointer<Utf8>)>('user_create');
+
+    userSwitch = _lib.lookupFunction<
+        Int32 Function(Int32),
+        int Function(int)>('user_switch');
+
+    userRename = _lib.lookupFunction<
+        Int32 Function(Int32, Pointer<Utf8>),
+        int Function(int, Pointer<Utf8>)>('user_rename');
+
+    userDelete = _lib.lookupFunction<
+        Int32 Function(Int32),
+        int Function(int)>('user_delete');
 
     textGetCount = _lib.lookupFunction<
         Int32 Function(),

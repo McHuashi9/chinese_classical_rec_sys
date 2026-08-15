@@ -30,38 +30,43 @@ public:
     
     /**
      * @brief 添加阅读记录
+     * @param userId 用户ID
      * @param textId 文章ID
      * @param readTime 阅读时长（秒）
      * @param timestamp 阅读时间戳
      * @return true 成功，false 失败
      */
-    bool addRecord(int textId, double readTime, time_t timestamp);
+    bool addRecord(int userId, int textId, double readTime, time_t timestamp);
     
     /**
      * @brief 获取最近阅读记录
+     * @param userId 用户ID
      * @param limit 记录数量限制
      * @return 阅读记录列表
      */
-    std::vector<ReadingRecord> getRecentRecords(int limit = 10);
+    std::vector<ReadingRecord> getRecentRecords(int userId, int limit = 10);
     
     /**
      * @brief 获取用户总阅读次数
+     * @param userId 用户ID
      * @return 阅读次数
      */
-    int getTotalReadCount();
+    int getTotalReadCount(int userId);
 
     /**
      * @brief 标记文章已追踪（INSERT OR IGNORE）
+     * @param userId 用户ID
      * @param textId 文章ID
      * @return true 成功，false 失败
      */
-    bool markAsTracked(int textId);
+    bool markAsTracked(int userId, int textId);
 
     /**
      * @brief 获取已追踪的文章ID列表
+     * @param userId 用户ID
      * @return 文章ID列表
      */
-    std::vector<int> getTrackedTextIds();
+    std::vector<int> getTrackedTextIds(int userId);
     
 private:
     DatabaseManager* db;

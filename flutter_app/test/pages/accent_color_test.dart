@@ -4,14 +4,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 Widget _wrap(SettingsController ctrl) {
+  final navCtrl = NavigationController();
+  final readTracker = ReadTracker();
+  final readingCtrl = ReadingController(readTracker);
+  final userCtrl = UserController();
+  final coord = AppCoordinator(
+    navCtrl: navCtrl,
+    settingsCtrl: ctrl,
+    readingCtrl: readingCtrl,
+    userCtrl: userCtrl,
+    readTracker: readTracker,
+  );
   return ListenableBuilder(
     listenable: ctrl,
     builder: (context, _) => MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: ctrl),
+        ChangeNotifierProvider.value(value: navCtrl),
+        ChangeNotifierProvider.value(value: readingCtrl),
+        ChangeNotifierProvider.value(value: userCtrl),
+        Provider.value(value: coord),
       ],
       child: MaterialApp(
         theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,

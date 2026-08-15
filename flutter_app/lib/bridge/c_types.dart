@@ -21,6 +21,25 @@ final class UserData extends Struct {
   external int lastReadTime;
 }
 
+/// C ProfileData struct — 本地多用户档案元数据
+@Packed(1)
+final class ProfileData extends Struct {
+  @Int32()
+  external int id;
+
+  @Array(64)
+  external Array<Uint8> name;
+
+  @Int64()
+  external int createdAt;
+
+  @Int64()
+  external int lastUsedAt;
+
+  @Int32()
+  external int deleted;
+}
+
 /// C TextInfo struct — 列表展示用摘要
 @Packed(1)
 final class TextInfo extends Struct {

@@ -17,9 +17,10 @@ class MyPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.select((UserController u) => u.user);
     final reviewCount = context.select((UserController u) => u.reviewCount);
+    final profileName = context.select((UserController u) => u.activeProfileName);
 
     return user != null
-        ? _MyContent(user: user, reviewCount: reviewCount)
+        ? _MyContent(user: user, reviewCount: reviewCount, profileName: profileName)
         : const Center(child: CircularProgressIndicator());
   }
 }
@@ -27,8 +28,13 @@ class MyPage extends StatelessWidget {
 class _MyContent extends StatelessWidget {
   final User user;
   final int reviewCount;
+  final String? profileName;
 
-  const _MyContent({required this.user, required this.reviewCount});
+  const _MyContent({
+    required this.user,
+    required this.reviewCount,
+    required this.profileName,
+  });
 
   double get _average {
     double sum = 0;
@@ -95,6 +101,13 @@ class _MyContent extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
                   )),
+              if (profileName != null) ...[
+                SizedBox(height: context.gapSmall),
+                Text('当前用户 · $profileName',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: context.accent,
+                        )),
+              ],
             ],
           );
         }
@@ -105,7 +118,17 @@ class _MyContent extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineLarge,
               overflow: TextOverflow.ellipsis,
             ),
-            const Spacer(),
+            if (profileName != null) ...[
+              SizedBox(width: context.gapMedium),
+              Expanded(
+                child: Text('当前用户 · $profileName',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: context.accent,
+                        ),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ] else
+              const Spacer(),
             Text('综合: ${(_average * 100).toStringAsFixed(1)}%',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,

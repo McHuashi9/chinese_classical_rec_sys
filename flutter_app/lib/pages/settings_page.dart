@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -5,7 +6,11 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
+import 'package:chinese_classical_rec_sys/models/user_profile.dart';
+import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
+import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/engine/github_config.dart';
 
@@ -35,6 +40,8 @@ class _SettingsPageState extends State<SettingsPage> {
           SizedBox(height: context.gapLg),
           const Divider(color: AppTheme.border, height: 1),
           SizedBox(height: context.gapXl),
+          _buildProfileCard(context, fontScale),
+          SizedBox(height: context.gapLg),
           _buildAppearanceCard(context, isDark, fontScale),
           SizedBox(height: context.gapLg),
           _buildLoggingCard(context, isSmall, logLevel, fontScale),
@@ -43,6 +50,174 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildProfileCard(BuildContext context, double fontScale) {
+    final profiles = context.select((UserController u) => u.profiles);
+    final activeUserId = context.select((UserController u) => u.activeUserId);
+    final coord = context.read<AppCoordinator>();
+
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(context.cardPaddingH),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.people_outline, size: 20 * fontScale),
+                SizedBox(width: context.gapSmall),
+                Text('用户档案', style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                IconButton(
+                  tooltip: '新建用户',
+                  icon: const Icon(Icons.person_add),
+                  onPressed: () => _showCreateProfileDialog(context, coord),
+                ),
+              ],
+            ),
+            SizedBox(height: context.gapSmall),
+            if (profiles.isEmpty)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: context.gapMedium),
+                child: Text('暂无用户档案',
+                    style: Theme.of(context).textTheme.bodyMedium),
+              )
+            else
+              ...profiles.map((p) {
+                final isActive = p.id == activeUserId;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    isActive ? Icons.person : Icons.person_outline,
+                    color: isActive ? context.accent : null,
+                  ),
+                  title: Text(p.name),
+                  subtitle: isActive ? const Text('当前使用') : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: '重命名',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _showRenameProfileDialog(context, coord, p),
+                      ),
+                      IconButton(
+                        tooltip: isActive ? '不能删除当前用户' : '删除',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: isActive
+                            ? null
+                            : () => _showDeleteProfileDialog(context, coord, p),
+                      ),
+                    ],
+                  ),
+                  onTap: isActive
+                      ? null
+                      : () => _switchProfile(context, coord, p),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _switchProfile(
+      BuildContext context, AppCoordinator coord, UserProfile profile) async {
+    final ok = coord.switchProfile(profile.id);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('切换用户失败（${profile.name}）')),
+      );
+    }
+  }
+
+  Future<void> _showCreateProfileDialog(
+      BuildContext context, AppCoordinator coord) async {
+    final name = await _promptProfileName(context, title: '新建用户档案');
+    if (name == null || !context.mounted) return;
+    final id = coord.createProfile(name);
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('创建失败，请检查名称长度')),
+      );
+      return;
+    }
+    if (!coord.switchProfile(id)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建成功，但切换失败')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showRenameProfileDialog(
+      BuildContext context, AppCoordinator coord, UserProfile profile) async {
+    final name = await _promptProfileName(context,
+        title: '重命名用户', initial: profile.name);
+    if (name == null || !context.mounted) return;
+    if (!coord.renameProfile(profile.id, name)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('重命名失败，请检查名称长度')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteProfileDialog(
+      BuildContext context, AppCoordinator coord, UserProfile profile) async {
+    final confirmed = await showConfirmDialog(context,
+        title: '删除用户档案',
+        content: '确定删除「${profile.name}」吗？学习记录仍保留在本地，可在后续版本恢复。',
+        confirmLabel: '删除');
+    if (confirmed && context.mounted) {
+      if (!coord.deleteProfile(profile.id) && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除失败')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _promptProfileName(BuildContext context,
+      {required String title, String initial = ''}) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          inputFormatters: [
+            _Utf8ByteLimitingFormatter(maxProfileNameBytes),
+          ],
+          decoration: const InputDecoration(
+            hintText: '请输入用户名称',
+            helperText: '最多 63 字节（约 21 个汉字）',
+          ),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    // 不手动 dispose controller：对话框关闭动画期间 TextField 仍持有监听。
+    // 局部 controller 随 GC 回收，短生命周期可接受。
+    final name = result?.trim();
+    if (name == null || name.isEmpty) return null;
+    return normalizeProfileName(name);
   }
 
   Widget _buildAppearanceCard(
@@ -566,6 +741,28 @@ class _FontScaleSelector extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 按 UTF-8 字节数限制输入（档案名 C 侧为定长 64 字节缓冲，超出即非法）
+class _Utf8ByteLimitingFormatter extends TextInputFormatter {
+  final int maxBytes;
+
+  _Utf8ByteLimitingFormatter(this.maxBytes);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (utf8.encode(newValue.text).length <= maxBytes) return newValue;
+
+    var text = newValue.text;
+    while (text.isNotEmpty && utf8.encode(text).length > maxBytes) {
+      text = text.substring(0, text.length - 1);
+    }
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

@@ -1,15 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
+import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 
 class UserController extends ChangeNotifier {
   QuizTracker? _tracker;
+  ProfileRepository? _profileRepo;
 
   User? _user;
   List<RecommendResult> _recommendations = [];
+
+  List<UserProfile> _profiles = [];
+  int? _activeUserId;
+  String? _activeProfileName;
 
   /// 到期错题数缓存（-1 = 未加载；答题/复习提交后置脏）
   int _reviewCount = -1;
@@ -18,9 +25,67 @@ class UserController extends ChangeNotifier {
 
   void initTracker(QuizTracker tracker) { _tracker = tracker; }
 
+  /// 注入档案仓库（生产为 FfiProfileRepository；测试可注入 Fake）
+  void initProfiles(ProfileRepository repo) { _profileRepo = repo; }
+
   User? get user => _user;
   double get averageAbility => _user?.averageAbility ?? 0.3;
   List<RecommendResult> get recommendations => _recommendations;
+
+  /// 未删除档案列表（按 id 升序；由 [refreshProfiles] 加载）
+  List<UserProfile> get profiles => List.unmodifiable(_profiles);
+  int? get activeUserId => _activeUserId;
+  String? get activeProfileName => _activeProfileName;
+
+  /// 从 FFI 重拉档案列表与当前档案 id；成功返回 true（仓库未注入返回 false）
+  bool refreshProfiles() {
+    final repo = _profileRepo;
+    if (repo == null) return false;
+    _profiles = repo.listProfiles();
+    _activeUserId = repo.activeUserId();
+    _activeProfileName = null;
+    if (_activeUserId != null) {
+      for (final p in _profiles) {
+        if (p.id == _activeUserId) {
+          _activeProfileName = p.name;
+          break;
+        }
+      }
+      _activeProfileName ??= '用户 $_activeUserId';
+    }
+    notifyListeners();
+    return true;
+  }
+
+  /// 新建档案；成功后刷新列表并返回新 id
+  int? createProfile(String name) {
+    final repo = _profileRepo;
+    final normalized = normalizeProfileName(name);
+    if (repo == null || normalized == null) return null;
+    final id = repo.createProfile(normalized);
+    if (id == null) return null;
+    refreshProfiles();
+    return id;
+  }
+
+  /// 重命名档案；成功后刷新列表
+  bool renameProfile(int id, String name) {
+    final repo = _profileRepo;
+    final normalized = normalizeProfileName(name);
+    if (repo == null || normalized == null) return false;
+    if (!repo.renameProfile(id, normalized)) return false;
+    refreshProfiles();
+    return true;
+  }
+
+  /// 软删档案；成功后刷新列表
+  bool deleteProfile(int id) {
+    final repo = _profileRepo;
+    if (repo == null) return false;
+    if (!repo.deleteProfile(id)) return false;
+    refreshProfiles();
+    return true;
+  }
 
   /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
   /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）

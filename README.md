@@ -132,7 +132,7 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 
 ## 项目架构
 
-**C++ 核心** — 编译产物 `libchinese_core.so`，通过 27 个 C FFI 符号向 Flutter 暴露
+**C++ 核心** — 编译产物 `libchinese_core.so`，通过 33 个 C FFI 符号向 Flutter 暴露
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
 - `include/` 头文件（引擎 · 知识追踪）
@@ -152,8 +152,8 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 
 - `lib/main.dart` 入口 · MainShell（NavigationRail + IndexedStack）
 - `lib/bridge/` dart:ffi 绑定（ffi_bindings · c_types）
-- `lib/engine/` FFI 封装（tracker · recommendation · read_tracker · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config）
-- `lib/models/` user · text · question · version · reading_view_data
+- `lib/engine/` FFI 封装（tracker · recommendation · read_tracker · profile_repository · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config）
+- `lib/models/` user · user_profile · text · question · version · reading_view_data
 - `lib/state/` 5 个控制器（coordinator · navigation · reading · settings · user）
 - `lib/service/` history_service
 - `lib/theme/` AppTheme —— 颜色/字体 Token（强调色用户可调：context.accent = ColorScheme.primary）

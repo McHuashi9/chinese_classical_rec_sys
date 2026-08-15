@@ -24,6 +24,17 @@ typedef struct {
 } UserData;
 
 /**
+ * @brief C ABI 档案元数据结构（本地多用户）
+ */
+typedef struct {
+    int id;                      ///< 档案 id（= user.id）
+    char name[64];               ///< 档案名 (UTF-8)
+    int64_t created_at;          ///< 创建时间 (Unix 时间戳)
+    int64_t last_used_at;        ///< 最近使用时间 (Unix 时间戳)
+    int deleted;                 ///< 软删标记（0=正常 1=已删除，列表仅返回未删除）
+} ProfileData;
+
+/**
  * @brief C ABI 文本摘要结构 (用于列表展示)
  */
 typedef struct {

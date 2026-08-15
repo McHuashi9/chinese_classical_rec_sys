@@ -261,16 +261,28 @@ def create_tables(conn: sqlite3.Connection) -> bool:
     cursor = conn.cursor()
     
     tables = [
+        ("profiles", "用户档案表（本地多用户）"),
         ("user", "用户表（10维能力 + 基础能力）"),
         ("classical_text", "古文表（10维特征）"),
         ("reading_history", "阅读历史表"),
         ("learning_increments", "学习增量表"),
     ]
     
-    # 创建 user 表（与 UserRepository.cpp 完全一致）
+    # 创建 profiles 表（与 UserRepository.cpp 完全一致）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL,
+            deleted INTEGER NOT NULL DEFAULT 0
+        );
+    """)
+
+    # 创建 user 表（与 UserRepository.cpp 完全一致；多用户化后 id 为普通主键）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
+            id INTEGER PRIMARY KEY,
             d1_ability REAL DEFAULT 0.0,
             d2_ability REAL DEFAULT 0.0,
             d3_ability REAL DEFAULT 0.0,

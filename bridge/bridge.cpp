@@ -35,6 +35,7 @@ static struct {
     std::unique_ptr<User> user;
     std::unique_ptr<std::vector<Text>> texts;
     std::unique_ptr<std::unordered_map<int, size_t>> textIndex;
+    int activeUserId = 1;
     bool initialized = false;
 } g_state;
 static std::mutex g_mtx;
@@ -50,6 +51,7 @@ static_assert(sizeof(TextDetail) == 68184, "TextDetail ABI 尺寸不符，检查
 static_assert(sizeof(ReadingRecordData) == 24, "ReadingRecordData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(QuestionData) == 6244, "QuestionData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(ReviewItemData) == 24, "ReviewItemData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(ProfileData) == 88, "ProfileData ABI 尺寸不符，检查 #pragma pack");
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,35 @@ static void c_to_user(const UserData* src, User& dst)
     }
     dst.setEta(src->eta);
     dst.setLastReadTime(static_cast<time_t>(src->last_read_time));
+}
+
+// 载入指定档案为当前用户：读 user 行 → 缺行/全零初始化默认 → 应用遗忘 → 落库 → 更新内存态。
+// 调用方负责持有 g_mtx。
+static bool loadUserForActive(int userId)
+{
+    if (!g_state.initialized || !g_state.userRepo || !g_state.tracker) return false;
+
+    User loaded;
+    if (g_state.userRepo->getUser(loaded, userId)) {
+        if (loaded.getAverageAbility() <= 0.001) {
+            loaded.initializeDefault();
+        }
+    } else {
+        loaded.initializeDefault();
+    }
+
+    g_state.tracker->setUserId(userId);
+    g_state.tracker->applyForgettingEffect(loaded, time(nullptr));
+
+    if (!g_state.userRepo->saveUser(loaded, userId)) {
+        LOG_ERROR("bridge: 档案 {} 切换落库失败", userId);
+        return false;
+    }
+    g_state.userRepo->touchProfile(userId);
+    g_state.user = std::make_unique<User>(loaded);
+    g_state.activeUserId = userId;
+    LOG_INFO("bridge: 当前档案切换为 id={}", userId);
+    return true;
 }
 
 // ─── lifecycle ─────────────────────────────────────────────────────────────────
@@ -123,18 +154,15 @@ static int openDatabase(const char* db_path)
 
     g_state.tracker = std::make_unique<KnowledgeTracker>(g_state.incrementRepo.get());
 
-    // 加载用户或初始化默认
-    if (g_state.userRepo->getUser(*g_state.user)) {
-        if (g_state.user->getAverageAbility() <= 0.001) {
-            g_state.user->initializeDefault();
-        }
-    } else {
-        g_state.user->initializeDefault();
-    }
-    g_state.tracker->applyForgettingEffect(*g_state.user, time(nullptr));
-    g_state.userRepo->saveUser(*g_state.user);
-
+    // 老库/新库统一：确保默认档案存在（老库 id=1 数据归入"默认用户"）
+    g_state.userRepo->ensureProfileExists(1, "默认用户");
     g_state.initialized = true;
+    if (!loadUserForActive(1)) {
+        LOG_ERROR("bridge: 默认档案加载失败");
+        g_state = {};
+        return BRIDGE_ERR_INIT;
+    }
+
     LOG_INFO("bridge: 数据库已打开 — {} 篇文本已加载", g_state.texts->size());
     return BRIDGE_OK;
 }
@@ -312,7 +340,7 @@ static bool importUserTables(sqlite3* db, const std::vector<ExportedTable>& tabl
     }
 
     // 自增序列对齐（防止 id 显式导入后 AUTOINCREMENT 复用旧 id）
-    for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts"}) {
+    for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts", "profiles"}) {
         if (tableExists(db, seqTable)) {
             const std::string upd = "UPDATE sqlite_sequence SET seq = "
                 "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "
@@ -429,7 +457,7 @@ extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     c_to_user(in, *g_state.user);
-    if (g_state.userRepo->saveUser(*g_state.user)) {
+    if (g_state.userRepo->saveUser(*g_state.user, g_state.activeUserId)) {
         return BRIDGE_OK;
     }
     LOG_ERROR("bridge: user_save 失败");
@@ -441,10 +469,106 @@ extern "C" CHINESE_CORE_EXPORT int user_init_default()
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     g_state.user->initializeDefault();
-    if (g_state.userRepo->saveUser(*g_state.user)) {
+    if (g_state.userRepo->saveUser(*g_state.user, g_state.activeUserId)) {
         return BRIDGE_OK;
     }
     return BRIDGE_ERR_GENERIC;
+}
+
+// ─── user profiles（本地多档案） ───────────────────────────────────────────────
+
+// 未删除档案列表（按 id 升序）。返回条数；out 为空/容量不足按 0 处理（无错误码）。
+extern "C" CHINESE_CORE_EXPORT int user_list(ProfileData* out, int max_count)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_count <= 0) return 0;
+
+    const auto profiles = g_state.userRepo->listProfiles();
+    const int n = std::min(max_count, static_cast<int>(profiles.size()));
+    for (int i = 0; i < n; i++) {
+        std::memset(&out[i], 0, sizeof(ProfileData));
+        out[i].id = profiles[i].id;
+        std::strncpy(out[i].name, profiles[i].name.c_str(), 63);
+        out[i].name[63] = '\0';
+        out[i].created_at = profiles[i].createdAt;
+        out[i].last_used_at = profiles[i].lastUsedAt;
+        out[i].deleted = profiles[i].deleted;
+    }
+    return n;
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_active_id()
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return 0;
+    return g_state.activeUserId;
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
+        LOG_WARN("bridge: user_create 非法档案名（空或超 63 字节）");
+        return BRIDGE_ERR_GENERIC;
+    }
+    int newId = 0;
+    if (!g_state.userRepo->createProfile(name, newId)) {
+        LOG_ERROR("bridge: user_create 失败 name={}", name);
+        return BRIDGE_ERR_GENERIC;
+    }
+    LOG_INFO("bridge: 已创建档案 id={} name={}", newId, name);
+    return newId;
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_switch(int id)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (id <= 0 || !g_state.userRepo->isProfileActive(id)) {
+        LOG_WARN("bridge: user_switch 档案不存在或已删除 id={}", id);
+        return BRIDGE_ERR_USER;
+    }
+    if (id == g_state.activeUserId) {
+        g_state.userRepo->touchProfile(id);
+        return BRIDGE_OK;
+    }
+    if (!loadUserForActive(id)) {
+        return BRIDGE_ERR_GENERIC;
+    }
+    return BRIDGE_OK;
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
+        LOG_WARN("bridge: user_rename 非法档案名（空或超 63 字节）");
+        return BRIDGE_ERR_GENERIC;
+    }
+    if (!g_state.userRepo->renameProfile(id, name)) {
+        LOG_WARN("bridge: user_rename 档案不存在或已删除 id={}", id);
+        return BRIDGE_ERR_USER;
+    }
+    return BRIDGE_OK;
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_delete(int id)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (id == g_state.activeUserId) {
+        LOG_WARN("bridge: user_delete 拒绝删除当前档案 id={}", id);
+        return BRIDGE_ERR_USER;
+    }
+    if (!g_state.userRepo->deleteProfile(id)) {
+        LOG_WARN("bridge: user_delete 档案不存在或已删除 id={}", id);
+        return BRIDGE_ERR_USER;
+    }
+    LOG_INFO("bridge: 档案已软删 id={}", id);
+    return BRIDGE_OK;
 }
 
 // ─── text ──────────────────────────────────────────────────────────────────────
@@ -641,13 +765,13 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
     user_to_c(cpp_user, out_user);
 
     // 历史两写沿用现有容错（阅读记录失败不影响知识追踪主链路）
-    g_state.historyRepo->markAsTracked(text_id);
-    g_state.historyRepo->addRecord(text_id, read_time, effective_ts);
+    g_state.historyRepo->markAsTracked(g_state.activeUserId, text_id);
+    g_state.historyRepo->addRecord(g_state.activeUserId, text_id, read_time, effective_ts);
     LOG_INFO("bridge: 知识追踪完成 — text_id={}, read_time={:.1f}s, avg_ability={:.3f}→{:.3f}",
              text_id, read_time, g_state.user->getAverageAbility(), cpp_user.getAverageAbility());
 
     // 持久化（失败则不更新内存态，保持与磁盘一致，避免重启丢阅读效应）
-    if (!g_state.userRepo->saveUser(cpp_user)) {
+    if (!g_state.userRepo->saveUser(cpp_user, g_state.activeUserId)) {
         LOG_ERROR("bridge: 阅读效应落库失败 text_id={}", text_id);
         return BRIDGE_ERR_GENERIC;
     }
@@ -681,7 +805,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
     user_to_c(cpp_user, out_user);
 
     // 持久化修剪后的状态
-    g_state.userRepo->saveUser(cpp_user);
+    g_state.userRepo->saveUser(cpp_user, g_state.activeUserId);
     g_state.user = std::make_unique<User>(cpp_user);
     return BRIDGE_OK;
 }
@@ -740,7 +864,7 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
                           "dims, explanation, difficulty, "
                           "context, mark_start, mark_len "
                           "FROM questions WHERE text_id = ?1 AND id NOT IN "
-                          "(SELECT question_id FROM quiz_attempts WHERE text_id = ?2) "
+                          "(SELECT question_id FROM quiz_attempts WHERE text_id = ?2 AND user_id = ?3) "
                           "ORDER BY seq, id";
         if (sqlite3_prepare_v2(g_state.db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
             LOG_ERROR("bridge: question_get_by_text prepare 失败: {}",
@@ -749,6 +873,7 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
         }
         sqlite3_bind_int(stmt, 1, text_id);
         sqlite3_bind_int(stmt, 2, text_id);
+        sqlite3_bind_int(stmt, 3, g_state.activeUserId);
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             QuestionData q;
             std::memset(&q, 0, sizeof(q));
@@ -901,7 +1026,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         g_state.tracker->applyQuizEffect(cpp_user, (*g_state.texts)[it->second], dim_list,
                                          correct, effective_ts);
         user_to_c(cpp_user, out_user);
-        if (!g_state.userRepo->saveUser(cpp_user)) {
+        if (!g_state.userRepo->saveUser(cpp_user, g_state.activeUserId)) {
             LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
             execRawSql(db, "ROLLBACK");
             return BRIDGE_ERR_GENERIC;
@@ -913,15 +1038,16 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
 
     {
         sqlite3_stmt* stmt = nullptr;
-        const char* sql = "INSERT INTO quiz_attempts(question_id, text_id, correct, is_review, answered_at) "
-                          "VALUES (?, ?, ?, ?, ?)";
+        const char* sql = "INSERT INTO quiz_attempts(user_id, question_id, text_id, correct, is_review, answered_at) "
+                          "VALUES (?, ?, ?, ?, ?, ?)";
         ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
         if (ok) {
-            sqlite3_bind_int(stmt, 1, question_id);
-            sqlite3_bind_int(stmt, 2, tid);
-            sqlite3_bind_int(stmt, 3, correct);
-            sqlite3_bind_int(stmt, 4, is_review ? 1 : 0);
-            sqlite3_bind_int64(stmt, 5, static_cast<int64_t>(effective_ts));
+            sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+            sqlite3_bind_int(stmt, 2, question_id);
+            sqlite3_bind_int(stmt, 3, tid);
+            sqlite3_bind_int(stmt, 4, correct);
+            sqlite3_bind_int(stmt, 5, is_review ? 1 : 0);
+            sqlite3_bind_int64(stmt, 6, static_cast<int64_t>(effective_ts));
             ok = sqlite3_step(stmt) == SQLITE_DONE;
         }
         if (!ok) {
@@ -935,10 +1061,11 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         if (!is_review) {
             // 正式测验答对 → 视为已掌握，从复习队列移除
             sqlite3_stmt* stmt = nullptr;
-            const char* sql = "DELETE FROM review_items WHERE question_id = ?";
+            const char* sql = "DELETE FROM review_items WHERE user_id = ? AND question_id = ?";
             ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
             if (ok) {
-                sqlite3_bind_int(stmt, 1, question_id);
+                sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+                sqlite3_bind_int(stmt, 2, question_id);
                 ok = sqlite3_step(stmt) == SQLITE_DONE;
             }
             if (!ok) {
@@ -951,10 +1078,11 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
             int streak = 0;
             {
                 sqlite3_stmt* stmt = nullptr;
-                const char* sql = "SELECT correct_streak FROM review_items WHERE question_id = ?";
+                const char* sql = "SELECT correct_streak FROM review_items WHERE user_id = ? AND question_id = ?";
                 ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
                 if (ok) {
-                    sqlite3_bind_int(stmt, 1, question_id);
+                    sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+                    sqlite3_bind_int(stmt, 2, question_id);
                     const int rc = sqlite3_step(stmt);
                     if (rc == SQLITE_ROW) streak = sqlite3_column_int(stmt, 0);
                     else if (rc != SQLITE_DONE) ok = false;
@@ -964,23 +1092,25 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
             if (ok) {
                 if (streak + 1 >= Config::REVIEW_MASTER_STREAK) {
                     sqlite3_stmt* stmt = nullptr;
-                    const char* sql = "DELETE FROM review_items WHERE question_id = ?";
+                    const char* sql = "DELETE FROM review_items WHERE user_id = ? AND question_id = ?";
                     ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
                     if (ok) {
-                        sqlite3_bind_int(stmt, 1, question_id);
+                        sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+                        sqlite3_bind_int(stmt, 2, question_id);
                         ok = sqlite3_step(stmt) == SQLITE_DONE;
                     }
                     sqlite3_finalize(stmt);
                 } else {
                     sqlite3_stmt* stmt = nullptr;
                     const char* sql = "UPDATE review_items SET correct_streak = ?, next_review_at = ? "
-                                      "WHERE question_id = ?";
+                                      "WHERE user_id = ? AND question_id = ?";
                     ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
                     if (ok) {
                         sqlite3_bind_int(stmt, 1, streak + 1);
                         sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(effective_ts) +
                                            reviewIntervalAfter(streak + 1));
-                        sqlite3_bind_int(stmt, 3, question_id);
+                        sqlite3_bind_int(stmt, 3, g_state.activeUserId);
+                        sqlite3_bind_int(stmt, 4, question_id);
                         ok = sqlite3_step(stmt) == SQLITE_DONE;
                     }
                     sqlite3_finalize(stmt);
@@ -995,18 +1125,20 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         // 答错（正式或复习均重置）：streak 清零、wrong_count+1、下次到期 = answered_at + base
         sqlite3_stmt* stmt = nullptr;
         const char* sql =
-            "INSERT INTO review_items(question_id, text_id, correct_streak, wrong_count, next_review_at) "
-            "VALUES (?, ?, 0, COALESCE((SELECT wrong_count FROM review_items WHERE question_id = ?), 0) + 1, ?) "
-            "ON CONFLICT(question_id) DO UPDATE SET "
+            "INSERT INTO review_items(user_id, question_id, text_id, correct_streak, wrong_count, next_review_at) "
+            "VALUES (?, ?, ?, 0, COALESCE((SELECT wrong_count FROM review_items WHERE user_id = ? AND question_id = ?), 0) + 1, ?) "
+            "ON CONFLICT(user_id, question_id) DO UPDATE SET "
             "correct_streak = 0, "
             "wrong_count = review_items.wrong_count + 1, "
             "next_review_at = excluded.next_review_at";
         ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK;
         if (ok) {
-            sqlite3_bind_int(stmt, 1, question_id);
-            sqlite3_bind_int(stmt, 2, tid);
-            sqlite3_bind_int(stmt, 3, question_id);
-            sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(effective_ts) +
+            sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+            sqlite3_bind_int(stmt, 2, question_id);
+            sqlite3_bind_int(stmt, 3, tid);
+            sqlite3_bind_int(stmt, 4, g_state.activeUserId);
+            sqlite3_bind_int(stmt, 5, question_id);
+            sqlite3_bind_int64(stmt, 6, static_cast<int64_t>(effective_ts) +
                                Config::REVIEW_BASE_INTERVAL);
             ok = sqlite3_step(stmt) == SQLITE_DONE;
         }
@@ -1051,7 +1183,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
     // question_id）→ questions 表存在时过滤掉，避免复习列表出现点击无效的"文章 #N"组
     const bool hasQuestions = questionsTableExists();
     std::string sql = "SELECT question_id, text_id, correct_streak, wrong_count, next_review_at "
-                      "FROM review_items WHERE next_review_at <= ? "
+                      "FROM review_items WHERE user_id = ? AND next_review_at <= ? "
                       "AND (? = 0 OR text_id = ?)";
     if (hasQuestions) sql += " AND question_id IN (SELECT id FROM questions)";
     sql += " ORDER BY next_review_at ASC LIMIT ?";
@@ -1062,10 +1194,11 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
                   sqlite3_errmsg(g_state.db->getConnection()));
         return BRIDGE_ERR_GENERIC;
     }
-    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
-    sqlite3_bind_int(stmt, 2, text_id);
+    sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+    sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(time(nullptr)));
     sqlite3_bind_int(stmt, 3, text_id);
-    sqlite3_bind_int(stmt, 4, max_count);
+    sqlite3_bind_int(stmt, 4, text_id);
+    sqlite3_bind_int(stmt, 5, max_count);
 
     int count = 0;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1092,7 +1225,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
 
     const bool hasQuestions = questionsTableExists();
-    std::string sql = "SELECT COUNT(*) FROM review_items WHERE next_review_at <= ? "
+    std::string sql = "SELECT COUNT(*) FROM review_items WHERE user_id = ? AND next_review_at <= ? "
                       "AND (? = 0 OR text_id = ?)";
     if (hasQuestions) sql += " AND question_id IN (SELECT id FROM questions)";
 
@@ -1102,9 +1235,10 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
                   sqlite3_errmsg(g_state.db->getConnection()));
         return BRIDGE_ERR_GENERIC;
     }
-    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
-    sqlite3_bind_int(stmt, 2, text_id);
+    sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+    sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(time(nullptr)));
     sqlite3_bind_int(stmt, 3, text_id);
+    sqlite3_bind_int(stmt, 4, text_id);
 
     int count = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1190,18 +1324,20 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* to
     }
     if (answered) {
         sqlite3_stmt* stmt = nullptr;
-        const char* sql = "SELECT COUNT(DISTINCT question_id) FROM quiz_attempts WHERE text_id = ?";
+        const char* sql = "SELECT COUNT(DISTINCT question_id) FROM quiz_attempts WHERE text_id = ? AND user_id = ?";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_int(stmt, 1, text_id);
+            sqlite3_bind_int(stmt, 2, g_state.activeUserId);
             if (sqlite3_step(stmt) == SQLITE_ROW) *answered = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
     }
     if (wrong) {
         sqlite3_stmt* stmt = nullptr;
-        const char* sql = "SELECT COUNT(*) FROM review_items WHERE text_id = ?";
+        const char* sql = "SELECT COUNT(*) FROM review_items WHERE text_id = ? AND user_id = ?";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_int(stmt, 1, text_id);
+            sqlite3_bind_int(stmt, 2, g_state.activeUserId);
             if (sqlite3_step(stmt) == SQLITE_ROW) *wrong = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
@@ -1215,7 +1351,8 @@ extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_t
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
-    bool ok = g_state.historyRepo->addRecord(text_id, read_time, static_cast<time_t>(timestamp));
+    bool ok = g_state.historyRepo->addRecord(g_state.activeUserId, text_id, read_time,
+                                             static_cast<time_t>(timestamp));
     if (ok) {
         LOG_INFO("bridge: history_add_record text_id={} read_time={:.1f}s", text_id, read_time);
     }
@@ -1229,7 +1366,7 @@ extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordDa
     // 钳制：非正 limit/max_count 按"无结果"处理（SQLite LIMIT -1 视为无限制，必须拦下）
     if (limit <= 0 || max_count <= 0) return 0;
 
-    auto records = g_state.historyRepo->getRecentRecords(limit);
+    auto records = g_state.historyRepo->getRecentRecords(g_state.activeUserId, limit);
     int n = std::min(static_cast<int>(records.size()), max_count);
 
     for (int i = 0; i < n; i++) {
@@ -1245,7 +1382,7 @@ extern "C" CHINESE_CORE_EXPORT int history_get_total_count()
 {
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized) return 0;
-    return g_state.historyRepo->getTotalReadCount();
+    return g_state.historyRepo->getTotalReadCount(g_state.activeUserId);
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int max_count)
@@ -1253,7 +1390,7 @@ extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int ma
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_state.initialized || !out) return 0;
 
-    auto ids = g_state.historyRepo->getTrackedTextIds();
+    auto ids = g_state.historyRepo->getTrackedTextIds(g_state.activeUserId);
     int n = std::min(static_cast<int>(ids.size()), max_count);
 
     for (int i = 0; i < n; i++) {
