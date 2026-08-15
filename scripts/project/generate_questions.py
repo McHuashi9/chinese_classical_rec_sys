@@ -236,7 +236,7 @@ def gen_shici(art: dict, items: list) -> list:
         distractors = random.sample(pool, 3)
         qs.append({
             "type": "shici", "dims": TYPE_DIMS["shici"],
-            "stem": f"下列句中划线词「{item['head']}」的解释，正确的一项是",
+            "stem": f"下列句中划线词“{item['head']}”的解释，正确的一项是",
             "options": [correct] + distractors,
             "answer": correct,
             # 解析前拼正确答案文本：结果页答错时也能看到正确答案（判题仍只在 C++ 侧）
@@ -429,7 +429,7 @@ def gen_tongjia(art: dict, items: list, mat: TongjiaMaterial) -> list:
             options = [zhengzi] + old_sample
         q = {
             "type": "tongjia", "dims": TYPE_DIMS["tongjia"],
-            "stem": f"下列句中划线字「{word}」的本字，正确的一项是",
+            "stem": f"下列句中划线字“{word}”的本字，正确的一项是",
             "options": options,
             "answer": zhengzi,
             "explanation": f"正确答案：{zhengzi}。{item['text']}",
