@@ -6,6 +6,7 @@
 #include "database/TextRepository.h"
 #include "database/ReadingHistoryRepository.h"
 #include "database/LearningIncrementRepository.h"
+#include "database/schema_introspect.h"
 #include "core/RecommendationEngine.h"
 #include "core/KnowledgeTracker.h"
 #include "models/User.h"
@@ -23,6 +24,9 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+
+using dbschema::tableColumns;
+using dbschema::tableExists;
 
 static struct {
     std::unique_ptr<DatabaseManager> db;
@@ -206,32 +210,6 @@ static bool sqliteExec(sqlite3* db, const char* sql)
         return false;
     }
     return true;
-}
-
-static bool tableExists(sqlite3* db, const std::string& table)
-{
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?";
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
-    bool exists = (sqlite3_step(stmt) == SQLITE_ROW);
-    sqlite3_finalize(stmt);
-    return exists;
-}
-
-static std::set<std::string> tableColumns(sqlite3* db, const std::string& table)
-{
-    std::set<std::string> cols;
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, ("PRAGMA table_info(" + table + ")").c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        return cols;
-    }
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        if (name) cols.insert(name);
-    }
-    sqlite3_finalize(stmt);
-    return cols;
 }
 
 // 从已打开的源库导出用户数据表（列名白名单容错）
@@ -549,7 +527,7 @@ extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
         return BRIDGE_ERR_GENERIC;
     }
     if (!g_state.userRepo->renameProfile(id, name)) {
-        LOG_WARN("bridge: user_rename 档案不存在或已删除 id={}", id);
+        LOG_WARN("bridge: user_rename 拒绝（档案不存在/已删除/与未删除档案重名） id={}", id);
         return BRIDGE_ERR_USER;
     }
     return BRIDGE_OK;

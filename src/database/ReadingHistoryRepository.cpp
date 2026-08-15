@@ -1,58 +1,14 @@
 #include "database/ReadingHistoryRepository.h"
+#include "database/schema_introspect.h"
 #include "utils/Logger.h"
 #include <sqlite3.h>
 #include <iostream>
 #include <set>
 #include <string>
 
-namespace {
-
-bool tableExists(sqlite3* db, const std::string& table)
-{
-    if (!db) return false;
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?";
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
-    const bool exists = (sqlite3_step(stmt) == SQLITE_ROW);
-    sqlite3_finalize(stmt);
-    return exists;
-}
-
-std::string tableSql(sqlite3* db, const std::string& table)
-{
-    if (!db) return {};
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return {};
-    sqlite3_bind_text(stmt, 1, table.c_str(), -1, SQLITE_TRANSIENT);
-    std::string out;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        const unsigned char* t = sqlite3_column_text(stmt, 0);
-        if (t) out = reinterpret_cast<const char*>(t);
-    }
-    sqlite3_finalize(stmt);
-    return out;
-}
-
-std::set<std::string> tableColumns(sqlite3* db, const std::string& table)
-{
-    std::set<std::string> cols;
-    if (!db) return cols;
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, ("PRAGMA table_info(" + table + ")").c_str(), -1, &stmt, nullptr)
-        != SQLITE_OK) {
-        return cols;
-    }
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        const unsigned char* name = sqlite3_column_text(stmt, 1);
-        if (name) cols.insert(reinterpret_cast<const char*>(name));
-    }
-    sqlite3_finalize(stmt);
-    return cols;
-}
-
-}  // namespace
+using dbschema::tableColumns;
+using dbschema::tableExists;
+using dbschema::tableSql;
 
 ReadingHistoryRepository::ReadingHistoryRepository(DatabaseManager* dbManager) : db(dbManager) {}
 
