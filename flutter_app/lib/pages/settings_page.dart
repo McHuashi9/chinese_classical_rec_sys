@@ -70,9 +70,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text('用户档案', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
                 IconButton(
-                  tooltip: '新建用户',
+                  tooltip: profiles.length >= kMaxProfiles
+                      ? '已达档案数上限（$kMaxProfiles）'
+                      : '新建用户',
                   icon: const Icon(Icons.person_add),
-                  onPressed: () => _showCreateProfileDialog(context, coord),
+                  onPressed: profiles.length >= kMaxProfiles
+                      ? null
+                      : () => _showCreateProfileDialog(context, coord),
                 ),
               ],
             ),
@@ -136,11 +140,22 @@ class _SettingsPageState extends State<SettingsPage> {
       BuildContext context, AppCoordinator coord) async {
     final name = await _promptProfileName(context, title: '新建用户档案');
     if (name == null || !context.mounted) return;
+    // 重名预检查给友好提示（C++ 侧同样拒绝，双保险）
+    if (coord.userCtrl.isProfileNameTaken(name)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('该名称已存在，请换一个')),
+        );
+      }
+      return;
+    }
     final id = coord.createProfile(name);
     if (id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('创建失败，请检查名称长度')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建失败，请检查名称长度')),
+        );
+      }
       return;
     }
     if (!coord.switchProfile(id)) {
@@ -157,6 +172,15 @@ class _SettingsPageState extends State<SettingsPage> {
     final name = await _promptProfileName(context,
         title: '重命名用户', initial: profile.name);
     if (name == null || !context.mounted) return;
+    // 排除自身后重名才算冲突
+    if (coord.userCtrl.isProfileNameTaken(name, excludeId: profile.id)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('该名称已被其他档案使用')),
+        );
+      }
+      return;
+    }
     if (!coord.renameProfile(profile.id, name)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -759,6 +783,13 @@ class _Utf8ByteLimitingFormatter extends TextInputFormatter {
     var text = newValue.text;
     while (text.isNotEmpty && utf8.encode(text).length > maxBytes) {
       text = text.substring(0, text.length - 1);
+      // 尾部若剩半个代理对（emoji 被拆），继续删，避免悬空代理变乱码字符
+      if (text.isNotEmpty) {
+        final last = text.codeUnitAt(text.length - 1);
+        if (last >= 0xD800 && last <= 0xDBFF) {
+          text = text.substring(0, text.length - 1);
+        }
+      }
     }
     return TextEditingValue(
       text: text,

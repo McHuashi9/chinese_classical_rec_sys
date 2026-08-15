@@ -8,6 +8,10 @@ import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 /// 档案名字节上限（C 侧 name[64]，保留 1 字节 NUL；约 21 个汉字）
 const int maxProfileNameBytes = 63;
 
+/// 档案数上限（未删除档案，含默认档案）——与 C++ kMaxProfiles 同步；
+/// 设置页满员时禁用新建按钮（C++ 侧同样拒绝，双保险）
+const int kMaxProfiles = 32;
+
 /// 档案 FFI 抽象：UserController 依赖此接口（生产注入 [FfiProfileRepository]，
 /// 测试注入 Fake）。
 abstract class ProfileRepository {

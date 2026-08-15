@@ -106,22 +106,39 @@ class AppCoordinator {
     }
   }
 
-  void _loadUser({bool fromDefaultInit = false}) {
+  /// 加载引擎当前档案到内存用户；返回是否成功。
+  /// [allowDefaultInit] 失败时是否回退"重置为默认能力"（仅启动/首次初始化场景安全；
+  /// 切换档案场景必须传 false——否则会把刚切过来的新档案能力覆盖成默认值）
+  bool _loadUser({bool allowDefaultInit = true}) {
     final u = User.allocate(calloc);
     final rc = _bridge!.userLoad(u.ptr);
     if (rc == BridgeError.ok) {
       userCtrl.setUser(u);
-    } else {
-      u.dispose();
-      if (!fromDefaultInit) {
-        _initDefaultUser();
-      }
+      return true;
     }
+    u.dispose();
+    if (allowDefaultInit) {
+      _initDefaultUser();
+    }
+    return false;
   }
 
   void _initDefaultUser() {
     _bridge!.userInitDefault();
-    _loadUser(fromDefaultInit: true);
+    _loadUser(allowDefaultInit: false);
+  }
+
+  /// 当前档案相关的内存态整体失效重建（切换档案 / 远程同步后共用）：
+  /// 已读集合清空回填、档案列表、错题数缓存、阅读统计缓存、推荐列表。
+  /// 新档案的 user 对象必须先由 [_loadUser] 载入。
+  void _reloadUserScopedState() {
+    readTracker.clear();
+    _loadTextTrackedStates();
+    userCtrl.refreshProfiles();
+    userCtrl.invalidateQuizData();
+    _cachedStats = null;
+    _statsGeneration++;
+    getRecommendations(10);
   }
 
   /// 启动时恢复上次档案（prefs active_user_id）；失败回退到引擎当前档案并落 prefs
@@ -139,24 +156,30 @@ class AppCoordinator {
     }
   }
 
-  /// 切换当前档案：C++ user_switch 重载用户 → 失效已读集合/推荐/统计缓存 → 重拉推荐
+  /// 切换当前档案：C++ user_switch 重载用户 → 失效已读集合/推荐/统计缓存 → 重拉推荐。
+  /// 加载新档案失败时切回原档案，避免"引擎已切、内存没切"的错位写库。
   bool switchProfile(int id) {
     if (!isInitialized || _bridge == null) return false;
     if (syncing.value) return false;
     if (id == userCtrl.activeUserId) return true;
 
+    final oldId = userCtrl.activeUserId;
     final rc = _bridge!.userSwitch(id);
     if (rc != BridgeError.ok) return false;
 
-    _loadUser();
-    readTracker.clear();
-    _loadTextTrackedStates();
-    userCtrl.refreshProfiles();
-    userCtrl.invalidateQuizData();
-    _cachedStats = null;
-    _statsGeneration++;
+    if (!_loadUser(allowDefaultInit: false)) {
+      // 引擎已切到新档案但读取失败：绝不重置新档案，尝试切回原档案自愈
+      AppLogger().warn('切换档案 $id 后加载用户失败，尝试切回 $oldId');
+      if (oldId != null && _bridge!.userSwitch(oldId) == BridgeError.ok) {
+        _loadUser();
+      } else {
+        settingsCtrl.setError('切换档案失败，请重启应用');
+      }
+      return false;
+    }
+
+    _reloadUserScopedState();
     _prefs?.setInt('active_user_id', id);
-    getRecommendations(10);
     return true;
   }
 
@@ -312,10 +335,8 @@ class AppCoordinator {
       _textRepo.loadTextCache();
       _restoreActiveProfile();
       _loadUser();
-      _loadTextTrackedStates();
-      // db_replace 已合并用户表：错题队列/作答流水/档案列表可能变化，刷新缓存
-      userCtrl.refreshProfiles();
-      userCtrl.invalidateQuizData();
+      // db_replace 已合并用户表：已读集合/错题队列/档案列表/统计缓存全部失效重建
+      _reloadUserScopedState();
       if (restored) {
         // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
         AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');

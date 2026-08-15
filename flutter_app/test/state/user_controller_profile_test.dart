@@ -116,5 +116,20 @@ void main() {
       expect(ctrl.deleteProfile(1), isTrue);
       expect(ctrl.profiles, isEmpty);
     });
+
+    test('isProfileNameTaken 检查未删除档案重名（可排除自身）', () {
+      ctrl.refreshProfiles();
+      expect(ctrl.isProfileNameTaken('默认用户'), isTrue);
+      expect(ctrl.isProfileNameTaken('默认用户', excludeId: 1), isFalse);
+      expect(ctrl.isProfileNameTaken('  默认用户  '), isTrue);  // 先 trim 再比
+      expect(ctrl.isProfileNameTaken('不存在的人'), isFalse);
+    });
+
+    test('引擎未初始化（activeUserId=0）时视为 null，无兜底名', () {
+      repo.activeId = 0;
+      expect(ctrl.refreshProfiles(), isTrue);
+      expect(ctrl.activeUserId, isNull);
+      expect(ctrl.activeProfileName, isNull);
+    });
   });
 }

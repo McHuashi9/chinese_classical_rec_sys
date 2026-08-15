@@ -42,19 +42,30 @@ class UserController extends ChangeNotifier {
     final repo = _profileRepo;
     if (repo == null) return false;
     _profiles = repo.listProfiles();
-    _activeUserId = repo.activeUserId();
+    final activeId = repo.activeUserId();
+    // C++ 未初始化时返回 0 表示"无当前档案"，与 null 同义（避免出现"用户 0"兜底名）
+    _activeUserId = activeId > 0 ? activeId : null;
     _activeProfileName = null;
-    if (_activeUserId != null) {
+    final active = _activeUserId;
+    if (active != null) {
       for (final p in _profiles) {
-        if (p.id == _activeUserId) {
+        if (p.id == active) {
           _activeProfileName = p.name;
           break;
         }
       }
-      _activeProfileName ??= '用户 $_activeUserId';
+      _activeProfileName ??= '用户 $active';
     }
     notifyListeners();
     return true;
+  }
+
+  /// 未删除档案中是否已存在同名（软删档案名可复用）。
+  /// [excludeId] 重命名时排除自身。
+  bool isProfileNameTaken(String name, {int? excludeId}) {
+    final normalized = normalizeProfileName(name);
+    if (normalized == null) return false;
+    return _profiles.any((p) => p.id != excludeId && p.name == normalized);
   }
 
   /// 新建档案；成功后刷新列表并返回新 id

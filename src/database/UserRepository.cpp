@@ -306,28 +306,22 @@ bool UserRepository::getUser(User& user, int userId) {
 }
 
 bool UserRepository::saveUser(const User& user, int userId) {
-    auto buildUserParams = [&user]() -> std::vector<SqlParam> {
-        std::vector<SqlParam> p;
-        for (int i = 0; i < 10; ++i) {
-            p.emplace_back(user.getAbility(i));
-        }
-        for (int i = 0; i < 10; ++i) {
-            p.emplace_back(user.getBaseAbility(i));
-        }
-        p.emplace_back(user.getEta());
-        for (int i = 0; i < 10; ++i) {
-            p.emplace_back(user.getQuizCount(i));
-        }
-        p.emplace_back(static_cast<double>(user.getLastReadTime()));
-        return p;
-    };
-
-    auto userParams = buildUserParams();
+    // 单条 UPSERT：UPDATE 分支用 excluded.<col> 引用 INSERT 值，
+    // 占位符只需一份（id + 32 能力列），避免手写两遍参数列表错位（N-x）
     std::vector<SqlParam> params;
     params.emplace_back(userId);
-    params.insert(params.end(), userParams.begin(), userParams.end());
-    params.insert(params.end(), userParams.begin(), userParams.end());
-    
+    for (int i = 0; i < 10; ++i) {
+        params.emplace_back(user.getAbility(i));
+    }
+    for (int i = 0; i < 10; ++i) {
+        params.emplace_back(user.getBaseAbility(i));
+    }
+    params.emplace_back(user.getEta());
+    for (int i = 0; i < 10; ++i) {
+        params.emplace_back(user.getQuizCount(i));
+    }
+    params.emplace_back(static_cast<double>(user.getLastReadTime()));
+
     return db->executeSQL(
 "INSERT INTO user (id, "
         "d1_ability, d2_ability, d3_ability, d4_ability, d5_ability, d6_ability, "
@@ -341,16 +335,33 @@ bool UserRepository::saveUser(const User& user, int userId) {
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
         "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(id) DO UPDATE SET "
-        "d1_ability = ?, d2_ability = ?, d3_ability = ?, d4_ability = ?, "
-        "d5_ability = ?, d6_ability = ?, d7_ability = ?, d8_ability = ?, "
-        "d9_ability = ?, d10_ability = ?, "
-        "d1_base_ability = ?, d2_base_ability = ?, d3_base_ability = ?, d4_base_ability = ?, "
-        "d5_base_ability = ?, d6_base_ability = ?, d7_base_ability = ?, d8_base_ability = ?, "
-        "d9_base_ability = ?, d10_base_ability = ?, eta = ?, "
-        "d1_quiz_count = ?, d2_quiz_count = ?, d3_quiz_count = ?, d4_quiz_count = ?, "
-        "d5_quiz_count = ?, d6_quiz_count = ?, d7_quiz_count = ?, d8_quiz_count = ?, "
-        "d9_quiz_count = ?, d10_quiz_count = ?, "
-        "last_read_time = ?;",
+        "d1_ability = excluded.d1_ability, d2_ability = excluded.d2_ability, "
+        "d3_ability = excluded.d3_ability, d4_ability = excluded.d4_ability, "
+        "d5_ability = excluded.d5_ability, d6_ability = excluded.d6_ability, "
+        "d7_ability = excluded.d7_ability, d8_ability = excluded.d8_ability, "
+        "d9_ability = excluded.d9_ability, d10_ability = excluded.d10_ability, "
+        "d1_base_ability = excluded.d1_base_ability, "
+        "d2_base_ability = excluded.d2_base_ability, "
+        "d3_base_ability = excluded.d3_base_ability, "
+        "d4_base_ability = excluded.d4_base_ability, "
+        "d5_base_ability = excluded.d5_base_ability, "
+        "d6_base_ability = excluded.d6_base_ability, "
+        "d7_base_ability = excluded.d7_base_ability, "
+        "d8_base_ability = excluded.d8_base_ability, "
+        "d9_base_ability = excluded.d9_base_ability, "
+        "d10_base_ability = excluded.d10_base_ability, "
+        "eta = excluded.eta, "
+        "d1_quiz_count = excluded.d1_quiz_count, "
+        "d2_quiz_count = excluded.d2_quiz_count, "
+        "d3_quiz_count = excluded.d3_quiz_count, "
+        "d4_quiz_count = excluded.d4_quiz_count, "
+        "d5_quiz_count = excluded.d5_quiz_count, "
+        "d6_quiz_count = excluded.d6_quiz_count, "
+        "d7_quiz_count = excluded.d7_quiz_count, "
+        "d8_quiz_count = excluded.d8_quiz_count, "
+        "d9_quiz_count = excluded.d9_quiz_count, "
+        "d10_quiz_count = excluded.d10_quiz_count, "
+        "last_read_time = excluded.last_read_time;",
         params
     );
 }
@@ -392,12 +403,45 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     }
 
     bool ok = true;
+    // 未删除档案同名拒绝（软删档案名可复用）；上限保护（防 UI 绕过/未来多端并发）
+    {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT COUNT(*) FROM profiles WHERE deleted = 0;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            const int count = (sqlite3_step(chk) == SQLITE_ROW) ? sqlite3_column_int(chk, 0) : -1;
+            sqlite3_finalize(chk);
+            if (count < 0) {
+                ok = false;
+            } else if (count >= kMaxProfiles) {
+                LOG_WARN("createProfile 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
+                ok = false;
+            }
+        }
+    }
+    if (ok) {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE deleted = 0 AND name = ?;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            sqlite3_bind_text(chk, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+            const bool dup = (sqlite3_step(chk) == SQLITE_ROW);
+            sqlite3_finalize(chk);
+            if (dup) {
+                LOG_WARN("createProfile 重名拒绝: {}", name);
+                ok = false;
+            }
+        }
+    }
+
     sqlite3_stmt* stmt = nullptr;
     const int64_t now = static_cast<int64_t>(time(nullptr));
-    if (sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
+    if (ok && sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
                               "VALUES (?, ?, ?, 0);", -1, &stmt, nullptr) != SQLITE_OK) {
         ok = false;
-    } else {
+    } else if (ok) {
         sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int64(stmt, 2, now);
         sqlite3_bind_int64(stmt, 3, now);
@@ -431,13 +475,19 @@ bool UserRepository::renameProfile(int userId, const std::string& name) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "UPDATE profiles SET name = ? WHERE id = ? AND deleted = 0;";
+    // 同名拒绝（排除自身，仅未删除档案参与比较）
+    const char* sql =
+        "UPDATE profiles SET name = ? "
+        "WHERE id = ? AND deleted = 0 "
+        "AND NOT EXISTS (SELECT 1 FROM profiles WHERE deleted = 0 AND name = ? AND id <> ?);";
     if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         LOG_ERROR("renameProfile prepare 失败: {}", sqlite3_errmsg(c));
         return false;
     }
     sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, userId);
+    sqlite3_bind_text(stmt, 3, name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 4, userId);
     const int rc = sqlite3_step(stmt);
     const int changes = sqlite3_changes(c);
     sqlite3_finalize(stmt);

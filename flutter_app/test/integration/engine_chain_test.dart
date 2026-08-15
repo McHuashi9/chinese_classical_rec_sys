@@ -9,14 +9,21 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
+import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
+import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
+import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 
 void main() {
   NativeBridge? bridge;
@@ -287,11 +294,62 @@ void main() {
       expect(repo.listProfiles().length, 1);
     });
   });
+
+  group('AppCoordinator 档案切换（真实 .so + 资产库）', () {
+    test('创建/切换档案后当前档案、已读集合、档案列表整体刷新', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      final lib = _tryLoadLibrary();
+      if (lib == null) {
+        markTestSkipped('未找到 libchinese_core.so，先执行 cmake --build build');
+        return;
+      }
+      final work = Directory.systemTemp.createTempSync('engine_chain_switch');
+      _copyAssetDb('${work.path}/classical.db');
+
+      final coord = AppCoordinator(
+        navCtrl: NavigationController(),
+        settingsCtrl: SettingsController(),
+        readingCtrl: ReadingController(ReadTracker()),
+        userCtrl: UserController(),
+        readTracker: ReadTracker(),
+      );
+      addTearDown(() {
+        coord.dispose();
+        try {
+          work.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+
+      expect(await coord.init('${work.path}/classical.db', lib), isTrue);
+      expect(coord.userCtrl.activeUserId, 1);
+      expect(coord.userCtrl.profiles.length, 1);
+      expect(coord.userCtrl.activeProfileName, '默认用户');
+
+      // 新建档案并切换：当前档案/列表/名字刷新，新档案已读集合为空
+      final id = coord.createProfile('小明');
+      expect(id, isNotNull);
+      expect(coord.switchProfile(id!), isTrue);
+      expect(coord.userCtrl.activeUserId, id);
+      expect(coord.userCtrl.profiles.length, 2);
+      expect(coord.userCtrl.activeProfileName, '小明');
+      expect(coord.readTracker.getAllTrackedIds(), isEmpty);
+
+      // 切回默认档案：状态随之回来
+      expect(coord.switchProfile(1), isTrue);
+      expect(coord.userCtrl.activeUserId, 1);
+      expect(coord.userCtrl.activeProfileName, '默认用户');
+
+      // 重复切换同一档案：幂等成功；切换不存在/已删档案：失败
+      expect(coord.switchProfile(1), isTrue);
+      expect(coord.switchProfile(9999), isFalse);
+    });
+  });
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────
 
-NativeBridge? _tryLoadBridge() {
+DynamicLibrary? _tryLoadLibrary() {
   final candidates = [
     '../build/libchinese_core.so',
     '../build/tests/libchinese_core.so',
@@ -300,10 +358,15 @@ NativeBridge? _tryLoadBridge() {
   for (final p in candidates) {
     final f = File(p);
     if (f.existsSync()) {
-      return NativeBridge.fromLib(DynamicLibrary.open(f.absolute.path));
+      return DynamicLibrary.open(f.absolute.path);
     }
   }
   return null;
+}
+
+NativeBridge? _tryLoadBridge() {
+  final lib = _tryLoadLibrary();
+  return lib == null ? null : NativeBridge.fromLib(lib);
 }
 
 String _assetDbPath() {

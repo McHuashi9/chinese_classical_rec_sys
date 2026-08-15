@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+/// 档案数上限（未删除档案，含默认档案）。个人/家庭设备规模，32 足够；
+/// Dart 侧 kMaxProfiles 与之同步（settings 页满员禁用新建）。
+inline constexpr int kMaxProfiles = 32;
+
 /**
  * @brief 档案元数据（profiles 表行）
  */

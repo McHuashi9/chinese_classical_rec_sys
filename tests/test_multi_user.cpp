@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include "c_types.h"
+#include "database/UserRepository.h"
 #include <sqlite3.h>
 
 #include <cstring>
@@ -217,6 +218,51 @@ TEST_CASE("多用户 - 老库 CHECK(id=1)/旧主键迁移", "[multi_user]") {
     const int id2 = user_create("迁移后新档");
     REQUIRE(id2 > 1);
     REQUIRE(user_switch(id2) == BRIDGE_OK);
+
+    db_close();
+}
+
+TEST_CASE("多用户 - 重名拒绝与档案数上限", "[multi_user]") {
+    db_close();
+    const std::string work = makeWorkDb("mu_limits");
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 重名创建拒绝（未删除档案同名）
+    REQUIRE(user_create("默认用户") == BRIDGE_ERR_GENERIC);
+    const int id2 = user_create("小明");
+    REQUIRE(id2 > 1);
+    REQUIRE(user_create("小明") == BRIDGE_ERR_GENERIC);
+
+    // 重名重命名拒绝（C++ 侧不区分"不存在/重名"，统一拒绝非 OK）
+    REQUIRE(user_rename(id2, "默认用户") != BRIDGE_OK);
+    REQUIRE(user_rename(id2, "小红") == BRIDGE_OK);
+    REQUIRE(user_rename(id2, "小红") == BRIDGE_OK);  // 名字不变仍成功
+
+    // 软删后名字可复用（列表不可见，不构成重名）
+    REQUIRE(user_switch(1) == BRIDGE_OK);
+    REQUIRE(user_delete(id2) == BRIDGE_OK);
+    REQUIRE(user_create("小红") > 1);
+
+    db_close();
+}
+
+TEST_CASE("多用户 - 档案数上限 kMaxProfiles", "[multi_user]") {
+    db_close();
+    const std::string work = makeWorkDb("mu_cap");
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 默认档案占 1 个名额，补建到上限
+    for (int i = 2; i <= kMaxProfiles; i++) {
+        const int id = user_create(("用户" + std::to_string(i)).c_str());
+        REQUIRE(id == i);
+    }
+    // 满员后拒绝
+    REQUIRE(user_create("超额档案") == BRIDGE_ERR_GENERIC);
+
+    // 软删一个后可再建
+    REQUIRE(user_switch(1) == BRIDGE_OK);
+    REQUIRE(user_delete(2) == BRIDGE_OK);
+    REQUIRE(user_create("替补档案") > 1);
 
     db_close();
 }
