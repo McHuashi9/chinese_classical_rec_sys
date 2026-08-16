@@ -21,11 +21,14 @@ import 'engine/read_tracker.dart';
 import 'engine/github_config.dart';
 import 'engine/db_version.dart';
 import 'engine/app_logger.dart';
+import 'engine/announcement.dart';
 import 'theme/theme.dart';
 import 'pages/read_hub_page.dart';
 import 'pages/my_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/init_onboarding_page.dart';
 import 'widgets/dialogs.dart';
+import 'widgets/announcement_dialog.dart';
 
 void main() {
   final readTracker = ReadTracker();
@@ -182,6 +185,13 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     coord.activateSavedProfile();
     coord.getRecommendations(10);
     await coord.settingsCtrl.init(prefs, coord.bridge);
+    if (!mounted) return;
+    await _maybeShowAnnouncement(coord, prefs);
+    if (!mounted) return;
+    if (!coord.userCtrl.isInitialized) {
+      await _showInitGuide(coord);
+    }
+    if (!mounted) return;
     _postInit(coord);
   }
 
@@ -197,6 +207,42 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         return '内容库与用户库路径相同，请重启应用。';
       default:
         return '数据库打开失败，请重启应用。\n若持续出现，请重新安装。';
+    }
+  }
+
+  Future<void> _maybeShowAnnouncement(
+      AppCoordinator coord, SharedPreferences prefs) async {
+    final seen = prefs.getString('announcement_seen_id');
+    if (seen == kCurrentAnnouncement.id) return;
+    if (!mounted) return;
+    await AnnouncementDialog.show(context, announcement: kCurrentAnnouncement);
+    await prefs.setString('announcement_seen_id', kCurrentAnnouncement.id);
+  }
+
+  Future<void> _showInitGuide(AppCoordinator coord) async {
+    if (coord.userCtrl.isInitialized) return;
+    if (!mounted) return;
+    final start = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('初始化引导'),
+        content: const Text(
+          '新用户需要先完成 6 道带原文的初始化题，才能正常使用推荐与随堂练习。'
+          '整个过程约 3 分钟，无法跳过。',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('开始初始化'),
+          ),
+        ],
+      ),
+    );
+    if (start == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const InitOnboardingPage()),
+      );
     }
   }
 

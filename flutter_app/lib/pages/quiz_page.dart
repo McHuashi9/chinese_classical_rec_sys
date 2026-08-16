@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
+import 'package:chinese_classical_rec_sys/pages/init_result_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
@@ -14,12 +15,14 @@ class QuizPage extends StatefulWidget {
   final String articleTitle;
   final List<Question> questions;
   final bool isReview;
+  final bool isInit;
 
   const QuizPage({
     super.key,
     required this.articleTitle,
     required this.questions,
     this.isReview = false,
+    this.isInit = false,
   });
 
   @override
@@ -90,9 +93,30 @@ class _QuizPageState extends State<QuizPage> {
       return;
     }
     final userCtrl = context.read<UserController>();
+    final choices = List.generate(widget.questions.length, (i) => _choices[i]!);
+    if (widget.isInit) {
+      final ok = userCtrl.applyInit(
+        [for (final q in widget.questions) q.id],
+        choices,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('初始化提交失败，请重试')),
+        );
+        return;
+      }
+      _ownershipTransferred = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => InitResultPage(questions: widget.questions),
+        ),
+      );
+      return;
+    }
     final answers = userCtrl.submitQuiz(
       widget.questions,
-      List.generate(widget.questions.length, (i) => _choices[i]!),
+      choices,
       isReview: widget.isReview,
     );
     if (!mounted) return;
@@ -140,9 +164,11 @@ class _QuizPageState extends State<QuizPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          widget.isReview
-              ? '错题复习 · ${widget.articleTitle}'
-              : '随堂练习 · ${widget.articleTitle}',
+          widget.isInit
+              ? '初始化测验 · ${widget.articleTitle}'
+              : widget.isReview
+                  ? '错题复习 · ${widget.articleTitle}'
+                  : '随堂练习 · ${widget.articleTitle}',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontFamily: AppTheme.fontTitle,
               ),
@@ -288,6 +314,12 @@ class _QuizPageState extends State<QuizPage> {
         break;
       case 'fanyi':
         label = '翻译';
+        break;
+      case 'xuci':
+        label = '虚词';
+        break;
+      case 'duanju':
+        label = '断句';
         break;
       default:
         label = q.qType;
