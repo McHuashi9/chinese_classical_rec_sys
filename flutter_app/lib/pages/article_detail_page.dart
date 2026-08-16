@@ -34,7 +34,7 @@ class ArticleDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final coord = context.read<AppCoordinator>();
     final settingsCtrl = context.read<SettingsController>();
-    final userCtrl = context.read<UserController>();
+    final userCtrl = context.watch<UserController>();
     final text = coord.getTextDetail(textId);
     if (text == null) {
       return Scaffold(

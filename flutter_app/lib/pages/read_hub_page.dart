@@ -56,6 +56,9 @@ class _ReadHubPageState extends State<ReadHubPage>
   void _onTabChanged() {
     if (!_tabController.indexIsChanging && mounted) {
       setState(() => _tabIndex = _tabController.index);
+      if (_tabController.index == 1) {
+        _refreshRecommend();
+      }
     }
   }
 
@@ -257,7 +260,9 @@ class _ReadHubPageState extends State<ReadHubPage>
                 ? const Center(child: CircularProgressIndicator())
                 : recs.isEmpty
                 ? EmptyState(
-                    title: error != null ? '推荐失败，请稍后重试' : '能力变化时将自动生成推荐',
+                    title: error != null
+                        ? '推荐失败，请稍后重试'
+                        : '阅读几篇文章后，这里会为你生成推荐',
                   )
                 : TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0, end: 1),
@@ -404,6 +409,7 @@ class _ReadHubPageState extends State<ReadHubPage>
       alreadyTracked: !readingCtrl.hasUnrecordedReading,
       annotations: readingCtrl.annotations,
       showTranslation: readingCtrl.showTranslation,
+      pageStartsInTranslation: readingCtrl.pageStartsInTranslation,
       onToggleTranslation: () => readingCtrl.setShowTranslation(
           !readingCtrl.showTranslation),
       onPaginate: (w, h) => readingCtrl.paginate(

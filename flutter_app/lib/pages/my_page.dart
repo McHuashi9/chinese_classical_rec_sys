@@ -8,6 +8,7 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/stats_card.dart';
 import 'package:chinese_classical_rec_sys/widgets/recent_reading_list.dart';
+import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 
 class MyPage extends StatelessWidget {
@@ -48,6 +49,13 @@ class _MyContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.read<SettingsController>().darkMode;
     final coord = context.read<AppCoordinator>();
+
+    if (_average <= 0.001 && coord.getTotalReadCount() == 0) {
+      return const EmptyState(
+        title: '去读一篇文章开始吧',
+        subtitle: '阅读满 30 秒后，这里会展示你的能力画像与阅读统计',
+      );
+    }
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(context.pagePadding),
