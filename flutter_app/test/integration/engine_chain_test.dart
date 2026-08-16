@@ -30,9 +30,11 @@ import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 
 void main() {
   NativeBridge? bridge;
+  var pythonAvailable = false;
 
   setUpAll(() {
     bridge = _tryLoadBridge();
+    pythonAvailable = _tryPython();
   });
 
   tearDown(() {
@@ -49,10 +51,20 @@ void main() {
             '未找到 libchinese_core.so，先执行 cmake --build build（CI 非 Linux 作业自动跳过）');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       work = Directory.systemTemp.createTempSync('engine_chain_it');
       final db = '${work.path}/classical.db';
+      final userDb = '${work.path}/user.db';
       _copyAssetDb(db);
-      expect(bridge!.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+        bridge!.dbOpen(db.toNativeUtf8(allocator: calloc),
+            userDb.toNativeUtf8(allocator: calloc)),
+        BridgeError.ok,
+      );
+      _initDefaultProfile(bridge!);
       repo = TextRepository(bridge!);
       repo.loadTextCache();
     });
@@ -152,10 +164,20 @@ void main() {
         markTestSkipped('未找到 libchinese_core.so，跳过');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       work = Directory.systemTemp.createTempSync('engine_chain_it');
-      _copyAssetDb('${work.path}/classical.db');
-      expect(bridge!.dbOpen('${work.path}/classical.db'.toNativeUtf8(allocator: calloc)),
-          BridgeError.ok);
+      final db = '${work.path}/classical.db';
+      final userDb = '${work.path}/user.db';
+      _copyAssetDb(db);
+      expect(
+        bridge!.dbOpen(db.toNativeUtf8(allocator: calloc),
+            userDb.toNativeUtf8(allocator: calloc)),
+        BridgeError.ok,
+      );
+      _initDefaultProfile(bridge!);
       repo = TextRepository(bridge!);
       repo.loadTextCache();
       user = User.allocate(calloc);
@@ -203,10 +225,20 @@ void main() {
         markTestSkipped('未找到 libchinese_core.so，跳过');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       work = Directory.systemTemp.createTempSync('engine_chain_it');
-      _copyAssetDb('${work.path}/classical.db');
-      expect(bridge!.dbOpen('${work.path}/classical.db'.toNativeUtf8(allocator: calloc)),
-          BridgeError.ok);
+      final db = '${work.path}/classical.db';
+      final userDb = '${work.path}/user.db';
+      _copyAssetDb(db);
+      expect(
+        bridge!.dbOpen(db.toNativeUtf8(allocator: calloc),
+            userDb.toNativeUtf8(allocator: calloc)),
+        BridgeError.ok,
+      );
+      _initDefaultProfile(bridge!);
       repo = TextRepository(bridge!);
       repo.loadTextCache();
     });
@@ -259,10 +291,20 @@ void main() {
         markTestSkipped('未找到 libchinese_core.so，跳过');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       work = Directory.systemTemp.createTempSync('engine_chain_profile');
-      _copyAssetDb('${work.path}/classical.db');
-      expect(bridge!.dbOpen('${work.path}/classical.db'.toNativeUtf8(allocator: calloc)),
-          BridgeError.ok);
+      final db = '${work.path}/classical.db';
+      final userDb = '${work.path}/user.db';
+      _copyAssetDb(db);
+      expect(
+        bridge!.dbOpen(db.toNativeUtf8(allocator: calloc),
+            userDb.toNativeUtf8(allocator: calloc)),
+        BridgeError.ok,
+      );
+      _initDefaultProfile(bridge!);
       repo = FfiProfileRepository(bridge!);
     });
 
@@ -307,8 +349,14 @@ void main() {
         markTestSkipped('未找到 libchinese_core.so，先执行 cmake --build build');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       final work = Directory.systemTemp.createTempSync('engine_chain_switch');
-      _copyAssetDb('${work.path}/classical.db');
+      final dbPath = '${work.path}/classical.db';
+      final userPath = '${work.path}/user.db';
+      _copyAssetDb(dbPath);
 
       final coord = AppCoordinator(
         navCtrl: NavigationController(),
@@ -324,7 +372,7 @@ void main() {
         } catch (_) {}
       });
 
-      expect(await coord.init('${work.path}/classical.db', lib), isTrue);
+      expect(await coord.init(dbPath, userPath, lib), isTrue);
       expect(coord.userCtrl.activeUserId, 1);
       expect(coord.userCtrl.profiles.length, 1);
       expect(coord.userCtrl.activeProfileName, '默认用户');
@@ -359,9 +407,14 @@ void main() {
         markTestSkipped('未找到 libchinese_core.so，先执行 cmake --build build');
         return;
       }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
       final work = Directory.systemTemp.createTempSync('engine_chain_sync_fail');
       _copyAssetDb('${work.path}/classical.db');
       final dbPath = '${work.path}/classical.db';
+      final userPath = '${work.path}/user.db';
 
       final coord = AppCoordinator(
         navCtrl: NavigationController(),
@@ -377,7 +430,7 @@ void main() {
         } catch (_) {}
       });
 
-      expect(await coord.init(dbPath, lib), isTrue);
+      expect(await coord.init(dbPath, userPath, lib), isTrue);
 
       // 切到小明，并让 prefs 记住当前档案
       final id = coord.createProfile('小明');
@@ -389,7 +442,7 @@ void main() {
       // MockClient 下载一个非 SQLite 的 tmp 文件，db_replace 必然失败
       final sync = RemoteDbSync(prefs, work.path,
           client: MockClient((_) async => http.Response('not a sqlite db', 200)));
-      coord.setDbPathAfterSync(dbPath);
+      coord.setContentPathAfterSync(dbPath);
       coord.initRemoteDbSync(prefs, work.path, remoteDbSync: sync);
 
       await coord.remoteSyncDb(
@@ -402,6 +455,63 @@ void main() {
       expect(coord.userCtrl.activeProfileName, '小明');
       expect(FfiProfileRepository(coord.bridge!).activeUserId(), id);
       expect(coord.settingsCtrl.error, contains('数据库同步失败'));
+    });
+
+    test('同步成功路径：db_replace 后不重开引擎/不重载档案，当前用户保持', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final lib = _tryLoadLibrary();
+      if (lib == null) {
+        markTestSkipped('未找到 libchinese_core.so，先执行 cmake --build build');
+        return;
+      }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
+      final work = Directory.systemTemp.createTempSync('engine_chain_sync_ok');
+      _copyAssetDb('${work.path}/classical.db');
+      _copyAssetDb('${work.path}/new_classical.db');
+      final dbPath = '${work.path}/classical.db';
+      final userPath = '${work.path}/user.db';
+
+      final coord = AppCoordinator(
+        navCtrl: NavigationController(),
+        settingsCtrl: SettingsController(),
+        readingCtrl: ReadingController(ReadTracker()),
+        userCtrl: UserController(),
+        readTracker: ReadTracker(),
+      );
+      addTearDown(() {
+        coord.dispose();
+        try {
+          work.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+
+      expect(await coord.init(dbPath, userPath, lib), isTrue);
+      final id = coord.createProfile('小明');
+      expect(id, isNotNull);
+      expect(coord.switchProfile(id!), isTrue);
+      await prefs.setInt('active_user_id', id);
+
+      final newBytes = File('${work.path}/new_classical.db').readAsBytesSync();
+      final sync = RemoteDbSync(prefs, work.path,
+          client: MockClient((_) async => http.Response.bytes(newBytes, 200)));
+      coord.setContentPathAfterSync(dbPath);
+      coord.initRemoteDbSync(prefs, work.path, remoteDbSync: sync);
+
+      await coord.remoteSyncDb(
+        remoteVersion: '20990101-deadbeef',
+        downloadUrl: 'http://example.com/classical.db',
+      );
+
+      expect(coord.settingsCtrl.error, isNull);
+      expect(coord.settingsCtrl.notice, contains('内容已更新'));
+      expect(coord.userCtrl.activeUserId, id);
+      expect(coord.userCtrl.activeProfileName, '小明');
+      expect(FfiProfileRepository(coord.bridge!).activeUserId(), id);
     });
   });
 }
@@ -439,5 +549,55 @@ String _assetDbPath() {
 }
 
 void _copyAssetDb(String dest) {
-  File(dest).writeAsBytesSync(File(_assetDbPath()).readAsBytesSync());
+  final script = _fixtureScriptPath();
+  final result = Process.runSync(
+      'python3', [script, _assetDbPath(), dest]);
+  if (result.exitCode != 0) {
+    throw StateError('生成纯内容 fixture 失败: ${result.stderr}');
+  }
+}
+
+/// 完成默认档案强制初始化（6 题统一选 0）。已初始化时跳过。
+void _initDefaultProfile(NativeBridge b) {
+  if (b.userIsInitialized() > 0) return;
+  final block = calloc<QuestionData>(8);
+  final n = b.userInitQuestions(block, 8);
+  if (n <= 0) {
+    calloc.free(block);
+    throw StateError('无法获取初始化题');
+  }
+  final qids = calloc<Int32>(n);
+  final choices = calloc<Int32>(n);
+  for (int i = 0; i < n; i++) {
+    qids[i] = (block + i).ref.id;
+    choices[i] = 0;
+  }
+  final out = calloc<UserData>();
+  final rc = b.userInitApply(qids, choices, n, 1700000000, out);
+  calloc.free(qids);
+  calloc.free(choices);
+  calloc.free(out);
+  calloc.free(block);
+  if (rc != BridgeError.ok) {
+    throw StateError('初始化默认档案失败 rc=$rc');
+  }
+}
+
+String _fixtureScriptPath() {
+  for (final p in [
+    'test/helpers/make_content_fixture.py',
+    '../flutter_app/test/helpers/make_content_fixture.py',
+  ]) {
+    if (File(p).existsSync()) return p;
+  }
+  throw StateError('找不到 make_content_fixture.py');
+}
+
+bool _tryPython() {
+  try {
+    final r = Process.runSync('python3', ['--version']);
+    return r.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
 }

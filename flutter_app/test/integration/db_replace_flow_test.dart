@@ -14,9 +14,11 @@ import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 
 void main() {
   NativeBridge? bridge;
+  var pythonAvailable = false;
 
   setUpAll(() {
     bridge = _tryLoadBridge();
+    pythonAvailable = _tryPython();
   });
 
   tearDown(() {
@@ -30,6 +32,10 @@ void main() {
       if (bridge == null) {
         markTestSkipped(
             '未找到 libchinese_core.so，先执行 cmake --build build（CI 非 Linux 作业自动跳过）');
+        return;
+      }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
         return;
       }
       work = Directory.systemTemp.createTempSync('db_replace_it');
@@ -46,7 +52,8 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
 
       _saveUser(b, 0.6);
       expect(b.historyAddRecord(1, 60.0, 1700000000), BridgeError.ok);
@@ -63,7 +70,8 @@ void main() {
       File('${work.path}/db_version.txt').writeAsStringSync('unknown');
 
       // 恢复后的库可正常打开，数据完好
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
       _expectUserBase(b, 0.6);
@@ -74,7 +82,8 @@ void main() {
       _copyAssetDb(tmp);
       expect(b.dbReplace(tmp.toNativeUtf8(allocator: calloc),
           db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
       _expectUserBase(b, 0.6);
@@ -88,7 +97,8 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
       _saveUser(b, 0.5);
       expect(b.historyAddRecord(3, 90.0, 1700000000), BridgeError.ok);
       b.dbClose();
@@ -105,20 +115,22 @@ void main() {
       File('${work.path}/db_version.txt').writeAsStringSync('unknown');
       expect(b.dbReplace('${work.path}/classical.db.tmp'.toNativeUtf8(allocator: calloc),
           db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
 
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
       _expectUserBase(b, 0.5);
-      // 替换前旧库已在 .bak 兜底
-      expect(File('${work.path}/classical.db.bak').existsSync(), isTrue);
+      // 替换成功后 .bak 已由 db_replace 清理
+      expect(File('${work.path}/classical.db.bak').existsSync(), isFalse);
     });
 
     test('无效新库回滚：替换失败后旧库字节不变、引擎可重开、数据完好', () {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
       _saveUser(b, 0.8);
       expect(b.historyAddRecord(4, 45.0, 1700000000), BridgeError.ok);
 
@@ -139,7 +151,8 @@ void main() {
       File(tmp).deleteSync();
 
       // 引擎可重开（H2 恢复路径），数据完好
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
       _expectUserBase(b, 0.8);
@@ -153,6 +166,10 @@ void main() {
       if (bridge == null) {
         markTestSkipped(
             '未找到 libchinese_core.so，先执行 cmake --build build（CI 非 Linux 作业自动跳过）');
+        return;
+      }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
         return;
       }
       work = Directory.systemTemp.createTempSync('translation_it');
@@ -169,7 +186,8 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
 
       final out = calloc<Uint8>(65536);
       final rc = b.textGetTranslation(1, out.cast<Utf8>(), 65536);
@@ -188,7 +206,8 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      _initDefaultProfile(b);
 
       final out = calloc<Uint8>(1024);
       final rc = b.textGetTranslation(999999, out.cast<Utf8>(), 1024);
@@ -224,7 +243,57 @@ String _assetDbPath() {
 }
 
 void _copyAssetDb(String dest) {
-  File(dest).writeAsBytesSync(File(_assetDbPath()).readAsBytesSync());
+  final script = _fixtureScriptPath();
+  final result = Process.runSync(
+      'python3', [script, _assetDbPath(), dest]);
+  if (result.exitCode != 0) {
+    throw StateError('生成纯内容 fixture 失败: ${result.stderr}');
+  }
+}
+
+String _fixtureScriptPath() {
+  for (final p in [
+    'test/helpers/make_content_fixture.py',
+    '../flutter_app/test/helpers/make_content_fixture.py',
+  ]) {
+    if (File(p).existsSync()) return p;
+  }
+  throw StateError('找不到 make_content_fixture.py');
+}
+
+bool _tryPython() {
+  try {
+    final r = Process.runSync('python3', ['--version']);
+    return r.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 完成默认档案强制初始化（6 题统一选 0）。已初始化时跳过。
+void _initDefaultProfile(NativeBridge b) {
+  if (b.userIsInitialized() > 0) return;
+  final block = calloc<QuestionData>(8);
+  final n = b.userInitQuestions(block, 8);
+  if (n <= 0) {
+    calloc.free(block);
+    throw StateError('无法获取初始化题');
+  }
+  final qids = calloc<Int32>(n);
+  final choices = calloc<Int32>(n);
+  for (int i = 0; i < n; i++) {
+    qids[i] = (block + i).ref.id;
+    choices[i] = 0;
+  }
+  final out = calloc<UserData>();
+  final rc = b.userInitApply(qids, choices, n, 1700000000, out);
+  calloc.free(qids);
+  calloc.free(choices);
+  calloc.free(out);
+  calloc.free(block);
+  if (rc != BridgeError.ok) {
+    throw StateError('初始化默认档案失败 rc=$rc');
+  }
 }
 
 void _saveUser(NativeBridge b, double base) {
