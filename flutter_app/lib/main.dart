@@ -7,7 +7,8 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator, rootBundle;
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart' show getApplicationSupportDirectory;
+import 'package:path_provider/path_provider.dart'
+    show getApplicationSupportDirectory;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'state/coordinator.dart';
@@ -67,8 +68,8 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
       final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
       final isDark = context.select((SettingsController s) => s.darkMode);
       final fontScale = context.select((SettingsController s) => s.fontScale);
-      final accent = Color(context
-          .select((SettingsController s) => s.accentColorValue));
+      final accent =
+          Color(context.select((SettingsController s) => s.accentColorValue));
 
       return MaterialApp(
         title: '文言文推荐系统',
@@ -113,9 +114,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _pages = <Widget>[
-      const RepaintBoundary(child: ReadHubPage()),   // 0 阅读
-      const RepaintBoundary(child: MyPage()),         // 1 我的
-      const RepaintBoundary(child: SettingsPage()),   // 2 设置
+      const RepaintBoundary(child: ReadHubPage()), // 0 阅读
+      const RepaintBoundary(child: MyPage()), // 1 我的
+      const RepaintBoundary(child: SettingsPage()), // 2 设置
     ];
     _ctrl = AnimationController(
       duration: const Duration(milliseconds: 250),
@@ -220,26 +221,30 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _showInitGuide(AppCoordinator coord) async {
-    if (coord.userCtrl.isInitialized) return;
-    if (!mounted) return;
-    final start = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('初始化引导'),
-        content: const Text(
-          '新用户需要先完成 6 道带原文的初始化题，才能正常使用推荐与随堂练习。'
-          '整个过程约 3 分钟，无法跳过。',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('开始初始化'),
+    // 强制初始化不能跳过：反复弹引导，直到用户完成初始化。
+    while (!coord.userCtrl.isInitialized && mounted) {
+      if (!mounted) return;
+      final start = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('初始化引导'),
+            content: const Text(
+              '新用户需要先完成 6 道带原文的初始化题，才能正常使用推荐与随堂练习。'
+              '整个过程约 3 分钟，无法跳过。',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('开始初始化'),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-    if (start == true && mounted) {
+        ),
+      );
+      if (start != true || !mounted) continue;
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const InitOnboardingPage()),
       );
@@ -256,7 +261,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   Future<void> _silentCheckForUpdates(AppCoordinator coord) async {
-    final latest = await coord.settingsCtrl.silentCheckForUpdates(AppCoordinator.currentVersion);
+    final latest = await coord.settingsCtrl
+        .silentCheckForUpdates(AppCoordinator.currentVersion);
     if (latest != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -300,7 +306,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return null;
     }
 
-    final resp = await http.get(Uri.parse(GithubConfig.releaseApiList), headers: {
+    final resp =
+        await http.get(Uri.parse(GithubConfig.releaseApiList), headers: {
       'Accept': 'application/vnd.github.v3+json',
     }).timeout(const Duration(seconds: 30));
     if (resp.statusCode != 200) {
@@ -329,7 +336,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
       final verResp = await http.get(Uri.parse(verUrl));
       if (verResp.statusCode != 200) {
-        AppLogger().warn('DB 检查: db_version.txt 下载失败 HTTP ${verResp.statusCode}');
+        AppLogger()
+            .warn('DB 检查: db_version.txt 下载失败 HTTP ${verResp.statusCode}');
         continue;
       }
       evaluatedAnyAsset = true;
@@ -355,7 +363,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     return null;
   }
 
-  Future<void> _syncIfNewer(AppCoordinator coord, String version, String url) async {
+  Future<void> _syncIfNewer(
+      AppCoordinator coord, String version, String url) async {
     try {
       await coord.remoteSyncDb(remoteVersion: version, downloadUrl: url);
     } catch (_) {}
@@ -559,7 +568,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   Future<void> _showAbandonDialog(int targetIndex) async {
     final coord = _coord!;
     coord.readingCtrl.pauseTimer();
-    final discard = await showConfirmDialog(context,
+    final discard = await showConfirmDialog(
+      context,
       title: '放弃阅读？',
       content: '阅读中切换页面将放弃当前记录。确定吗？',
       confirmLabel: '放弃',
@@ -586,7 +596,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     if (!coord.readingCtrl.hasUnrecordedReading) return AppExitResponse.exit;
 
-    final discard = await showConfirmDialog(context, title: '确认退出', content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？', confirmLabel: '放弃并退出');
+    final discard = await showConfirmDialog(context,
+        title: '确认退出',
+        content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？',
+        confirmLabel: '放弃并退出');
     if (!context.mounted) return AppExitResponse.exit;
     if (discard) {
       coord.readingCtrl.discardReading();
@@ -611,8 +624,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (didPop) return;
     final coord = _coord;
     if (coord == null || !coord.readingCtrl.isReading) {
-      final exit = await showConfirmDialog(context,
-        title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
+      final exit = await showConfirmDialog(
+        context,
+        title: '确认退出',
+        content: '确定要退出应用吗？',
+        confirmLabel: '退出',
       );
       if (exit && context.mounted) SystemNavigator.pop();
       return;
@@ -622,8 +638,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     coord.applyReadingEffect();
 
     if (!coord.readingCtrl.hasUnrecordedReading) {
-      final exit = await showConfirmDialog(context,
-        title: '确认退出', content: '确定要退出应用吗？', confirmLabel: '退出',
+      final exit = await showConfirmDialog(
+        context,
+        title: '确认退出',
+        content: '确定要退出应用吗？',
+        confirmLabel: '退出',
       );
       if (exit && context.mounted) {
         SystemNavigator.pop();
@@ -633,7 +652,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return;
     }
 
-    final discard = await showConfirmDialog(context,
+    final discard = await showConfirmDialog(
+      context,
       title: '确认退出',
       content: '当前文章阅读未满30秒，未完成追踪。放弃并退出？',
       confirmLabel: '放弃并退出',
@@ -748,8 +768,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return const Center(child: CircularProgressIndicator());
     }
     if (!_transitioning) {
-      return IndexedStack(
-          key: _bodyKey, index: _pageIndex, children: _pages);
+      return IndexedStack(key: _bodyKey, index: _pageIndex, children: _pages);
     }
     return ClipRect(
       child: Stack(
@@ -759,8 +778,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
                 position: _slideOut, child: _pages[_prevPageIndex]),
           ),
           Positioned.fill(
-            child: SlideTransition(
-                position: _slideIn, child: _pages[_pageIndex]),
+            child:
+                SlideTransition(position: _slideIn, child: _pages[_pageIndex]),
           ),
         ],
       ),

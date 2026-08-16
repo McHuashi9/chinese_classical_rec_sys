@@ -56,54 +56,61 @@ class _InitOnboardingPageState extends State<InitOnboardingPage> {
     final allRead = texts.isNotEmpty &&
         texts.every((t) => coord.readTracker.isTextRead(t.id));
 
-    return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: const SizedBox.shrink(),
-        title: const Text('初始化引导'),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(context.pagePadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '完成 6 道题后即可正常使用',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            SizedBox(height: context.gapMedium),
-            Text(
-              '请先阅读下面两篇短文（可查看注释与译文），然后完成 6 道随文题。'
-              '初始化题不计入普通测验，也不会进入复习队列。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-            ),
-            SizedBox(height: context.gapLg),
-            const Divider(color: AppTheme.border, height: 1),
-            SizedBox(height: context.gapLg),
-            for (final text in texts) ...[
-              _InitArticleTile(text: text, isRead: coord.readTracker.isTextRead(text.id)),
-              SizedBox(height: context.gapSmall),
-            ],
-            SizedBox(height: context.gapXl),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.accent,
-                  foregroundColor: AppTheme.cardBg,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                onPressed: allRead ? _startInitQuiz : null,
-                child: Text(allRead ? '开始 6 题初始化' : '请先阅读两篇文章'),
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: const SizedBox.shrink(),
+          title: const Text('初始化引导'),
+        ),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.all(context.pagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '完成 6 道题后即可正常使用',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-            ),
-            SizedBox(height: context.gapXxl),
-          ],
+              SizedBox(height: context.gapMedium),
+              Text(
+                '请先阅读下面两篇短文（可查看注释与译文），然后完成 6 道随文题。'
+                '初始化题不计入普通测验，也不会进入复习队列。',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(height: 1.6),
+              ),
+              SizedBox(height: context.gapLg),
+              const Divider(color: AppTheme.border, height: 1),
+              SizedBox(height: context.gapLg),
+              for (final text in texts) ...[
+                _InitArticleTile(
+                    text: text, isRead: coord.readTracker.isTextRead(text.id)),
+                SizedBox(height: context.gapSmall),
+              ],
+              SizedBox(height: context.gapXl),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.accent,
+                    foregroundColor: AppTheme.cardBg,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  onPressed: allRead ? _startInitQuiz : null,
+                  child: Text(allRead ? '开始 6 题初始化' : '请先阅读两篇文章'),
+                ),
+              ),
+              SizedBox(height: context.gapXxl),
+            ],
+          ),
         ),
       ),
     );
@@ -152,17 +159,28 @@ class _InitArticleTile extends StatelessWidget {
           color: isRead ? AppTheme.stoneGreen : context.accent,
         ),
         title: Text(text.title),
-        subtitle: Text(text.author.isEmpty ? text.dynasty : '${text.author} · ${text.dynasty}'),
+        subtitle: Text(text.author.isEmpty
+            ? text.dynasty
+            : '${text.author} · ${text.dynasty}'),
         trailing: isRead
             ? const Text('已读')
             : FilledButton.tonal(
                 onPressed: () {
+                  // getInitTexts() 返回的是列表缓存（无正文），进入阅读前必须拉全文；
+                  // 否则 ReadingFrame 会显示“暂无内容”。
+                  final detail = coord.getTextDetail(text.id);
+                  if (detail == null || detail.content.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('文章加载失败，请重试')),
+                    );
+                    return;
+                  }
                   final raw = coord.getAnnotations(text.id);
                   final translation = coord.getTranslation(text.id);
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => InitReadingPage(
-                        text: text,
+                        text: detail,
                         annotations: AnnotationParser.parse(raw),
                         translation: translation,
                       ),
@@ -219,67 +237,73 @@ class _InitReadingPageState extends State<InitReadingPage> {
     if (_recorded) return;
     _recorded = true;
     final coord = context.read<AppCoordinator>();
-    coord.recordInitRead(widget.text.id, _readingCtrl.elapsedSeconds.toDouble());
+    coord.recordInitRead(
+        widget.text.id, _readingCtrl.elapsedSeconds.toDouble());
     _readingCtrl.stopTimer();
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final settingsCtrl = context.watch<SettingsController>();
-    final isDark = settingsCtrl.darkMode;
-    final fontScale = settingsCtrl.fontScale;
-    final pages = _readingCtrl.pages;
-    final currentPage = _readingCtrl.currentPage;
-    final totalPages = _readingCtrl.totalPages;
+    return ListenableBuilder(
+      listenable: _readingCtrl,
+      builder: (context, _) {
+        final settingsCtrl = context.watch<SettingsController>();
+        final isDark = settingsCtrl.darkMode;
+        final fontScale = settingsCtrl.fontScale;
+        final pages = _readingCtrl.pages;
+        final currentPage = _readingCtrl.currentPage;
+        final totalPages = _readingCtrl.totalPages;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back,
-              color: isDark ? AppTheme.darkInk : AppTheme.ink),
-          onPressed: _finish,
-        ),
-        title: Text(widget.text.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontFamily: AppTheme.fontTitle,
-                )),
-      ),
-      body: SafeArea(
-        child: ReadingFrame(
-          viewData: ReadingViewData(
-            text: widget.text,
-            pages: pages,
-            currentPage: currentPage,
-            totalPages: totalPages,
-            formattedTime: _readingCtrl.formattedReadingTime,
-            isDark: isDark,
-            elapsedSeconds: _readingCtrl.elapsedSeconds,
-            alreadyTracked: false,
-            annotations: widget.annotations,
-            showTranslation: _readingCtrl.showTranslation,
-            pageStartsInTranslation: _readingCtrl.pageStartsInTranslation,
-            onToggleTranslation: () => _readingCtrl.setShowTranslation(
-                !_readingCtrl.showTranslation),
-            onPaginate: (w, h) => _readingCtrl.paginate(
-              w.toDouble(),
-              h.toDouble(),
-              AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
-              fontScale,
-              isDark,
-              accentColor: context.accent,
+        return Scaffold(
+          backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back,
+                  color: isDark ? AppTheme.darkInk : AppTheme.ink),
+              onPressed: _finish,
             ),
-            onNextPage: _readingCtrl.nextPage,
-            onPrevPage: _readingCtrl.prevPage,
-            onComplete: _finish,
-            onAbandon: _finish,
-            onExit: _finish,
+            title: Text(widget.text.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontFamily: AppTheme.fontTitle,
+                    )),
           ),
-        ),
-      ),
+          body: SafeArea(
+            child: ReadingFrame(
+              viewData: ReadingViewData(
+                text: widget.text,
+                pages: pages,
+                currentPage: currentPage,
+                totalPages: totalPages,
+                formattedTime: _readingCtrl.formattedReadingTime,
+                isDark: isDark,
+                elapsedSeconds: _readingCtrl.elapsedSeconds,
+                alreadyTracked: false,
+                annotations: widget.annotations,
+                showTranslation: _readingCtrl.showTranslation,
+                pageStartsInTranslation: _readingCtrl.pageStartsInTranslation,
+                onToggleTranslation: () => _readingCtrl
+                    .setShowTranslation(!_readingCtrl.showTranslation),
+                onPaginate: (w, h) => _readingCtrl.paginate(
+                  w.toDouble(),
+                  h.toDouble(),
+                  AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
+                  fontScale,
+                  isDark,
+                  accentColor: context.accent,
+                ),
+                onNextPage: _readingCtrl.nextPage,
+                onPrevPage: _readingCtrl.prevPage,
+                onComplete: _finish,
+                onAbandon: _finish,
+                onExit: _finish,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

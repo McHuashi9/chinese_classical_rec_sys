@@ -24,11 +24,15 @@ class _FakeCoordinator extends AppCoordinator {
   });
 
   List<ChineseText> initTexts = [];
+  ChineseText? detailOverride;
   String rawAnnotations = '';
   String translation = '';
 
   @override
   List<ChineseText> getInitTexts() => initTexts;
+
+  @override
+  ChineseText? getTextDetail(int textId) => detailOverride;
 
   @override
   String getAnnotations(int textId) => rawAnnotations;
@@ -105,6 +109,29 @@ void main() {
     expect(find.text('严先生祠堂记'), findsOneWidget);
     expect(find.text('周郑交质'), findsOneWidget);
     expect(find.text('请先阅读两篇文章'), findsOneWidget);
+  });
+
+  testWidgets('点击阅读会加载正文详情，不显示暂无内容', (tester) async {
+    // 生产路径 getInitTexts() 返回列表缓存（无正文），正文需要 getTextDetail() 拉取。
+    coord.initTexts = [
+      ChineseText(
+        id: 41,
+        title: '严先生祠堂记',
+        author: '',
+        dynasty: '宋',
+        source: '古文观止',
+        content: '',
+        charCount: 0,
+        difficulties: List.filled(10, 0.5),
+      ),
+    ];
+    coord.detailOverride = _text(41, '严先生祠堂记');
+    await tester.pumpWidget(wrap(const InitOnboardingPage()));
+    await tester.tap(find.text('阅读'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无内容'), findsNothing);
+    expect(find.text('严先生祠堂记'), findsWidgets);
   });
 
   testWidgets('两篇均已读后按钮变为开始初始化', (tester) async {
