@@ -38,8 +38,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,isPrerelease,createdAt | \
-            python3 -c 'import json,sys; arr=json.load(sys.stdin); arr=[r for r in arr if r.get("isPrerelease") and r.get("tagName","").startswith("data-")]; arr.sort(key=lambda r: r.get("createdAt","")); print(arr[-1]["tagName"] if arr else "")')"
+          # 按 tagName 倒序取最新 data-*：data-YYYYMMDD-HHMMSS 字典序=时间序；
+          # 不用 createdAt，因为 gh release 的 createdAt 是 tag 指向 commit 的日期，
+          # 新 release 可能因 tag 指向旧提交而排到旧 release 前面。
+          TAG="$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,isPrerelease | \
+            python3 -c 'import json,sys; arr=json.load(sys.stdin); arr=[r for r in arr if r.get("isPrerelease") and r.get("tagName","").startswith("data-")]; arr.sort(key=lambda r: r["tagName"], reverse=True); print(arr[0]["tagName"] if arr else "")')"
           if [ -z "$TAG" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "No data-* release found; skip released-db comparison"
