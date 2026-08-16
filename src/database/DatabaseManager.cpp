@@ -37,6 +37,54 @@ void DatabaseManager::close() {
     }
 }
 
+bool DatabaseManager::attachDatabase(const std::string& alias, const std::string& dbPath) {
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+    sqlite3_stmt* stmt = nullptr;
+    const std::string sql = "ATTACH DATABASE ? AS " + alias + ";";
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, dbPath.c_str(), -1, SQLITE_TRANSIENT);
+    const int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    return true;
+}
+
+bool DatabaseManager::detachDatabase(const std::string& alias) {
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+    const std::string sql = "DETACH DATABASE " + alias + ";";
+    return executeSQL(sql);
+}
+
+int DatabaseManager::getUserVersion() const {
+    if (!db) return 0;
+    sqlite3_stmt* stmt = nullptr;
+    int version = 0;
+    if (sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nullptr) != SQLITE_OK) {
+        return 0;
+    }
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        version = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return version;
+}
+
+bool DatabaseManager::setUserVersion(int version) {
+    return executeSQL("PRAGMA user_version = " + std::to_string(version) + ";");
+}
+
 bool DatabaseManager::executeSQL(const std::string& sql) {
     if (!db) {
         lastError = "数据库未打开";

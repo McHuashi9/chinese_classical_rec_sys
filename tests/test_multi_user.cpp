@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include "c_types.h"
+#include "test_helpers.h"
 #include "database/UserRepository.h"
 #include <sqlite3.h>
 
@@ -7,36 +8,39 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <set>
+#include <map>
+#include <sstream>
 
 namespace fs = std::filesystem;
 
 extern "C" {
-    int db_open(const char* db_path);
+    int db_open(const char* content_path, const char* user_path);
     void db_close();
     int db_replace(const char* new_db_path, const char* cur_db_path);
     int user_list(ProfileData* out, int max_count);
     int user_active_id();
     int user_create(const char* name);
+    int user_create_inherit(const char* name, int source_id);
     int user_switch(int id);
     int user_rename(int id, const char* name);
     int user_delete(int id);
     int user_load(UserData* out);
     int user_save(const UserData* in);
+    int user_is_initialized();
+    int user_init_questions(QuestionData* out, int max_count);
+    int user_init_apply(const int* qids, const int* choices, int count, int64_t timestamp, UserData* out_user);
     int history_add_record(int text_id, double read_time, int64_t timestamp);
     int history_get_total_count();
     int history_get_tracked_text_ids(int* out, int max_count);
     int text_get_count();
+    int recommend(const UserData* user, int top_k, int* out_ids, double* out_probs, int out_ids_capacity, int out_probs_capacity);
+    int question_get_by_text(int text_id, QuestionData* out, int max_count, int* answered_all);
+    int tracker_apply_quiz(const UserData* user, int question_id, int user_choice,
+                           int64_t timestamp, UserData* out_user, int* out_correct, int is_review);
 }
 
 namespace {
-
-std::string makeWorkDb(const std::string& tag)
-{
-    const std::string path = std::string(TEST_DB_PATH) + "." + tag + ".db";
-    fs::copy_file(TEST_DB_PATH, path, fs::copy_options::overwrite_existing);
-    fs::remove(path + ".bak");
-    return path;
-}
 
 std::string sqliteText(const std::string& dbPath, const std::string& sql)
 {
@@ -55,15 +59,29 @@ std::string sqliteText(const std::string& dbPath, const std::string& sql)
     return result;
 }
 
+void initDefaultProfile()
+{
+    QuestionData qs[8];
+    const int n = user_init_questions(qs, 8);
+    REQUIRE(n == 6);
+    int qids[6] = {0};
+    int choices[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < n; i++) qids[i] = qs[i].id;
+    UserData out;
+    REQUIRE(user_init_apply(qids, choices, n, 1700000000LL, &out) == BRIDGE_OK);
+}
+
 }  // namespace
 
-TEST_CASE("多用户 - 默认档案与档案 CRUD", "[multi_user]") {
+TEST_CASE("多用户 - 默认档案与档案 CRUD（新档案未初始化）", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_crud");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string content = test_helpers::makeContentDb("mu_crud");
+    const std::string user = test_helpers::makeUserDb("mu_crud");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
-    // 新库：默认档案 id=1 已就位
+    // 新库：默认档案 id=1 已就位，但未完成初始化
     REQUIRE(user_active_id() == 1);
+    REQUIRE(user_is_initialized() == 0);
     ProfileData profiles[8];
     int n = user_list(profiles, 8);
     REQUIRE(n == 1);
@@ -76,9 +94,10 @@ TEST_CASE("多用户 - 默认档案与档案 CRUD", "[multi_user]") {
     REQUIRE(user_create("") == BRIDGE_ERR_GENERIC);
     REQUIRE(user_create("这个名字实在是太长太长太长太长太长太长太长太长太长太长太长太长太长太长太长太长太长太长太长了") == BRIDGE_ERR_GENERIC);
 
-    // 切换后 active id 更新，且新档案能力初始化默认
+    // 切换后 active id 更新，新档案未初始化，但能力显示默认先验（0.3）
     REQUIRE(user_switch(id2) == BRIDGE_OK);
     REQUIRE(user_active_id() == id2);
+    REQUIRE(user_is_initialized() == 0);
     UserData u;
     REQUIRE(user_load(&u) == BRIDGE_OK);
     bool hasAbility = false;
@@ -113,10 +132,11 @@ TEST_CASE("多用户 - 默认档案与档案 CRUD", "[multi_user]") {
 
 TEST_CASE("多用户 - 阅读历史与已读标记按档案隔离", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_isolation");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string content = test_helpers::makeContentDb("mu_isolation");
+    const std::string user = test_helpers::makeUserDb("mu_isolation");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
-    // 档案 1 制造阅读历史
+    // 档案 1 制造阅读历史（history_add_record 不要求初始化）
     UserData u;
     REQUIRE(user_load(&u) == BRIDGE_OK);
     REQUIRE(user_save(&u) == BRIDGE_OK);
@@ -141,15 +161,15 @@ TEST_CASE("多用户 - 阅读历史与已读标记按档案隔离", "[multi_user
     db_close();
 }
 
-TEST_CASE("多用户 - 老库 CHECK(id=1)/旧主键迁移", "[multi_user]") {
+TEST_CASE("多用户 - 旧开发版 user.db（db_version=0）拒绝启动", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_migrate");
-    fs::remove(work);
+    const std::string content = test_helpers::makeContentDb("mu_old_user");
+    const std::string user = test_helpers::makeUserDb("mu_old_user");
 
-    // 构造旧 schema：user 带 CHECK(id=1)，text_tracking 单列主键，review_items 单列主键
+    // 构造旧版 user.db（无 initialized 列、db_version=0）
     {
         sqlite3* db = nullptr;
-        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        REQUIRE(sqlite3_open(user.c_str(), &db) == SQLITE_OK);
         const char* oldUser =
             "CREATE TABLE user ("
             "id INTEGER PRIMARY KEY CHECK (id = 1), "
@@ -171,61 +191,18 @@ TEST_CASE("多用户 - 老库 CHECK(id=1)/旧主键迁移", "[multi_user]") {
             "d9_quiz_count INTEGER DEFAULT 0, d10_quiz_count INTEGER DEFAULT 0, "
             "last_read_time INTEGER DEFAULT 0);";
         REQUIRE(sqlite3_exec(db, oldUser, nullptr, nullptr, nullptr) == SQLITE_OK);
-        REQUIRE(sqlite3_exec(db,
-            "INSERT INTO user (id, d1_ability, d1_base_ability, last_read_time) "
-            "VALUES (1, 0.7, 0.61, 1700000000);", nullptr, nullptr, nullptr) == SQLITE_OK);
-        REQUIRE(sqlite3_exec(db,
-            "CREATE TABLE text_tracking (text_id INTEGER PRIMARY KEY, tracked_at INTEGER NOT NULL);"
-            "INSERT INTO text_tracking (text_id, tracked_at) VALUES (123, 1700000000);",
-            nullptr, nullptr, nullptr) == SQLITE_OK);
-        REQUIRE(sqlite3_exec(db,
-            "CREATE TABLE review_items ("
-            "question_id INTEGER PRIMARY KEY, text_id INTEGER NOT NULL, "
-            "correct_streak INTEGER DEFAULT 0, wrong_count INTEGER DEFAULT 0, "
-            "next_review_at INTEGER NOT NULL);"
-            "INSERT INTO review_items (question_id, text_id, correct_streak, wrong_count, next_review_at) "
-            "VALUES (999, 1, 0, 1, 1700000000);",
-            nullptr, nullptr, nullptr) == SQLITE_OK);
         sqlite3_close(db);
     }
 
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
-
-    // user 数据迁移到默认档案
-    UserData u;
-    REQUIRE(user_load(&u) == BRIDGE_OK);
-    REQUIRE(u.base_abilities[0] == Catch::Approx(0.61));
-    REQUIRE(u.last_read_time == 1700000000LL);
-    REQUIRE(user_active_id() == 1);
-
-    // profiles 表已补默认档案
-    ProfileData profiles[8];
-    REQUIRE(user_list(profiles, 8) == 1);
-    REQUIRE(std::string(profiles[0].name) == "默认用户");
-
-    // text_tracking 旧数据归入 user_id=1
-    int tracked[8];
-    REQUIRE(history_get_tracked_text_ids(tracked, 8) == 1);
-    REQUIRE(tracked[0] == 123);
-
-    // review_items 迁移为复合主键且数据保留
-    const std::string reviewSql = sqliteText(work,
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='review_items';");
-    REQUIRE(reviewSql.find("PRIMARY KEY (user_id, question_id)") != std::string::npos);
-    REQUIRE(sqliteText(work, "SELECT wrong_count FROM review_items WHERE question_id = 999;") == "1");
-
-    // 老库迁移后仍可新建档案
-    const int id2 = user_create("迁移后新档");
-    REQUIRE(id2 > 1);
-    REQUIRE(user_switch(id2) == BRIDGE_OK);
-
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_ERR_DB_VERSION);
     db_close();
 }
 
 TEST_CASE("多用户 - 重名拒绝与档案数上限", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_limits");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string content = test_helpers::makeContentDb("mu_limits");
+    const std::string user = test_helpers::makeUserDb("mu_limits");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
     // 重名创建拒绝（未删除档案同名）
     REQUIRE(user_create("默认用户") == BRIDGE_ERR_GENERIC);
@@ -248,8 +225,9 @@ TEST_CASE("多用户 - 重名拒绝与档案数上限", "[multi_user]") {
 
 TEST_CASE("多用户 - 档案数上限 kMaxProfiles", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_cap");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string content = test_helpers::makeContentDb("mu_cap");
+    const std::string user = test_helpers::makeUserDb("mu_cap");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
     // 默认档案占 1 个名额，补建到上限
     for (int i = 2; i <= kMaxProfiles; i++) {
@@ -267,10 +245,12 @@ TEST_CASE("多用户 - 档案数上限 kMaxProfiles", "[multi_user]") {
     db_close();
 }
 
-TEST_CASE("多用户 - db_replace 整库替换保留全部档案数据", "[multi_user]") {
+TEST_CASE("多用户 - db_replace 内容库替换保留全部档案数据", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_replace");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string dir = test_helpers::workDir("mu_replace");
+    const std::string content = test_helpers::makeContentDb("mu_replace");
+    const std::string user = test_helpers::makeUserDb("mu_replace");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
     // 档案 1 与档案 2 各写一条阅读历史
     REQUIRE(history_add_record(1, 60.0, 1700000000LL) == BRIDGE_OK);
@@ -281,12 +261,23 @@ TEST_CASE("多用户 - db_replace 整库替换保留全部档案数据", "[multi
     REQUIRE(history_get_total_count() == 1);
     db_close();
 
-    // 新库 = 资产副本（无用户数据）
-    const std::string newDb = work + ".new";
-    fs::copy_file(TEST_DB_PATH, newDb, fs::copy_options::overwrite_existing);
+    // 新内容包 = 同目录纯内容库
+    const std::string newContent = dir + "/new_classical.db";
+    fs::copy_file(TEST_DB_PATH, newContent, fs::copy_options::overwrite_existing);
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(newContent.c_str(), &db) == SQLITE_OK);
+        for (const char* t : {"profiles", "user", "reading_history", "text_tracking",
+                              "learning_increments", "quiz_attempts", "review_items"}) {
+            const std::string sql = "DROP TABLE IF EXISTS " + std::string(t) + ";";
+            sqlite3_exec(db, sql.c_str(), nullptr, nullptr, nullptr);
+        }
+        sqlite3_exec(db, "PRAGMA user_version = 1;", nullptr, nullptr, nullptr);
+        sqlite3_close(db);
+    }
 
-    REQUIRE(db_replace(newDb.c_str(), work.c_str()) == BRIDGE_OK);
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    REQUIRE(db_replace(newContent.c_str(), content.c_str()) == BRIDGE_OK);
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
     REQUIRE(text_get_count() > 0);
     ProfileData profiles[8];
@@ -304,8 +295,9 @@ TEST_CASE("多用户 - db_replace 整库替换保留全部档案数据", "[multi
 
 TEST_CASE("多用户 - 能力全 0 但有学习痕迹的档案不被重置为默认", "[multi_user]") {
     db_close();
-    const std::string work = makeWorkDb("mu_zero_keep");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const std::string content = test_helpers::makeContentDb("mu_zero_keep");
+    const std::string user = test_helpers::makeUserDb("mu_zero_keep");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
     // 新档案首次切换会初始化默认 0.3
     const int id2 = user_create("差生档案");
@@ -335,6 +327,163 @@ TEST_CASE("多用户 - 能力全 0 但有学习痕迹的档案不被重置为默
         REQUIRE(u.quiz_counts[i] == 1);
     }
     REQUIRE(u.last_read_time == 1700000000LL);
+
+    db_close();
+}
+
+TEST_CASE("用户初始化 - 未初始化时正常功能被拒，初始化后可用", "[multi_user]") {
+    db_close();
+    const std::string content = test_helpers::makeContentDb("mu_init_gate");
+    const std::string user = test_helpers::makeUserDb("mu_init_gate");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
+    REQUIRE(user_is_initialized() == 0);
+
+    // 未初始化：推荐、普通取题、普通答题、复习通道均被拒
+    UserData u;
+    REQUIRE(user_load(&u) == BRIDGE_OK);
+    int out_ids[4] = {0};
+    double out_probs[4] = {0};
+    REQUIRE(recommend(&u, 4, out_ids, out_probs, 4, 4) == BRIDGE_ERR_INIT_INCOMPLETE);
+    QuestionData qs[8];
+    REQUIRE(question_get_by_text(1, qs, 4, nullptr) == BRIDGE_ERR_INIT_INCOMPLETE);
+    UserData out;
+    int correct = -1;
+    REQUIRE(tracker_apply_quiz(&u, 1, 0, 1700000000LL, &out, &correct, 0) == BRIDGE_ERR_INIT_INCOMPLETE);
+
+    // 初始化题可取且可一次性提交
+    REQUIRE(user_init_questions(qs, 8) == 6);
+    int qids[6] = {0};
+    int choices[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 6; i++) qids[i] = qs[i].id;
+    REQUIRE(user_init_apply(qids, choices, 6, 1700000000LL, &out) == BRIDGE_OK);
+    REQUIRE(user_is_initialized() == 1);
+
+    // 初始化后正常功能可用
+    REQUIRE(recommend(&out, 4, out_ids, out_probs, 4, 4) == BRIDGE_OK);
+    REQUIRE(question_get_by_text(1, qs, 4, nullptr) >= 0);
+    REQUIRE(tracker_apply_quiz(&out, qs[0].id, 0, 1700000000LL, &out, &correct, 0) == BRIDGE_OK);
+
+    db_close();
+}
+
+TEST_CASE("用户初始化 - 初始化题不进入复习队列且普通取题排除", "[multi_user]") {
+    db_close();
+    const std::string content = test_helpers::makeContentDb("mu_init_no_review");
+    const std::string user = test_helpers::makeUserDb("mu_init_no_review");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
+
+    QuestionData qs[8];
+    REQUIRE(user_init_questions(qs, 8) == 6);
+    int qids[6] = {0};
+    int choices[6] = {1, 1, 1, 1, 1, 1};  // 全选 1，必有一些答错/答对
+    for (int i = 0; i < 6; i++) qids[i] = qs[i].id;
+    UserData out;
+    REQUIRE(user_init_apply(qids, choices, 6, 1700000000LL, &out) == BRIDGE_OK);
+
+    // 初始化题不进入 review_items
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(user.c_str(), &db) == SQLITE_OK);
+    sqlite3_stmt* stmt = nullptr;
+    int reviewCount = -1;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM review_items", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) reviewCount = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    REQUIRE(reviewCount == 0);
+
+    // 初始化题已写入 quiz_attempts 且 is_init=1；普通取题按已答排除
+    for (int i = 0; i < 6; i++) {
+        REQUIRE(sqliteText(user, "SELECT is_init FROM quiz_attempts WHERE question_id = " + std::to_string(qids[i])) == "1");
+    }
+
+    db_close();
+}
+
+TEST_CASE("用户初始化 - 后验落库与 quizCounts 更新", "[multi_user]") {
+    db_close();
+    const std::string content = test_helpers::makeContentDb("mu_init_posterior");
+    const std::string user = test_helpers::makeUserDb("mu_init_posterior");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
+
+    QuestionData qs[8];
+    REQUIRE(user_init_questions(qs, 8) == 6);
+    std::set<int> covered;
+    for (int i = 0; i < 6; i++) {
+        std::istringstream ss(qs[i].dims);
+        std::string tok;
+        while (std::getline(ss, tok, ',')) {
+            if (!tok.empty()) covered.insert(std::atoi(tok.c_str()));
+        }
+    }
+    REQUIRE(covered.size() >= 1);
+
+    int qids[6] = {0};
+    int choices[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 6; i++) qids[i] = qs[i].id;
+    UserData out;
+    REQUIRE(user_init_apply(qids, choices, 6, 1700000000LL, &out) == BRIDGE_OK);
+
+    // 覆盖维度 quizCount 更新为观察数；未覆盖维度保持先验 0.3
+    std::map<int, int> dimCount;
+    for (int i = 0; i < 6; i++) {
+        std::istringstream ss(qs[i].dims);
+        std::string tok;
+        while (std::getline(ss, tok, ',')) {
+            if (!tok.empty()) dimCount[std::atoi(tok.c_str())]++;
+        }
+    }
+    for (int d = 0; d < 10; d++) {
+        if (covered.count(d)) {
+            REQUIRE(out.quiz_counts[d] == dimCount[d]);
+            REQUIRE(out.base_abilities[d] == Catch::Approx(out.abilities[d]).margin(1e-9));
+        } else {
+            REQUIRE(out.quiz_counts[d] == 0);
+            REQUIRE(out.abilities[d] == Catch::Approx(0.3));
+        }
+    }
+    // eta 保持默认
+    REQUIRE(out.eta == Catch::Approx(0.08));
+
+    // 落库：user.initialized=1、quiz_attempts 6 条 is_init=1、review_items 空
+    REQUIRE(user_is_initialized() == 1);
+    REQUIRE(sqliteText(user, "SELECT COUNT(*) FROM quiz_attempts WHERE is_init = 1") == "6");
+    REQUIRE(sqliteText(user, "SELECT COUNT(*) FROM review_items") == "0");
+
+    db_close();
+}
+
+TEST_CASE("新建档案继承 - user_create_inherit 原子复制能力与历史", "[multi_user]") {
+    db_close();
+    const std::string content = test_helpers::makeContentDb("mu_inherit");
+    const std::string user = test_helpers::makeUserDb("mu_inherit");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
+
+    // 初始化档案 1
+    initDefaultProfile();
+    UserData base;
+    REQUIRE(user_load(&base) == BRIDGE_OK);
+    REQUIRE(history_add_record(1, 60.0, 1700000000LL) == BRIDGE_OK);
+    REQUIRE(user_save(&base) == BRIDGE_OK);
+
+    // 继承创建
+    const int id2 = user_create_inherit("继承者", 1);
+    REQUIRE(id2 > 1);
+    REQUIRE(user_is_initialized() == 1);  // 仍在档案 1，新档案尚未切换
+    REQUIRE(user_switch(id2) == BRIDGE_OK);
+    REQUIRE(user_is_initialized() == 1);
+
+    UserData inherited;
+    REQUIRE(user_load(&inherited) == BRIDGE_OK);
+    for (int i = 0; i < 10; i++) {
+        REQUIRE(inherited.base_abilities[i] == Catch::Approx(base.base_abilities[i]));
+        REQUIRE(inherited.quiz_counts[i] == base.quiz_counts[i]);
+    }
+    REQUIRE(history_get_total_count() == 1);
+
+    // 源档案数据仍在
+    REQUIRE(user_switch(1) == BRIDGE_OK);
+    REQUIRE(history_get_total_count() == 1);
 
     db_close();
 }

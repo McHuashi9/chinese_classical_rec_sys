@@ -58,7 +58,8 @@ bool UserRepository::initTable() {
         "d8_quiz_count INTEGER DEFAULT 0, "
         "d9_quiz_count INTEGER DEFAULT 0, "
         "d10_quiz_count INTEGER DEFAULT 0, "
-        "last_read_time INTEGER DEFAULT 0"  // 最后阅读时间戳
+        "last_read_time INTEGER DEFAULT 0, "  // 最后阅读时间戳
+        "initialized INTEGER NOT NULL DEFAULT 0"  // 强制初始化完成标记
         ");";
 
     // 档案元数据表（多用户）
@@ -104,6 +105,9 @@ bool UserRepository::initTable() {
 
     // 迁移：为旧数据库添加 last_read_time 列（如果不存在）
     db->executeSQL("ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;");  // 忽略错误
+
+    // v1.0.0：强制初始化标记（仅版本 1 用户库可能缺列时补，旧 0 版会在 db_open 阶段被拒）
+    db->executeSQL("ALTER TABLE user ADD COLUMN initialized INTEGER NOT NULL DEFAULT 0;");  // 忽略错误
 
     // 迁移：移除已弃用的 name 列（如果存在）
     db->executeSQL("ALTER TABLE user DROP COLUMN name;");  // 忽略错误（列不存在或 SQLite < 3.35.0）
@@ -153,6 +157,7 @@ bool UserRepository::initTable() {
         "text_id INTEGER NOT NULL, "
         "correct INTEGER NOT NULL, "              // 0/1
         "is_review INTEGER DEFAULT 0, "           // 0=正式测验 1=错题复习
+        "is_init INTEGER DEFAULT 0, "             // 1=强制初始化题（不再普通出现）
         "answered_at INTEGER NOT NULL"            // unix 秒
         ");";
     const char* reviewItemsSql =
@@ -177,6 +182,9 @@ bool UserRepository::initTable() {
 
     // 旧 quiz_attempts 表补 user_id 列（必须先于依赖该列的索引创建）
     db->executeSQL("ALTER TABLE quiz_attempts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1;");  // 忽略错误
+
+    // v1.0.0：初始化题标记
+    db->executeSQL("ALTER TABLE quiz_attempts ADD COLUMN is_init INTEGER DEFAULT 0;");  // 忽略错误
 
     if (!db->executeSQL(quizAttemptsIdxSql) || !db->executeSQL(quizAttemptsUserIdxSql)) {
         LOG_ERROR("UserRepository::initTable quiz index failed: {}", db->getLastError());
@@ -549,5 +557,202 @@ bool UserRepository::ensureProfileExists(int userId, const std::string& name) {
     sqlite3_bind_int64(stmt, 4, now);
     const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool UserRepository::isInitialized(int userId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT initialized FROM user WHERE id = ?;";
+    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, userId);
+    bool initialized = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        initialized = sqlite3_column_int(stmt, 0) != 0;
+    }
+    sqlite3_finalize(stmt);
+    return initialized;
+}
+
+bool UserRepository::setInitialized(int userId) {
+    if (!db || !db->getConnection()) return false;
+    return db->executeSQL(
+        "UPDATE user SET initialized = 1 WHERE id = ?;",
+        std::vector<SqlParam>{userId}
+    );
+}
+
+bool UserRepository::createProfileInherit(const std::string& name, int sourceId, int& outId) {
+    if (!db || !db->getConnection()) return false;
+    sqlite3* c = db->getConnection();
+
+    char* err = nullptr;
+    if (sqlite3_exec(c, "BEGIN IMMEDIATE", nullptr, nullptr, &err) != SQLITE_OK) {
+        LOG_ERROR("createProfileInherit BEGIN 失败: {}", err ? err : "?");
+        sqlite3_free(err);
+        return false;
+    }
+
+    bool ok = true;
+    // 与 createProfile 相同的约束：上限、未删除档案重名拒绝
+    {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT COUNT(*) FROM profiles WHERE deleted = 0;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            const int count = (sqlite3_step(chk) == SQLITE_ROW) ? sqlite3_column_int(chk, 0) : -1;
+            sqlite3_finalize(chk);
+            if (count < 0 || count >= kMaxProfiles) {
+                LOG_WARN("createProfileInherit 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
+                ok = false;
+            }
+        }
+    }
+    if (ok) {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE deleted = 0 AND name = ?;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            sqlite3_bind_text(chk, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+            const bool dup = (sqlite3_step(chk) == SQLITE_ROW);
+            sqlite3_finalize(chk);
+            if (dup) {
+                LOG_WARN("createProfileInherit 重名拒绝: {}", name);
+                ok = false;
+            }
+        }
+    }
+    // 源档案必须存在、未删除且已完成初始化
+    if (ok) {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            sqlite3_bind_int(chk, 1, sourceId);
+            const bool active = (sqlite3_step(chk) == SQLITE_ROW);
+            sqlite3_finalize(chk);
+            if (!active) {
+                LOG_WARN("createProfileInherit 源档案不存在或已删除 id={}", sourceId);
+                ok = false;
+            }
+        }
+    }
+    if (ok) {
+        sqlite3_stmt* chk = nullptr;
+        if (sqlite3_prepare_v2(c, "SELECT initialized FROM user WHERE id = ?;", -1, &chk, nullptr)
+            != SQLITE_OK) {
+            ok = false;
+        } else {
+            sqlite3_bind_int(chk, 1, sourceId);
+            const bool initialized = (sqlite3_step(chk) == SQLITE_ROW) && sqlite3_column_int(chk, 0) != 0;
+            sqlite3_finalize(chk);
+            if (!initialized) {
+                LOG_WARN("createProfileInherit 源档案未完成初始化 id={}", sourceId);
+                ok = false;
+            }
+        }
+    }
+
+    const int64_t now = static_cast<int64_t>(time(nullptr));
+    sqlite3_stmt* stmt = nullptr;
+    if (ok && sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
+                               "VALUES (?, ?, ?, 0);", -1, &stmt, nullptr) != SQLITE_OK) {
+        ok = false;
+    } else if (ok) {
+        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 2, now);
+        sqlite3_bind_int64(stmt, 3, now);
+        ok = sqlite3_step(stmt) == SQLITE_DONE;
+        sqlite3_finalize(stmt);
+    }
+    if (ok) {
+        outId = static_cast<int>(sqlite3_last_insert_rowid(c));
+    }
+
+    // 复制 user 能力（新档案 initialized=1）
+    if (ok) {
+        const char* sql =
+            "INSERT INTO user (id, "
+            "d1_ability, d2_ability, d3_ability, d4_ability, d5_ability, d6_ability, "
+            "d7_ability, d8_ability, d9_ability, d10_ability, "
+            "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
+            "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
+            "d9_base_ability, d10_base_ability, eta, "
+            "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
+            "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
+            "last_read_time, initialized) "
+            "SELECT ?, "
+            "d1_ability, d2_ability, d3_ability, d4_ability, d5_ability, d6_ability, "
+            "d7_ability, d8_ability, d9_ability, d10_ability, "
+            "d1_base_ability, d2_base_ability, d3_base_ability, d4_base_ability, "
+            "d5_base_ability, d6_base_ability, d7_base_ability, d8_base_ability, "
+            "d9_base_ability, d10_base_ability, eta, "
+            "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
+            "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
+            "last_read_time, 1 FROM user WHERE id = ?;";
+        sqlite3_stmt* u = nullptr;
+        if (sqlite3_prepare_v2(c, sql, -1, &u, nullptr) != SQLITE_OK) {
+            LOG_ERROR("createProfileInherit 复制 user 准备失败: {}", sqlite3_errmsg(c));
+            ok = false;
+        } else {
+            sqlite3_bind_int(u, 1, outId);
+            sqlite3_bind_int(u, 2, sourceId);
+            ok = sqlite3_step(u) == SQLITE_DONE;
+            sqlite3_finalize(u);
+        }
+    }
+
+    // 复制各历史表（自增 id 不复制，user_id 改新档案 id）
+    if (ok) {
+        const char* copies[] = {
+            "INSERT INTO reading_history (user_id, text_id, read_time, read_timestamp) "
+            "SELECT ?, text_id, read_time, read_timestamp FROM reading_history WHERE user_id = ?;",
+            "INSERT OR IGNORE INTO text_tracking (user_id, text_id, tracked_at) "
+            "SELECT ?, text_id, tracked_at FROM text_tracking WHERE user_id = ?;",
+            "INSERT INTO learning_increments (user_id, dimension, delta, timestamp, type) "
+            "SELECT ?, dimension, delta, timestamp, type FROM learning_increments WHERE user_id = ?;",
+            "INSERT INTO quiz_attempts (user_id, question_id, text_id, correct, is_review, is_init, answered_at) "
+            "SELECT ?, question_id, text_id, correct, is_review, is_init, answered_at FROM quiz_attempts WHERE user_id = ?;",
+            "INSERT OR IGNORE INTO review_items (user_id, question_id, text_id, correct_streak, wrong_count, next_review_at) "
+            "SELECT ?, question_id, text_id, correct_streak, wrong_count, next_review_at FROM review_items WHERE user_id = ?;",
+        };
+        for (const char* sql : copies) {
+            sqlite3_stmt* s = nullptr;
+            if (sqlite3_prepare_v2(c, sql, -1, &s, nullptr) != SQLITE_OK) {
+                LOG_ERROR("createProfileInherit 复制表准备失败: {}", sqlite3_errmsg(c));
+                ok = false;
+                break;
+            }
+            sqlite3_bind_int(s, 1, outId);
+            sqlite3_bind_int(s, 2, sourceId);
+            if (sqlite3_step(s) != SQLITE_DONE) {
+                LOG_ERROR("createProfileInherit 复制表失败: {}", sqlite3_errmsg(c));
+                ok = false;
+            }
+            sqlite3_finalize(s);
+            if (!ok) break;
+        }
+    }
+
+    // 自增序列对齐（profiles 已由 AUTOINCREMENT 自动维护，其余显式插入后保险对齐）
+    if (ok) {
+        for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts", "profiles"}) {
+            const std::string upd = "UPDATE sqlite_sequence SET seq = "
+                "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "
+                "WHERE name='" + std::string(seqTable) + "'";
+            sqlite3_exec(c, upd.c_str(), nullptr, nullptr, nullptr);  // 失败忽略（无序列条目正常）
+        }
+    }
+
+    if (ok) {
+        ok = sqlite3_exec(c, "COMMIT", nullptr, nullptr, &err) == SQLITE_OK;
+    } else {
+        sqlite3_exec(c, "ROLLBACK", nullptr, nullptr, nullptr);
+    }
+    sqlite3_free(err);
     return ok;
 }

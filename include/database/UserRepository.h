@@ -91,7 +91,26 @@ public:
      * @brief 幂等确保档案行存在（老库 id=1 默认档案迁移用；已存在不覆盖）
      */
     bool ensureProfileExists(int userId, const std::string& name);
-    
+
+    /**
+     * @brief 查询档案是否已完成强制初始化
+     */
+    bool isInitialized(int userId);
+
+    /**
+     * @brief 将档案标记为已完成初始化
+     */
+    bool setInitialized(int userId);
+
+    /**
+     * @brief 新建档案并原子继承源档案的能力与历史（含 initialized=1）
+     * @param name 新档案名
+     * @param sourceId 源档案 id（须存在且未删除）
+     * @param outId 输出新档案 id
+     * @return true 成功
+     */
+    bool createProfileInherit(const std::string& name, int sourceId, int& outId);
+
 private:
     DatabaseManager* db;
 };

@@ -106,6 +106,11 @@ typedef struct {
 #define BRIDGE_ERR_USER       -3   ///< 用户不存在
 #define BRIDGE_ERR_TEXT       -4   ///< 文本不存在
 #define BRIDGE_ERR_INIT       -5   ///< 初始化失败 (initTable 等)
+#define BRIDGE_ERR_DB_CONTENT -6   ///< 内容库缺失/损坏/缺表/含旧用户表
+#define BRIDGE_ERR_DB_USER    -7   ///< 用户库缺失/损坏
+#define BRIDGE_ERR_DB_VERSION -8   ///< db_version 不兼容（0 或 >1）
+#define BRIDGE_ERR_DB_SAME_PATH -9 ///< user.db 与 classical.db 同路径
+#define BRIDGE_ERR_INIT_INCOMPLETE -10 ///< 强制初始化未完成时使用被禁止的功能
 
 #pragma pack(pop)
 

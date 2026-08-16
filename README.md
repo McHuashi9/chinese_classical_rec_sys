@@ -132,7 +132,7 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 
 ## 项目架构
 
-**C++ 核心** — 编译产物 `libchinese_core.so`，通过 33 个 C FFI 符号向 Flutter 暴露
+**C++ 核心** — 编译产物 `libchinese_core.so`，通过 37 个 C FFI 符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
 - `include/` 头文件（引擎 · 知识追踪）
