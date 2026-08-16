@@ -86,8 +86,11 @@ class _ReadingFrameState extends State<ReadingFrame> {
     }
 
     final textPos = renderParagraph.getPositionForOffset(localPos);
+    // 译文模式零宽标记不参与排版：先映射回原始页串偏移再定位注释标记。
+    final rawOffset =
+        AnnotatedTextBuilder.paintedToRawOffset(current, textPos.offset);
     final num = AnnotatedTextBuilder.findAnnotationAtOffset(
-      current, textPos.offset, widget.viewData.annotations,
+      current, rawOffset, widget.viewData.annotations,
     );
 
     if (num == null) {
@@ -219,12 +222,18 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
         final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
         final textColor = widget.viewData.isDark ? AppTheme.darkInk : AppTheme.ink;
+        final pageStarts = widget.viewData.pageStartsInTranslation;
+        final translationActive = pageStarts != null &&
+            pageStarts.length > widget.viewData.currentPage
+            ? pageStarts[widget.viewData.currentPage]
+            : false;
         final textSpan = AnnotatedTextBuilder.build(
           current,
           widget.viewData.annotations,
           bodyStyle.copyWith(color: textColor),
           isDark: widget.viewData.isDark,
           accentColor: Theme.of(ctx).colorScheme.primary,
+          translationActive: translationActive,
         );
 
         return Container(
