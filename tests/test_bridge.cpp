@@ -63,6 +63,7 @@ std::pair<std::string, std::string> quizWorkDb(const std::string& tag)
 extern "C" {
     int db_open(const char* content_path, const char* user_path);
     void db_close();
+    int db_get_schema_versions(int* user_version, int* content_version);
     int user_load(UserData* out);
     int user_save(const UserData* in);
     int user_init_default();
@@ -145,6 +146,20 @@ TEST_CASE("bridge - db_open 无效路径返回错误", "[bridge][smoke]") {
 
     int rc = db_open("/nonexistent/path/to/content.db", "/nonexistent/path/to/user.db");
     REQUIRE(rc == BRIDGE_ERR_DB_USER);
+}
+
+TEST_CASE("bridge - db_get_schema_versions 返回双库版本", "[bridge][smoke]") {
+    db_close();
+    int uv = -1, cv = -1;
+    REQUIRE(db_get_schema_versions(&uv, &cv) == BRIDGE_ERR_NOT_INIT);
+
+    const auto [work, userPath] = quizWorkDb("schema_ver");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    REQUIRE(db_get_schema_versions(&uv, &cv) == BRIDGE_OK);
+    REQUIRE(uv == 1);
+    REQUIRE(cv == 1);
+
+    db_close();
 }
 
 TEST_CASE("bridge - 完整初始化链路 smoke test", "[bridge][smoke]") {

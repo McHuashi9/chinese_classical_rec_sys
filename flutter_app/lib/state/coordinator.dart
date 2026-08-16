@@ -15,6 +15,7 @@ import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
+import 'package:chinese_classical_rec_sys/engine/user_init_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -43,11 +44,14 @@ class AppCoordinator {
   late TextRepository _textRepo;
   late RecommendationEngine _engine;
   late ProfileRepository _profileRepo;
+  late UserInitRepository _initRepo;
   RemoteDbSync? _remoteDbSync;
   HistoryService? _historyService;
   SharedPreferences? _prefs;
 
-  String? _dbPathAfterSync;
+  String? _contentPathAfterSync;
+  String _contentDataVersion = 'unknown';
+  int? _dbOpenErrorCode;
 
   ReadingStats? _cachedStats;
   int _statsGeneration = 0;
@@ -66,34 +70,72 @@ class AppCoordinator {
   List<ChineseText> get texts => isInitialized ? _textRepo.texts : [];
   HistoryService get history => _historyService!;
 
+  String get contentDataVersion => _contentDataVersion;
+  int? get dbOpenErrorCode => _dbOpenErrorCode;
+
+  void setContentDataVersion(String version) {
+    _contentDataVersion = version;
+  }
+
+  /// 双库 schema 版本（user_version / content_version）；未打开或失败返回 null。
+  (int, int)? get schemaVersions {
+    if (_bridge == null) return null;
+    final uv = calloc<Int32>();
+    final cv = calloc<Int32>();
+    final rc = _bridge!.dbGetSchemaVersions(uv, cv);
+    final result = rc == BridgeError.ok ? (uv.value, cv.value) : null;
+    calloc.free(uv);
+    calloc.free(cv);
+    return result;
+  }
+
   ChineseText? getTextDetail(int textId) =>
       isInitialized ? _textRepo.getTextDetail(textId) : null;
 
-  Future<bool> init(String dbPath, DynamicLibrary lib) async {
+  String getAnnotations(int textId) =>
+      isInitialized ? _textRepo.getAnnotations(textId) : '';
+
+  String getTranslation(int textId) =>
+      isInitialized ? _textRepo.getTranslation(textId) : '';
+
+  /// 强制初始化使用的两篇短文（按标题匹配；缺失时返回空列表）。
+  List<ChineseText> getInitTexts() {
+    const titles = {'严先生祠堂记', '周郑交质'};
+    return _textRepo.texts.where((t) => titles.contains(t.title)).toList();
+  }
+
+  Future<bool> init(String contentPath, String userPath, DynamicLibrary lib) async {
     if (isInitialized) return true;
 
     try {
       _bridge = NativeBridge.fromLib(lib);
 
-      final cPath = dbPath.toNativeUtf8(allocator: calloc);
-      final rc = _bridge!.dbOpen(cPath);
+      final cPath = contentPath.toNativeUtf8(allocator: calloc);
+      final uPath = userPath.toNativeUtf8(allocator: calloc);
+      final rc = _bridge!.dbOpen(cPath, uPath);
       calloc.free(cPath);
+      calloc.free(uPath);
 
       if (rc != BridgeError.ok) {
-        settingsCtrl.setError('数据库打开失败: $dbPath');
+        _dbOpenErrorCode = rc;
+        settingsCtrl.setError('数据库打开失败: $contentPath / $userPath');
         return false;
       }
+      _dbOpenErrorCode = null;
 
       _textRepo = TextRepository(_bridge!);
       _textRepo.loadTextCache();
       _engine = RecommendationEngine(_bridge!);
       _profileRepo = FfiProfileRepository(_bridge!);
+      _initRepo = FfiUserInitRepository(_bridge!);
 
       final tracker = KnowledgeTracker(_bridge!);
       userCtrl.initTracker(tracker);
       userCtrl.initProfiles(_profileRepo);
+      userCtrl.initUserInitRepository(_initRepo);
       _loadUser();
       userCtrl.refreshProfiles();
+      userCtrl.refreshInitState();
       _loadTextTrackedStates();
       _historyService = HistoryService(_bridge!, _textRepo);
 
@@ -189,6 +231,11 @@ class AppCoordinator {
     return userCtrl.createProfile(name);
   }
 
+  /// 新建档案并继承已有档案能力与历史。
+  int? createInheritedProfile(String name, int sourceId) {
+    return userCtrl.createInheritedProfile(name, sourceId);
+  }
+
   /// 重命名档案
   bool renameProfile(int id, String name) {
     return userCtrl.renameProfile(id, name);
@@ -256,6 +303,20 @@ class AppCoordinator {
     }
   }
 
+  /// 初始化阅读记录：无论阅读时长，只写 reading_history / text_tracking，
+  /// 不应用能力效应（skip_effect=1）。成功后标记该篇已读，避免普通取题重复。
+  bool recordInitRead(int textId, double seconds) {
+    if (_bridge == null || userCtrl.user == null) return false;
+    final outUser = User.allocate(calloc);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final rc = _bridge!.trackerApplyRead(
+        userCtrl.user!.ptr, textId, seconds, now, outUser.ptr, 1);
+    outUser.dispose();
+    if (rc != BridgeError.ok) return false;
+    readTracker.markEffectApplied(textId);
+    return true;
+  }
+
   void getRecommendations(int topK) {
     if (!isInitialized) {
       settingsCtrl.setError('系统尚未初始化');
@@ -292,62 +353,26 @@ class AppCoordinator {
       downloadUrl: downloadUrl,
     );
     if (tmpPath == null) return;
-    if (_bridge == null || !isInitialized || _dbPathAfterSync == null) {
+    if (_bridge == null || !isInitialized || _contentPathAfterSync == null) {
       _deleteFile(tmpPath);
       return;
     }
 
-    final dbPath = _dbPathAfterSync!;
-    // 替换窗口：db_replace 关闭引擎 → 文件替换 → db_open 重开。窗口内任何 FFI
-    // 调用都会 NOT_INIT，置 syncing 闸门短路测验/阅读效应入口。
-    // 当前窗口为同步连续段（回滚也是同步文件操作，无 await），UI 事件无法插入，
-    // 闸门防御未来引入异步间隙的情况。
+    final contentPath = _contentPathAfterSync!;
+    // 防御性闸门：db_replace 已不关引擎，仍防未来异步间隙。
     syncing.value = true;
     try {
-      final rc = _replaceDb(tmpPath, dbPath);
+      final rc = _replaceDb(tmpPath, contentPath);
       if (rc != BridgeError.ok) {
         AppLogger().error('remoteSyncDb: db_replace 失败 rc=$rc，已保留旧库');
         _deleteFile(tmpPath);
-        // db_replace 失败后引擎已关闭，必须重开旧库，否则本会话假死
-        if (_openDb(dbPath) != BridgeError.ok) {
-          AppLogger().error('remoteSyncDb: 失败后重开旧库失败，请重启');
-          settingsCtrl.setError('数据库同步失败，已保留当前数据。请重启应用。');
-          return;
-        }
-        // 重开后引擎默认落在 id=1；必须恢复失败前档案，否则后续读写会落到默认档案
-        _textRepo.loadTextCache();
-        _restoreActiveProfile();
-        _loadUser();
-        _reloadUserScopedState();
+        // C++ 已内部回滚并保持旧内容挂载，无需重开引擎/恢复档案。
         settingsCtrl.setError('数据库同步失败，已保留当前数据。');
         return;
       }
-
-      var restored = false;
-      var openRc = _openDb(dbPath);
-      if (openRc != BridgeError.ok) {
-        AppLogger().error('remoteSyncDb: 重开新库失败 rc=$openRc，尝试回滚 .bak');
-        _restoreBak(dbPath);
-        restored = true;
-        openRc = _openDb(dbPath);
-        if (openRc != BridgeError.ok) {
-          _deleteFile(tmpPath);
-          settingsCtrl.setError('数据库同步后无法打开数据库，请重启应用。');
-          return;
-        }
-      }
-
+      // 成功后：内容库已原子替换并重挂载，文本缓存失效重建；用户库/当前档案未动。
       _textRepo.loadTextCache();
-      _restoreActiveProfile();
-      _loadUser();
-      // db_replace 已合并用户表：已读集合/错题队列/档案列表/统计缓存全部失效重建
       _reloadUserScopedState();
-      if (restored) {
-        // 内容实际未同步（已回滚旧库）：不写冷却标记、不提示成功
-        AppLogger().warn('remoteSyncDb: 同步已回滚，恢复旧库');
-        settingsCtrl.setError('数据库同步失败，已恢复原数据。');
-        return;
-      }
     } finally {
       syncing.value = false;
     }
@@ -362,7 +387,7 @@ class AppCoordinator {
     // 检查失败/替换失败都不会走到这里：只有真正同步成功才冷却检查
     await _remoteDbSync!.markChecked();
     AppLogger().info('remoteSyncDb: 同步完成 $remoteVersion，用户数据已保留');
-    settingsCtrl.setNotice('数据已同步，学习进度已保留');
+    settingsCtrl.setNotice('内容已更新，学习进度已保留');
   }
 
   int _replaceDb(String newPath, String curPath) {
@@ -375,30 +400,6 @@ class AppCoordinator {
     return rc;
   }
 
-  int _openDb(String path) {
-    if (_bridge == null) return -1;
-    final cp = path.toNativeUtf8(allocator: calloc);
-    final rc = _bridge!.dbOpen(cp);
-    calloc.free(cp);
-    return rc;
-  }
-
-  /// 从 .bak 回滚数据库。同步文件操作：保证回滚在引擎关闭窗口内原子完成
-  /// （若为异步，await 间隙内引擎已关闭，用户交互的 FFI 调用会静默 NOT_INIT）
-  void _restoreBak(String dbPath) {
-    try {
-      final cur = File(dbPath);
-      final bak = File('$dbPath.bak');
-      if (bak.existsSync()) {
-        if (cur.existsSync()) cur.deleteSync();
-        bak.renameSync(dbPath);
-        AppLogger().info('remoteSyncDb: 已从 .bak 回滚数据库');
-      }
-    } catch (e) {
-      AppLogger().error('remoteSyncDb: .bak 回滚失败: $e');
-    }
-  }
-
   void _deleteFile(String path) {
     try {
       final f = File(path);
@@ -408,24 +409,14 @@ class AppCoordinator {
     }
   }
 
-  void setDbPathAfterSync(String path) {
-    _dbPathAfterSync = path;
+  void setContentPathAfterSync(String path) {
+    _contentPathAfterSync = path;
   }
 
   void initRemoteDbSync(SharedPreferences prefs, String dbDirPath,
       {RemoteDbSync? remoteDbSync}) {
     _prefs = prefs;
     _remoteDbSync = remoteDbSync ?? RemoteDbSync(prefs, dbDirPath);
-  }
-
-  /// db_replace 重开引擎后恢复上次档案（openDatabase 默认落在 id=1）
-  void _restoreActiveProfile() {
-    final saved = _prefs?.getInt('active_user_id');
-    if (saved == null || saved <= 0 || _bridge == null) return;
-    final rc = _bridge!.userSwitch(saved);
-    if (rc != BridgeError.ok) {
-      AppLogger().warn('remoteSyncDb: 恢复档案 $saved 失败 rc=$rc，回落默认档案');
-    }
   }
 
   void dispose() {

@@ -449,6 +449,22 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
     return BRIDGE_OK;
 }
 
+// ─── schema 版本查询（设置页数据状态展示） ─────────────────────────────────────
+
+extern "C" CHINESE_CORE_EXPORT int db_get_schema_versions(int* user_version,
+                                                          int* content_version)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized || !g_state.db || !g_state.db->getConnection()) {
+        return BRIDGE_ERR_NOT_INIT;
+    }
+    if (!user_version || !content_version) return BRIDGE_ERR_GENERIC;
+    *user_version = g_state.db->getUserVersion();
+    *content_version = pragmaUserVersion(g_state.db->getConnection(), "content");
+    if (*content_version < 0) return BRIDGE_ERR_DB_CONTENT;
+    return BRIDGE_OK;
+}
+
 // ─── user ──────────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)

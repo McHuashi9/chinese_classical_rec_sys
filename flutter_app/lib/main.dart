@@ -93,6 +93,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   static const _dbSyncInterval = Duration(hours: 24);
 
   bool _initialized = false;
+  String? _initError;
   int _pageIndex = 0;
   int _prevPageIndex = 0;
   bool _transitioning = false;
@@ -148,32 +149,55 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     } catch (e) {
       AppLogger().error('FFI load failed: $e');
       if (!mounted) return;
-      coord.settingsCtrl.setError('无法加载核心组件，请尝试重新安装。\n$e');
+      setState(() => _initError = '无法加载核心组件，请尝试重新安装。\n$e');
       return;
     }
-    final (dbPath, replaced) = await _resolveDbPath(NativeBridge.fromLib(lib));
+    final (contentPath, userPath, replaced) =
+        await _resolveDbPath(NativeBridge.fromLib(lib));
+    bool initOk;
     try {
-      await coord.init(dbPath, lib);
+      initOk = await coord.init(contentPath, userPath, lib);
     } catch (e) {
       AppLogger().error('数据库初始化失败: $e');
       if (!mounted) return;
-      coord.settingsCtrl.setError('无法加载核心组件，请尝试重新安装。\n$e');
+      setState(() => _initError = '无法加载核心组件，请尝试重新安装。\n$e');
+      return;
+    }
+    if (!initOk) {
+      if (!mounted) return;
+      setState(() => _initError = _dbOpenErrorMessage(coord.dbOpenErrorCode));
       return;
     }
     if (!mounted) return;
     if (replaced) {
       coord.settingsCtrl.setNotice('内容已更新，学习进度已保留');
     }
-    coord.setDbPathAfterSync(dbPath);
+    coord.setContentPathAfterSync(contentPath);
 
     final prefs = await SharedPreferences.getInstance();
-    final dbDir = File(dbPath).parent.path;
+    final dbDir = File(contentPath).parent.path;
     _dbDirPath = dbDir;
+    coord.setContentDataVersion(await _readLocalDbVersion());
     coord.initRemoteDbSync(prefs, dbDir);
     coord.activateSavedProfile();
     coord.getRecommendations(10);
     await coord.settingsCtrl.init(prefs, coord.bridge);
     _postInit(coord);
+  }
+
+  String _dbOpenErrorMessage(int? code) {
+    switch (code) {
+      case BridgeError.errDbContent:
+        return '内容库缺失或损坏，请重启应用。\n若持续出现，请重新安装。';
+      case BridgeError.errDbUser:
+        return '用户库缺失或损坏，请重启应用。\n若持续出现，请重新安装。';
+      case BridgeError.errDbVersion:
+        return '数据库版本不兼容，请更新应用或重新安装。';
+      case BridgeError.errDbSamePath:
+        return '内容库与用户库路径相同，请重启应用。';
+      default:
+        return '数据库打开失败，请重启应用。\n若持续出现，请重新安装。';
+    }
   }
 
   void _postInit(AppCoordinator coord) {
@@ -291,14 +315,23 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     } catch (_) {}
   }
 
-  Future<(String, bool)> _resolveDbPath(NativeBridge bridge) async {
+  Future<(String, String, bool)> _resolveDbPath(NativeBridge bridge) async {
     var replaced = false;
     try {
       final dir = await getApplicationSupportDirectory();
       final dbPath = '${dir.path}/classical.db';
+      final userPath = '${dir.path}/user.db';
       final verPath = '${dir.path}/db_version.txt';
       final dbFile = File(dbPath);
       final bakFile = File('${dir.path}/classical.db.bak');
+
+      // 用户库不复制 asset、不删除；由 C++ db_open 首次自动创建。
+      // 仅确保父目录存在（getApplicationSupportDirectory 通常已存在）。
+      try {
+        if (!await File(userPath).parent.exists()) {
+          await File(userPath).parent.create(recursive: true);
+        }
+      } catch (_) {}
 
       // 清理上次会话中断残留的同步中间文件（L4）
       try {
@@ -352,10 +385,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           } catch (_) {}
         }
       }
-      return (dbPath, replaced);
+      return (dbPath, userPath, replaced);
     } catch (e) {
       AppLogger().warn('_resolveDbPath 失败: $e，回退到相对路径');
-      return ('../data/classical.db', false);
+      return ('../data/classical.db', '../data/user.db', false);
     }
   }
 
@@ -633,7 +666,38 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildFatalError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline,
+                size: 56, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+            Text('启动失败', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => SystemNavigator.pop(),
+              child: const Text('退出应用'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
+    if (_initError != null) {
+      return _buildFatalError(_initError!);
+    }
     if (!_initialized) {
       return const Center(child: CircularProgressIndicator());
     }

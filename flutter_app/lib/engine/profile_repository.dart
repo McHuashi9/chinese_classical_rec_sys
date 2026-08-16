@@ -18,6 +18,7 @@ abstract class ProfileRepository {
   List<UserProfile> listProfiles();
   int activeUserId();
   int? createProfile(String name);
+  int? createProfileInherit(String name, int sourceId);
   bool switchProfile(int id);
   bool renameProfile(int id, String name);
   bool deleteProfile(int id);
@@ -59,6 +60,14 @@ class FfiProfileRepository implements ProfileRepository {
   int? createProfile(String name) {
     final ptr = name.toNativeUtf8(allocator: calloc);
     final rc = _bridge.userCreate(ptr);
+    calloc.free(ptr);
+    return rc > 0 ? rc : null;
+  }
+
+  @override
+  int? createProfileInherit(String name, int sourceId) {
+    final ptr = name.toNativeUtf8(allocator: calloc);
+    final rc = _bridge.userCreateInherit(ptr, sourceId);
     calloc.free(ptr);
     return rc > 0 ? rc : null;
   }
