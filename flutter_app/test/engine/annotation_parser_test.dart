@@ -326,5 +326,75 @@ void main() {
       expect(sel.baseOffset, 3);
       expect(sel.extentOffset, 6);
     });
+
+    test('译文零宽标记存在时 selection 返回渲染偏移（R3/R4）', () {
+      const mark = TranslationBuilder.mark;
+      const page = '原文$mark译文$mark〔5〕尾';
+      final sel = AnnotatedTextBuilder.markerSelection(page, 5);
+      expect(sel.baseOffset, 4);
+      expect(sel.extentOffset, 7);
+    });
+  });
+
+  group('AnnotatedTextBuilder 译文分页边界（R3/R4）', () {
+    const mark = TranslationBuilder.mark;
+    final baseStyle = AppTheme.bodyReadingSize(ScreenSize.medium, 1.0);
+
+    test('paintedToRawOffset 跳过零宽标记', () {
+      const page = '原文$mark译文$mark尾';
+      expect(AnnotatedTextBuilder.paintedToRawOffset(page, 0), 0);
+      expect(AnnotatedTextBuilder.paintedToRawOffset(page, 2), 2);
+      expect(AnnotatedTextBuilder.paintedToRawOffset(page, 3), 4);
+      expect(AnnotatedTextBuilder.paintedToRawOffset(page, 5), 7);
+    });
+
+    test('rawToPaintedOffset 扣除零宽标记', () {
+      const page = '原文$mark译文$mark尾';
+      expect(AnnotatedTextBuilder.rawToPaintedOffset(page, 0), 0);
+      expect(AnnotatedTextBuilder.rawToPaintedOffset(page, 2), 2);
+      expect(AnnotatedTextBuilder.rawToPaintedOffset(page, 4), 3);
+      expect(AnnotatedTextBuilder.rawToPaintedOffset(page, 6), 4);
+      expect(AnnotatedTextBuilder.rawToPaintedOffset(page, 7), 5);
+    });
+
+    test('translationActive=true 时页首无标记的续段仍为译文样式', () {
+      final span = AnnotatedTextBuilder.build(
+        '续译$mark原文',
+        {},
+        baseStyle,
+        translationActive: true,
+      );
+      final children = span.children!;
+      expect(children.length, 2);
+      final trans = children[0] as TextSpan;
+      expect(trans.text, '续译');
+      expect(trans.style!.color, AppTheme.stoneGreen);
+      final plain = children[1] as TextSpan;
+      expect(plain.text, '原文');
+      expect(plain.style, isNull);
+    });
+
+    test('translationActive=true 且页首为闭合标记时后续为原文样式', () {
+      final span = AnnotatedTextBuilder.build(
+        '$mark原文',
+        {},
+        baseStyle,
+        translationActive: true,
+      );
+      expect(span.toPlainText(), '原文');
+      expect((span.children!.single as TextSpan).style, isNull);
+    });
+
+    test('译文模式点击偏移可映射回原始页串（R3）', () {
+      const page = '原文$mark译文〔5〕尾$mark后';
+      // 渲染文本：原文译文〔5〕尾后；marker 前有 2 个零宽标记
+      final rawMarkerStart = page.indexOf('〔5〕');
+      final paintedStart =
+          AnnotatedTextBuilder.rawToPaintedOffset(page, rawMarkerStart);
+      expect(paintedStart, 4);
+      final rawBack =
+          AnnotatedTextBuilder.paintedToRawOffset(page, paintedStart);
+      expect(rawBack, rawMarkerStart);
+    });
   });
 }

@@ -28,6 +28,15 @@ class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  int? createProfileInherit(String name, int sourceId) {
+    if (failCreate) return null;
+    final id = nextId++;
+    profiles.add(UserProfile(
+        id: id, name: name, createdAt: 1000 + id, lastUsedAt: 2000 + id));
+    return id;
+  }
+
+  @override
   bool switchProfile(int id) {
     if (!profiles.any((p) => p.id == id)) return false;
     activeId = id;
@@ -103,6 +112,20 @@ void main() {
       ctrl.refreshProfiles();
       expect(ctrl.createProfile('   '), isNull);
       expect(ctrl.createProfile('长' * 100), isNull);
+    });
+
+    test('createInheritedProfile 创建继承档案并刷新列表', () {
+      ctrl.refreshProfiles();
+      final id = ctrl.createInheritedProfile('继承者', 1);
+      expect(id, 2);
+      expect(ctrl.profiles.length, 2);
+      expect(ctrl.profiles.last.name, '继承者');
+    });
+
+    test('createInheritedProfile 非法名称返回 null', () {
+      ctrl.refreshProfiles();
+      expect(ctrl.createInheritedProfile('   ', 1), isNull);
+      expect(ctrl.createInheritedProfile('长' * 100, 1), isNull);
     });
 
     test('renameProfile 更新列表中的档案名', () {

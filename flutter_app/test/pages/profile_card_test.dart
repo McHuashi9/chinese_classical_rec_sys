@@ -35,6 +35,14 @@ class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  int? createProfileInherit(String name, int sourceId) {
+    final id = nextId++;
+    profiles.add(UserProfile(
+        id: id, name: name, createdAt: id, lastUsedAt: id + 10));
+    return id;
+  }
+
+  @override
   bool switchProfile(int id) {
     if (!profiles.any((p) => p.id == id)) return false;
     activeId = id;
@@ -143,6 +151,14 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '小红');
     await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    // 新档案二选一：选“继承已有档案”可避免进入初始化流程
+    expect(find.text('新档案初始化方式'), findsOneWidget);
+    await tester.tap(find.text('继承已有档案'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择要继承的档案'), findsOneWidget);
+    await tester.tap(find.text('默认用户').last);
     await tester.pumpAndSettle();
 
     expect(find.text('小红'), findsOneWidget);

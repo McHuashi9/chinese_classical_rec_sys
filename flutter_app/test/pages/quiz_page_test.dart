@@ -168,6 +168,30 @@ void main() {
     expect(find.text('下一题'), findsOneWidget);
   });
 
+  testWidgets('新题型 badge：虚词/断句显示中文文案', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+    _writeStr(questions[0].ptr.ref.qType, 'xuci');
+    _writeStr(questions[1].ptr.ref.qType, 'duanju');
+
+    await tester.pumpWidget(_wrap(QuizPage(
+      articleTitle: '新题型',
+      questions: questions,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('虚词'), findsOneWidget);
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    expect(find.text('断句'), findsOneWidget);
+  });
+
   testWidgets('带原句题目：题干下渲染划线句并高亮目标词', (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1.0;
