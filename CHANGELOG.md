@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-16
+
+### Fixed
+
+- **修复 Windows 首次启动数据库打不开**：Windows 下新建的 `user.db` 与内容库 `classical.db` 编码不一致，导致内容库挂载失败；现已统一为 UTF-8 编码。已受影响的用户需要删除一次应用数据目录（`C:\Users\<用户名>\AppData\Roaming\com.example\chinese_classical_rec_sys`）后重新启动。
+
 ## [1.0.0] - 2026-08-16
 
 ### 注意
@@ -437,3 +443,4 @@ C++ CLI 原型。
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
 [1.0.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.0
+[1.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.1
