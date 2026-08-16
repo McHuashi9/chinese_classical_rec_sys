@@ -38,12 +38,81 @@ FEATURE_KEYS = ["f1_avg_sentence_length", "f3_sentence_count", "f5_function_word
                 "f6_avg_char_log_freq", "f8_tongjiazi_density", "f9_ppl_ancient",
                 "f10_ppl_modern", "f11_mattr", "f12_allusion_density", "f13_semantic_complexity"]
 
-# 题型 → 维度（论文表 tab:question_mapping）；d8/d9 无对应题型
+# 题型 → 维度（0-based，论文表 tab:question_mapping）
 TYPE_DIMS = {
     "shici": [3, 4, 9],      # 字词解释 → d4, d5, d10
     "tongjia": [4],          # 通假字还原 → d5
     "fanyi": [5, 6, 9],      # 文白翻译 → d6, d7, d10
+    "xuci": [2],             # 虚词词性 → d3 虚词比例
+    "duanju": [0, 1, 2],     # 断句 → d1 句长 / d2 句数 / d3 虚词比例
 }
+
+FUNCTION_WORDS_FILE = Path(__file__).resolve().parents[2] / "data" / "function_words.json"
+_FUNCTION_WORDS_FALLBACK_JSON = r'''{
+  "comment": "文言虚词表（缩减版）- 仅收录核心虚词，保留所有兼类词",
+  "description": "当词的词性不在其允许列表中时，表示该词作为实词使用，不计入虚词统计",
+  "pos_meaning": {
+    "u": "助词",
+    "p": "介词",
+    "c": "连词",
+    "y": "语气词",
+    "e": "叹词"
+  },
+  "words": {
+    "之": ["u"],
+    "者": ["u"],
+    "所": ["u"],
+    "矣": ["u", "y"],
+    "焉": ["u", "y"],
+    "耳": ["u", "y"],
+    "尔": ["u", "y"],
+    "诸": ["u"],
+    "兮": ["y"],
+    "乎": ["u", "p"],
+    "于": ["p"],
+    "於": ["p"],
+    "以": ["p", "c"],
+    "为": ["p"],
+    "与": ["p", "c"],
+    "自": ["p"],
+    "从": ["p"],
+    "因": ["p", "c"],
+    "及": ["p", "c"],
+    "而": ["c"],
+    "则": ["c"],
+    "虽": ["c"],
+    "若": ["p", "c"],
+    "如": ["p", "c"],
+    "故": ["c"],
+    "况": ["c"],
+    "且": ["c"],
+    "纵": ["c"],
+    "即": ["c"],
+    "然": ["c", "y"],
+    "乃": ["c"],
+    "遂": ["c"],
+    "既": ["c"],
+    "复": ["c"],
+    "又": ["c"],
+    "犹": ["c"],
+    "也": ["u", "y"],
+    "哉": ["y"],
+    "邪": ["y"],
+    "耶": ["y"],
+    "夫": ["u", "y", "c"],
+    "盖": ["u", "c"],
+    "噫": ["e"],
+    "呜呼": ["e"],
+    "嗟乎": ["e"]
+  }
+}'''
+try:
+    _FW_DATA = json.loads(FUNCTION_WORDS_FILE.read_text(encoding="utf-8"))
+except FileNotFoundError:
+    print("警告: data/function_words.json 缺失，使用内置虚词表")
+    _FW_DATA = json.loads(_FUNCTION_WORDS_FALLBACK_JSON)
+POS_MEANING = _FW_DATA["pos_meaning"]
+FUNCTION_WORDS = _FW_DATA["words"]
 
 
 def percentile_normalize(features: dict, lower_pct: int = 2, upper_pct: int = 98) -> dict:
@@ -210,6 +279,19 @@ def extract_context(art: dict, num: int, head: str) -> dict:
     return {"context": clean, "mark_start": mark_start, "mark_len": len(head)}
 
 
+def _strip_tail_punct(s: str) -> str:
+    """去掉字符串末尾的句读标点，避免解析里出现“正确答案：X。。原文”"""
+    return re.sub(r"[。！？；，]+$", "", s)
+
+
+def _format_explanation(correct: str, item_text: str) -> str:
+    """拼解析：correct 自带句末标点时不再额外加句号，避免“。。”"""
+    tail = _strip_tail_punct(item_text)
+    if correct.endswith(("。", "！", "？", "；", "，")):
+        return f"正确答案：{correct}{tail}"
+    return f"正确答案：{correct}。{tail}"
+
+
 def gen_shici(art: dict, items: list) -> list:
     """实词解释：正确释义 + 同篇其他词头释义（张冠李戴式干扰项）"""
     qs = []
@@ -240,7 +322,7 @@ def gen_shici(art: dict, items: list) -> list:
             "options": [correct] + distractors,
             "answer": correct,
             # 解析前拼正确答案文本：结果页答错时也能看到正确答案（判题仍只在 C++ 侧）
-            "explanation": f"正确答案：{correct}。{item['text']}",
+            "explanation": _format_explanation(correct, item["text"]),
             **extract_context(art, item["num"], item["head"]),
         })
     return qs
@@ -432,7 +514,7 @@ def gen_tongjia(art: dict, items: list, mat: TongjiaMaterial) -> list:
             "stem": f"下列句中划线字“{word}”的本字，正确的一项是",
             "options": options,
             "answer": zhengzi,
-            "explanation": f"正确答案：{zhengzi}。{item['text']}",
+            "explanation": _format_explanation(zhengzi, item["text"]),
             **extract_context(art, item["num"], word),
         }
         # 换质失败回退①（用已消费的 old_sample，不额外消耗随机流；回退后仍不过才跳过）
@@ -555,6 +637,374 @@ def clean_markers(s: str) -> str:
     return s.strip()
 
 
+# ─── 虚词题（xuci）─────────────────────────────────────────────────────────────
+
+_PUNCT_CHARS = "。！？；，、：\"“”‘’《》〈〉（）()「」『』…—·\n\r\t "
+
+# 常用文言动词（单字），用于“为/与/自”等介词/实词判据的粗粒度启发
+_COMMON_VERBS = set(
+    "有无见闻知欲使令攻守治事待报应答示告语言行进退取舍得失助救护爱好恶喜怒哀乐"
+    "求取予让责劝诫勉励观赏听闻视望顾瞻仰俯坐起入出来去归返还至到过临登"
+    "食饮衣冠佩带执持把捉拿放立卧行止居处动作作为制作修撰书写读诵讲论议说"
+    "称谓号立为谓云曰同如若似类犹称使教令遣率将领引导从就断"
+    "存盛绩泛耕织读诵惧恐畏患"
+)
+
+_PLACE_HEADS = set(
+    "天地古今此是秦楚齐鲁燕赵魏韩宋卫郑晋吴越江河山海域城国家门户庭堂室宫殿府县道路乡里村野郊关塞边境"
+    "内外上下左右前后东西南北中间时日月年岁春夏秋冬朝暮旦夕夜昼昔往垄陂泽渊谷陵丘原隰洲渚"
+)
+
+def _is_punct(ch: str) -> bool:
+    return not ch or ch in _PUNCT_CHARS or not ("\u4e00" <= ch <= "\u9fff")
+
+
+def _has_verb_before_punct(s: str) -> bool:
+    """在下一个句读前是否出现常用动词（粗粒度）"""
+    for ch in s:
+        if ch in "。！？；，、":
+            break
+        if ch in _COMMON_VERBS:
+            return True
+    return False
+
+
+def clean_original_text(art: dict) -> str:
+    """去掉原文中的〔n〕注释标记，保留句读标点"""
+    return re.sub(r"〔\d+〕", "", art["original"])
+
+
+def extract_word_context_at(sent: str, word: str, start: int) -> dict | None:
+    """从已去标记的句子中提取上下文与划线偏移（与 extract_context 的清洗风格一致）"""
+    if not 0 <= start <= len(sent) - len(word):
+        return None
+    clean = sent.strip()
+    lead = len(sent) - len(sent.lstrip())
+    start -= lead
+    clean = clean[lead:].rstrip()
+    quotes = "\u201c\u201d\u2018\u2019\""
+    new_lead = len(clean) - len(clean.lstrip(quotes))
+    new_tail = len(clean) - len(clean.rstrip(quotes))
+    clean = clean[new_lead:len(clean) - new_tail]
+    start -= new_lead
+    if not 0 <= start <= len(clean) - len(word):
+        return None
+    return {"context": clean, "mark_start": start, "mark_len": len(word)}
+
+
+def _infer_xuci_one(sent: str, word: str, allowed: list, i: int) -> str | None:
+    """对单个出现位置推断词性；返回 POS code 或 '实词'，无法判断返回 None"""
+    nxt = sent[i + len(word)] if i + len(word) < len(sent) else ""
+    prev = sent[i - 1] if i > 0 else ""
+    at_end = _is_punct(nxt)
+    at_start = i == 0 or _is_punct(prev)
+    after = sent[i + len(word):]
+
+    if word == "之":
+        if prev in _COMMON_VERBS and (at_end or nxt in _COMMON_VERBS or nxt in "至甚益愈尤颇亦又且而"):
+            return "实词"          # V之（代词宾语）/ 思之至深
+        if at_end:
+            return "实词"          # V之 → 代词宾语
+        if nxt in _PLACE_HEADS and prev in _COMMON_VERBS:
+            return "实词"          # V之+地名 → 往/到（动词）
+        if prev and nxt and not _is_punct(prev) and not _is_punct(nxt):
+            return "u"             # N之N / N之V 结构助词
+        return None
+    if word == "者":
+        return "u"
+    if word == "所":
+        if at_end:
+            return "实词"          # 处所
+        return "u"
+    if word == "诸":
+        if nxt in "侯大夫臣子人君公王将相吏民国事家邦苗夷":
+            return "实词"          # 诸侯/诸大夫/诸苗夷 → 众
+        return "u"                 # 投诸… → 之于（兼词，按表作助词）
+    if word == "兮":
+        return "y"
+    if word == "乎":
+        if at_end:
+            return "y"
+        if nxt in _PLACE_HEADS or nxt in "礼义道德仁智勇":
+            return "p"             # 乎+处所/对象 → 介词
+        return None                # 况乎/凛乎等词尾或语气，宁缺毋滥
+    if word in ("于", "於"):
+        return "p" if not at_end else None
+    if word == "为":
+        if "以为" in sent[max(0, i - 1):i + 2]:
+            return "实词"          # 以为 → 认为/作为
+        if "所" in after[:10] or after.startswith("而"):
+            return "p"             # 为…所 / 为…而
+        if at_end:
+            return "实词"
+        head = re.split(r"[，。！？；]", after, maxsplit=1)[0]
+        if "之" in head:
+            return "p"             # 为+名词+之 → 为了/对于
+        if _has_verb_before_punct(after):
+            return "p"             # 为+宾语+动词 → 介词
+        if nxt and not _is_punct(nxt):
+            return "实词"          # 为+名词且后无动词 → 成为/做
+        return None
+    if word == "自":
+        if after.startswith("以"):
+            return "实词"          # 自以为 → 自己
+        if nxt in _PLACE_HEADS:
+            return "p"             # 自+地点/时间
+        if nxt and nxt in _COMMON_VERBS:
+            return "实词"          # 自+动词 → 自己
+        if not at_end:
+            return "p"
+        return None
+    if word == "从":
+        if nxt in "其之命令言谏计策人臣民":
+            return "实词"          # 听从/跟从
+        if nxt in _PLACE_HEADS:
+            return "p"             # 从+地点/时间
+        if nxt and nxt in _COMMON_VERBS:
+            return "实词"          # 从+动词 → 跟从
+        if not at_end:
+            return "p"
+        return None
+    if word in ("而", "则", "虽", "况", "且", "纵", "乃", "遂", "既", "复", "又", "犹"):
+        if word == "故" and prev in "其之何无有是此":
+            return "实词"          # 缘故
+        if word == "即" and nxt in "位帝王政事":
+            return "实词"          # 即位/即政
+        if word == "乃" and nxt in "父兄母祖":
+            return "实词"          # 乃父/乃兄 → 你的
+        if word == "犹" and nxt and not _is_punct(nxt):
+            if nxt in "不且将尚有以未能或" or nxt in _COMMON_VERBS:
+                return "c"         # 犹且/犹尚/犹有/犹以/犹+动词 → 还/尚且/仍然
+            return "实词"          # 犹+名词 → 如同
+        if word == "复" and prev == "重":
+            return None            # 重复（复合词）
+        if word == "复" and nxt in "仇雠国位政礼业":
+            return "实词"
+        if word == "遂" and nxt in "意志愿":
+            return "实词"
+        return "c"
+    if word in ("哉", "邪", "耶"):
+        return "y" if at_end else None
+    if word in ("噫", "呜呼", "嗟乎"):
+        return "e"
+    if word in ("矣", "也"):
+        return "y" if at_end else None
+    if word == "焉":
+        return "y" if at_end else "实词"
+    if word == "耳":
+        return "y" if at_end else None
+    if word == "尔":
+        return "y" if at_end else None
+    if word == "以":
+        if sent[max(0, i - 1):i] in "所可足何":
+            return "p"             # 所以/可以/足以/何以
+        if at_end:
+            return None
+        if nxt in _COMMON_VERBS:
+            return "c"             # 以+动词 → 连词（来/以便）
+        if _has_verb_before_punct(after):
+            return "p"             # 以+名词+动词 → 介词（用/拿/因为）
+        return "p"
+    if word == "与":
+        if _has_verb_before_punct(after):
+            return "p"             # 与+宾语+动词 → 跟/和（介词）
+        if nxt in "其之此是我汝尔人臣子君父兄弟朋友国家诸侯秦汉楚燕赵魏韩":
+            return "p"             # 与+名词/代词 → 介词（跟）
+        if prev and nxt and prev not in _COMMON_VERBS and nxt not in _COMMON_VERBS:
+            return "c"             # 名词+与+名词 → 和（连词）
+        if at_start:
+            return "c"             # 连接分句 → 连词
+        return "实词"              # 参与/给/结交
+    if word == "因":
+        if at_start and nxt in "而则":
+            return "c"
+        if nxt and not _is_punct(nxt):
+            return "p"
+        return None
+    if word == "及":
+        if at_start:
+            return "p"             # 及+时间/事件 → 等到（介词）
+        if _has_verb_before_punct(after):
+            return "c"             # 连接动词性成分 → 连词
+        if nxt and not _is_punct(nxt):
+            return "p"
+        return None
+    if word == "若":
+        if at_start and nxt in "夫使令有人":
+            return "c"             # 若夫/若使/若令
+        if nxt in "是其之人此":
+            return "实词"          # 像/如同/此
+        if nxt and not _is_punct(nxt):
+            return "p"
+        return None
+    if word == "如":
+        if prev == "相":
+            return None            # 相如（人名）
+        if prev in "莫不":
+            return "实词"          # 莫如/不如 → 比得上
+        if nxt in "是此其":
+            return "实词"          # 如同
+        if at_start:
+            return "c"
+        if nxt and not _is_punct(nxt):
+            return "p"
+        return None
+    if word == "然":
+        if at_start and nxt in "后则而":
+            return "c"             # 然后/然则/然而
+        if prev in "以不虽宜当必固诚果":
+            return "实词"          # 以为然/不然/虽然/宜然/当然 → 这样/正确
+        if at_end:
+            return "y"
+        if nxt in "也矣乎":
+            return "y"
+        return None                # “X然”词尾等难以规则判定，宁缺毋滥
+    if word == "夫":
+        if nxt == "差" or prev == "大":
+            return None            # 夫差（人名）/ 大夫（职官名），不单独作虚词
+        if prev == "且":
+            return "u"             # 且夫 → 发语词
+        if at_start:
+            return "u"             # 发语词
+        if at_end:
+            return "y"
+        return "实词"              # 那/人
+    if word == "盖":
+        if at_start:
+            return "c"
+        return "u"
+    return None
+
+
+def _xuci_pos_label(pos: str) -> str:
+    return POS_MEANING.get(pos, pos)  # '实词' 原样返回
+
+
+def gen_xuci(art: dict, xuci_counts: dict) -> list:
+    """虚词词性判断：单词性主池 + 多词性规则判据；实词用法也可作正确答案"""
+    qs = []
+    text = clean_original_text(art)
+    sentences = [s.strip() for s in re.split(r"[。！？\n]+", text) if s.strip()]
+    for word, allowed in FUNCTION_WORDS.items():
+        if xuci_counts.get(word, 0) >= 30:
+            continue
+        done = False
+        for sent in sentences:
+            if done:
+                break
+            if word not in sent:
+                continue
+            for m in re.finditer(re.escape(word), sent):
+                pos = _infer_xuci_one(sent, word, allowed, m.start())
+                if pos is None:
+                    continue
+                if pos != "实词" and pos not in allowed:
+                    continue
+                ctx = extract_word_context_at(sent, word, m.start())
+                if ctx is None:
+                    continue
+                correct = _xuci_pos_label(pos)
+                pool = sorted(set(POS_MEANING.values()) | {"实词"} - {correct})
+                if len(pool) < 3:
+                    continue
+                distractors = random.sample(pool, 3)
+                qs.append({
+                    "type": "xuci", "dims": TYPE_DIMS["xuci"],
+                    "stem": f"下列句中加点词“{word}”的词性，正确的一项是",
+                    "options": [correct] + distractors,
+                    "answer": correct,
+                    "explanation": f"正确答案：{correct}。{word}在句中作{correct}。",
+                    **ctx,
+                })
+                xuci_counts[word] = xuci_counts.get(word, 0) + 1
+                done = True
+                break
+    return qs
+
+
+# ─── 断句题（duanju）───────────────────────────────────────────────────────────
+
+_DUANJU_BREAK_RE = re.compile(r"([。，；？！])")
+
+
+def _apply_slashes(stem: str, boundaries: set) -> str:
+    out = []
+    prev = 0
+    for b in sorted(boundaries):
+        out.append(stem[prev:b])
+        out.append("/")
+        prev = b
+    out.append(stem[prev:])
+    return "".join(out)
+
+
+def _ambiguous_boundaries(stem: str) -> set:
+    """候选断点：虚词/连词前后等歧义位置（去掉句首/句尾）"""
+    cand = set()
+    for word in FUNCTION_WORDS:
+        for m in re.finditer(re.escape(word), stem):
+            p = m.start()
+            if 0 < p < len(stem):
+                cand.add(p)
+            after = p + len(word)
+            if 0 < after < len(stem):
+                cand.add(after)
+    return cand
+
+
+def gen_duanju(art: dict) -> list:
+    """断句选择式：纯汉字题干 + 4 个斜杠断句选项；每篇 1 题，固定 3 个 /"""
+    text = clean_original_text(art)
+    parts = _DUANJU_BREAK_RE.split(text)
+    segments = []
+    for i in range(0, len(parts), 2):
+        seg = re.sub(r"[^\u4e00-\u9fff]", "", parts[i])
+        if seg:
+            segments.append(seg)
+
+    for i in range(len(segments) - 3):
+        frag = segments[i:i + 4]
+        stem = "".join(frag)
+        if not 15 <= len(stem) <= 40:
+            continue
+        boundaries = set()
+        acc = 0
+        for seg in frag[:3]:
+            acc += len(seg)
+            boundaries.add(acc)
+        correct = _apply_slashes(stem, boundaries)
+        candidates = _ambiguous_boundaries(stem) - boundaries
+        if not candidates:
+            continue
+        distractors = []
+        attempts = 0
+        while len(distractors) < 3 and attempts < 200:
+            attempts += 1
+            k = random.choice((1, 2))
+            remove = set(random.sample(sorted(boundaries), k))
+            add_pool = [b for b in candidates if b not in remove]
+            if len(add_pool) < k:
+                continue
+            add = set(random.sample(add_pool, k))
+            new_b = (boundaries - remove) | add
+            if len(new_b) != 3 or new_b == boundaries:
+                continue
+            option = _apply_slashes(stem, new_b)
+            if option not in distractors and option != correct:
+                distractors.append(option)
+        if len(distractors) != 3:
+            continue
+        q = {
+            "type": "duanju", "dims": TYPE_DIMS["duanju"],
+            "stem": f"下列断句正确的一项是\n{stem}",
+            "options": [correct] + distractors,
+            "answer": correct,
+            "explanation": f"正确答案：{correct}。",
+        }
+        return [q]
+    return []
+
+
 def validate(q: dict) -> bool:
     """规则校验（借鉴 CCL 2025 三重校验的规则版）"""
     opts = q["options"]
@@ -604,9 +1054,12 @@ def main():
                 global_zhengzi.add(m.group(1))
     mat = TongjiaMaterial(global_zhengzi, corpus_chars)
 
+    # 虚词题全库每词上限（Phase 4 定稿：每词每篇 ≤1，全库每词 ≤30）
+    xuci_counts = {}
+
     if args.sample:
-        # 分层抽样：保证样本含通假/翻译题篇目，其余随机补足
-        has_tj, has_fy = set(), set()
+        # 分层抽样：保证样本含通假/翻译/虚词/断句题篇目，其余随机补足
+        has_tj, has_fy, has_xu, has_dj = set(), set(), set(), set()
         for f in files:
             a = parse_article(f)
             it = parse_annotations(a["annotations_raw"])
@@ -614,11 +1067,19 @@ def main():
                 has_tj.add(f)
             if gen_fanyi(a, it, sent_pool):
                 has_fy.add(f)
+            if gen_xuci(a, {}):
+                has_xu.add(f)
+            if gen_duanju(a):
+                has_dj.add(f)
         picked = set()
         if has_tj:
             picked |= set(random.sample(sorted(has_tj), min(3, len(has_tj))))
         if has_fy:
             picked |= set(random.sample(sorted(has_fy - picked), min(5, len(has_fy - picked))))
+        if has_xu:
+            picked |= set(random.sample(sorted(has_xu - picked), min(3, len(has_xu - picked))))
+        if has_dj:
+            picked |= set(random.sample(sorted(has_dj - picked), min(3, len(has_dj - picked))))
         rest = random.sample([f for f in files if f not in picked], max(0, args.sample - len(picked)))
         files = list(picked) + rest
 
@@ -629,15 +1090,18 @@ def main():
         qs += gen_shici(art, items)
         qs += gen_tongjia(art, items, mat)
         qs += gen_fanyi(art, items, sent_pool)
+        qs += gen_xuci(art, xuci_counts)
+        qs += gen_duanju(art)
         for q in qs:
             random.shuffle(q["options"])  # 答案位置随机化（answer 为文本值，不受影响）
         qs = [q for q in qs if validate(q)]
-        stats[art["title"]] = {t: sum(1 for q in qs if q["type"] == t) for t in ("shici", "tongjia", "fanyi")}
+        stats[art["title"]] = {t: sum(1 for q in qs if q["type"] == t)
+                               for t in ("shici", "tongjia", "fanyi", "xuci", "duanju")}
         # 篇内序号 + 标题关联 + 论文难度 D_q = Σw_j·d̂_j / Σw_j
         feat = features.get(art["title"], features.get(art["title_fallback"], {}))
         dhat = [feat.get(k, 0.5) for k in FEATURE_KEYS]
         for i, q in enumerate(qs):
-            q["seq"] = i  # 篇内序号（shici → tongjia → fanyi，引文顺序）
+            q["seq"] = i  # 篇内序号（shici → tongjia → fanyi → xuci → duanju，引文顺序）
             q["title"], q["author"], q["source"] = art["title"], art["author"], art["source"]
             ws = [CRITIC_WEIGHTS[j] for j in q["dims"]]
             q["difficulty"] = round(sum(w * dhat[j] for w, j in zip(ws, q["dims"])) / sum(ws), 3)
@@ -671,9 +1135,9 @@ def main():
     for q in all_qs:
         by_type.setdefault(q["type"], []).append(q)
     print(f"总题数 {len(all_qs)} | 覆盖篇数 {sum(1 for v in stats.values() if any(v.values()))}/{len(files)}")
-    for t in ("shici", "tongjia", "fanyi"):
+    for t in ("shici", "tongjia", "fanyi", "xuci", "duanju"):
         print(f"  {t}: {len(by_type.get(t, []))} 题")
-    for t in ("shici", "tongjia"):
+    for t in ("shici", "tongjia", "xuci"):
         sub = [q for q in all_qs if q["type"] == t]
         covered = sum(1 for q in sub if q["context"])
         print(f"  {t} 带原句(划线): {covered}/{len(sub)}")
