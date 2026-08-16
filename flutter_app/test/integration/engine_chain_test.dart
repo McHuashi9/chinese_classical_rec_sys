@@ -9,11 +9,14 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
@@ -343,6 +346,62 @@ void main() {
       // 重复切换同一档案：幂等成功；切换不存在/已删档案：失败
       expect(coord.switchProfile(1), isTrue);
       expect(coord.switchProfile(9999), isFalse);
+    });
+  });
+
+  group('AppCoordinator 远程同步失败路径（R1）', () {
+    test('db_replace 失败后恢复当前档案，不跨档案污染', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final lib = _tryLoadLibrary();
+      if (lib == null) {
+        markTestSkipped('未找到 libchinese_core.so，先执行 cmake --build build');
+        return;
+      }
+      final work = Directory.systemTemp.createTempSync('engine_chain_sync_fail');
+      _copyAssetDb('${work.path}/classical.db');
+      final dbPath = '${work.path}/classical.db';
+
+      final coord = AppCoordinator(
+        navCtrl: NavigationController(),
+        settingsCtrl: SettingsController(),
+        readingCtrl: ReadingController(ReadTracker()),
+        userCtrl: UserController(),
+        readTracker: ReadTracker(),
+      );
+      addTearDown(() {
+        coord.dispose();
+        try {
+          work.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+
+      expect(await coord.init(dbPath, lib), isTrue);
+
+      // 切到小明，并让 prefs 记住当前档案
+      final id = coord.createProfile('小明');
+      expect(id, isNotNull);
+      expect(coord.switchProfile(id!), isTrue);
+      await prefs.setInt('active_user_id', id);
+      expect(coord.userCtrl.activeProfileName, '小明');
+
+      // MockClient 下载一个非 SQLite 的 tmp 文件，db_replace 必然失败
+      final sync = RemoteDbSync(prefs, work.path,
+          client: MockClient((_) async => http.Response('not a sqlite db', 200)));
+      coord.setDbPathAfterSync(dbPath);
+      coord.initRemoteDbSync(prefs, work.path, remoteDbSync: sync);
+
+      await coord.remoteSyncDb(
+        remoteVersion: '20990101-deadbeef',
+        downloadUrl: 'http://example.com/classical.db',
+      );
+
+      // 失败后引擎与内存都应恢复为小明，而不是默认档案 1
+      expect(coord.userCtrl.activeUserId, id);
+      expect(coord.userCtrl.activeProfileName, '小明');
+      expect(FfiProfileRepository(coord.bridge!).activeUserId(), id);
+      expect(coord.settingsCtrl.error, contains('数据库同步失败'));
     });
   });
 }

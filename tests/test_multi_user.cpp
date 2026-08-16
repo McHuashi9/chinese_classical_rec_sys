@@ -301,3 +301,40 @@ TEST_CASE("多用户 - db_replace 整库替换保留全部档案数据", "[multi
 
     db_close();
 }
+
+TEST_CASE("多用户 - 能力全 0 但有学习痕迹的档案不被重置为默认", "[multi_user]") {
+    db_close();
+    const std::string work = makeWorkDb("mu_zero_keep");
+    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+
+    // 新档案首次切换会初始化默认 0.3
+    const int id2 = user_create("差生档案");
+    REQUIRE(id2 > 1);
+    REQUIRE(user_switch(id2) == BRIDGE_OK);
+    UserData u;
+    REQUIRE(user_load(&u) == BRIDGE_OK);
+    REQUIRE(u.base_abilities[0] == Catch::Approx(0.3));
+
+    // 模拟真实差生：能力被负增量打到全 0，但基础能力/答题痕迹/阅读时间仍在
+    for (int i = 0; i < 10; ++i) {
+        u.abilities[i] = 0.0;
+        u.base_abilities[i] = 0.3;
+        u.quiz_counts[i] = 1;
+    }
+    u.eta = 0.08;
+    u.last_read_time = 1700000000LL;
+    REQUIRE(user_save(&u) == BRIDGE_OK);
+
+    // 切回默认再切回：不得因平均能力为 0 被静默重置
+    REQUIRE(user_switch(1) == BRIDGE_OK);
+    REQUIRE(user_switch(id2) == BRIDGE_OK);
+    REQUIRE(user_load(&u) == BRIDGE_OK);
+    for (int i = 0; i < 10; ++i) {
+        REQUIRE(u.abilities[i] == Catch::Approx(0.0));
+        REQUIRE(u.base_abilities[i] == Catch::Approx(0.3));
+        REQUIRE(u.quiz_counts[i] == 1);
+    }
+    REQUIRE(u.last_read_time == 1700000000LL);
+
+    db_close();
+}

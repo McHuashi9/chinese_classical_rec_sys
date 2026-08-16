@@ -50,6 +50,13 @@ public:
      * @return 10维能力值的平均
      */
     double getAverageAbility() const;
+
+    /**
+     * @brief 是否存在任何非默认字段（能力/基础能力/eta/答题数/最后阅读时间）
+     * 用于区分"新建档案的空行"与"真实学习后能力可能为 0 的档案"。
+     * @return true 表示该用户已带任何学习/使用痕迹，不应被重置为默认。
+     */
+    bool hasAnyNonDefaultField() const;
     
     /**
      * @brief 使用贝叶斯先验均值初始化能力值

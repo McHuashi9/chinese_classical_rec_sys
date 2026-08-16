@@ -314,6 +314,11 @@ class AppCoordinator {
           settingsCtrl.setError('数据库同步失败，已保留当前数据。请重启应用。');
           return;
         }
+        // 重开后引擎默认落在 id=1；必须恢复失败前档案，否则后续读写会落到默认档案
+        _textRepo.loadTextCache();
+        _restoreActiveProfile();
+        _loadUser();
+        _reloadUserScopedState();
         settingsCtrl.setError('数据库同步失败，已保留当前数据。');
         return;
       }
@@ -407,9 +412,10 @@ class AppCoordinator {
     _dbPathAfterSync = path;
   }
 
-  void initRemoteDbSync(SharedPreferences prefs, String dbDirPath) {
+  void initRemoteDbSync(SharedPreferences prefs, String dbDirPath,
+      {RemoteDbSync? remoteDbSync}) {
     _prefs = prefs;
-    _remoteDbSync = RemoteDbSync(prefs, dbDirPath);
+    _remoteDbSync = remoteDbSync ?? RemoteDbSync(prefs, dbDirPath);
   }
 
   /// db_replace 重开引擎后恢复上次档案（openDatabase 默认落在 id=1）

@@ -26,6 +26,27 @@ TEST_CASE("User 模型", "[model]") {
         REQUIRE(std::abs(u.getAverageAbility() - 0.3) < EPS);
     }
 
+    SECTION("hasAnyNonDefaultField") {
+        User fresh;
+        REQUIRE_FALSE(fresh.hasAnyNonDefaultField());
+
+        User learned;
+        learned.initializeDefault();
+        REQUIRE(learned.hasAnyNonDefaultField());
+
+        User allZeroButBase;
+        allZeroButBase.setBaseAbility(0, 0.3);
+        REQUIRE(allZeroButBase.hasAnyNonDefaultField());
+
+        User withHistory;
+        withHistory.setLastReadTime(1);
+        REQUIRE(withHistory.hasAnyNonDefaultField());
+
+        User withQuiz;
+        withQuiz.setQuizCount(5, 2);
+        REQUIRE(withQuiz.hasAnyNonDefaultField());
+    }
+
     SECTION("set/getAbility") {
         User u;
         u.setAbility(3, 0.75);

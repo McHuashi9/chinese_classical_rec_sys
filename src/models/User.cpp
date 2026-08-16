@@ -1,6 +1,7 @@
 #include "models/User.h"
 #include "core/Config.h"
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 
 User::User() : abilities{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}}, 
@@ -26,6 +27,20 @@ double User::getAbility(int index) const {
 double User::getAverageAbility() const {
     double sum = std::accumulate(abilities.begin(), abilities.end(), 0.0);
     return sum / 10.0;
+}
+
+bool User::hasAnyNonDefaultField() const {
+    for (double a : abilities) {
+        if (std::abs(a) > 1e-12) return true;
+    }
+    for (double b : baseAbilities) {
+        if (std::abs(b) > 1e-12) return true;
+    }
+    if (std::abs(eta - Config::ETA) > 1e-12) return true;
+    for (int q : quizCounts) {
+        if (q != 0) return true;
+    }
+    return lastReadTime != 0;
 }
 
 void User::initializeDefault() {

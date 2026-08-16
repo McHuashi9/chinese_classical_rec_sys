@@ -89,7 +89,8 @@ static void c_to_user(const UserData* src, User& dst)
     dst.setLastReadTime(static_cast<time_t>(src->last_read_time));
 }
 
-// 载入指定档案为当前用户：读 user 行 → 缺行/全零初始化默认 → 应用遗忘 → 落库 → 更新内存态。
+// 载入指定档案为当前用户：读 user 行 → 缺行/空行初始化默认 → 应用遗忘 → 落库 → 更新内存态。
+// 注意：不能用平均能力≈0 判断"空行"——真实差生能力可因负增量累积到全 0，必须保留。
 // 调用方负责持有 g_mtx。
 static bool loadUserForActive(int userId)
 {
@@ -97,7 +98,7 @@ static bool loadUserForActive(int userId)
 
     User loaded;
     if (g_state.userRepo->getUser(loaded, userId)) {
-        if (loaded.getAverageAbility() <= 0.001) {
+        if (!loaded.hasAnyNonDefaultField()) {
             loaded.initializeDefault();
         }
     } else {
