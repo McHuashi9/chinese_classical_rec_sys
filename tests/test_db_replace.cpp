@@ -212,10 +212,23 @@ TEST_CASE("db_replace - 新内容库带旧用户表被拒", "[db_replace]") {
     const std::string user = test_helpers::makeUserDb("replace_blacklist");
     REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
 
-    // 新包 = 未剥离用户表的混装库，但把 db_version 改成 1（纯净校验仍应拒绝）
+    // 新包 = 未剥离用户表的混装库，但把 db_version 改成 1（纯净校验仍应拒绝）。
+    // 注意：TEST_DB_PATH 现在已是纯内容库，需显式补回旧用户表才能构造“混装库”场景。
     const std::string mixed = dir + "/mixed.db";
     fs::copy_file(TEST_DB_PATH, mixed, fs::copy_options::overwrite_existing);
     setUserVersion(mixed, 1);
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(mixed.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        for (const std::string& t : kUserTableNames) {
+            const std::string sql = "CREATE TABLE IF NOT EXISTS \"" + t + "\" (id INTEGER);";
+            REQUIRE(sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err) == SQLITE_OK);
+            sqlite3_free(err);
+            err = nullptr;
+        }
+        sqlite3_close(db);
+    }
 
     REQUIRE(db_replace(mixed.c_str(), content.c_str()) == BRIDGE_ERR_DB_CONTENT);
     REQUIRE(text_get_count() == 270);  // 旧库未动

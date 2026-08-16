@@ -293,6 +293,19 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     db_close();
 
     const auto [work, userPath] = quizWorkDb("direct_2");
+    // 新题库所有文章都有题（断句题每篇 1 题），因此额外插入一篇无题文章，
+    // 专门验证“文章存在但无题 → 返回 0”的降级路径。
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        REQUIRE(sqlite3_exec(db,
+            "INSERT INTO classical_text(id, title, content) "
+            "VALUES(100000, '无题测试', '测试内容');",
+            nullptr, nullptr, &err) == SQLITE_OK);
+        sqlite3_free(err);
+        sqlite3_close(db);
+    }
     REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
     initDefaultProfile();
 
@@ -340,9 +353,9 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     // 文章不存在返回错误（区别于"无题"返回 0）
     REQUIRE(question_get_by_text(999999, qs, 5, nullptr) == BRIDGE_ERR_TEXT);
 
-    // 无题文章（存在但无题）返回 0：诫兄子严敦书（id=120）为新题库 4 篇零产出之一
+    // 无题文章（存在但无题）返回 0：使用上方插入的无题测试文章
     int answered_all = -1;
-    REQUIRE(question_get_by_text(120, qs, 5, &answered_all) == 0);
+    REQUIRE(question_get_by_text(100000, qs, 5, &answered_all) == 0);
     REQUIRE(answered_all == 0);
 
     // 参数校验

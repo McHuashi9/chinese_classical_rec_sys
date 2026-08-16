@@ -124,7 +124,8 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 
 1. 刷新 db_version.txt（`gen_db_version.sh`）并 amend 进数据提交（`SKIP_AMEND=1` 跳过）
 2. 题库可复现性检查（`check_questions_reproducible.sh`，连跑两次生成比对哈希；`SKIP_REPRO_CHECK=1` 跳过）
-3. 压缩 DB 发布为 GitHub prerelease
+3. 内容库一致性校验（`check_content_db.py`，R15 硬闸门：表集合/user_version/初始化 q_key/q_key 唯一/题数/db_version blob hash）
+4. 压缩 DB 发布为 GitHub prerelease
 
 客户端启动时自动检查并同步新数据包，无需发布 App 新版本。
 
@@ -145,7 +146,7 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 **Python 数据管线** — 把 `articles/` 加工成 `classical.db`
 
 - `articles/` 270 篇古文数据源（anthology 202 + textbook 68）
-- `scripts/project/` 核心脚本：init_data.py（建库）· generate_questions.py（题库）· features.json（13 维特征）· publish_data.sh（发布）· bump_version.sh（发版）· gen_db_version.sh · check_questions_reproducible.sh · build_ios_core.sh
+- `scripts/project/` 核心脚本：init_data.py（建库）· generate_questions.py（题库）· features.json（13 维特征）· publish_data.sh（发布）· bump_version.sh（发版）· gen_db_version.sh · check_questions_reproducible.sh · check_content_db.py（R15 发布校验）· build_ios_core.sh
 - `scripts/` 辅助脚本：subset_fonts.py（字体子集化）· test_coverage_cpp.sh / summarize_cov.py（覆盖率）
 
 **Flutter 应用** — `flutter_app/`

@@ -2,6 +2,7 @@ name: Question Generator Reproducibility
 
 # 题库生成器可复现性检查（N19）：同一环境连跑两次 generate_questions.py --json，
 # 比对 questions.json 哈希——防随机流漂移/掉题（前科：4770→4769）。
+# 同时用 check_content_db.py（R15）校验最新 data-* release 的内容库与本地生成产物一致。
 # 触发：
 # - dev/main 上生成器/语料/特征变更（paths 过滤，只跑相关变更）
 # - publish_data.sh 发布数据后显式触发（gh workflow run repro-check.yml）
@@ -14,6 +15,7 @@ on:
       - 'scripts/project/init_data.py'
       - 'scripts/project/features.json'
       - 'scripts/project/check_questions_reproducible.sh'
+      - 'scripts/project/check_content_db.py'
       - 'articles/**'
       - '.github/workflows/repro-check.yml'
   workflow_dispatch:
@@ -47,29 +49,13 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
           mkdir -p /tmp/data-release
           gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'classical.db.gz' --dir /tmp/data-release
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'db_version.txt' --dir /tmp/data-release
           gunzip -f /tmp/data-release/classical.db.gz
 
       - name: Compare released content DB with generated questions
         if: steps.data_release.outputs.skip != 'true'
         run: |
-          python3 - <<'PY'
-          import json
-          import sqlite3
-          import sys
-
-          db = sqlite3.connect('/tmp/data-release/classical.db')
-          cnt = db.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
-          rows = json.load(open('build/data/questions.json', encoding='utf-8'))
-          if cnt != len(rows):
-              sys.exit(f'released classical.db question count {cnt} != generated {len(rows)}')
-          init_keys = [
-              'd648b695e1579dbe', '28a1103b477177ee', '6dcbeb434a04bb29',
-              '5f465c9792081778', 'f6e064465d0da521', '638f4ed6d813d2f8',
-          ]
-          db_keys = {r[0] for r in db.execute("SELECT q_key FROM questions WHERE q_key != ''")}
-          missing = [k for k in init_keys if k not in db_keys]
-          if missing:
-              sys.exit(f'released classical.db missing init q_keys: {missing}')
-          print(f'OK: released db questions={cnt}, init q_keys present')
-          db.close()
-          PY
+          python3 scripts/project/check_content_db.py \
+            --db /tmp/data-release/classical.db \
+            --questions-json build/data/questions.json \
+            --db-version /tmp/data-release/db_version.txt
