@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-16
+
+### Fixed
+
+- **修复初始化阅读显示“暂无内容”**：初始化文章进入阅读页前会先加载完整正文，并正确监听分页变化。
+- **修复初始化流程可被跳过**：初始化确认弹窗与引导页现在禁止通过返回键/ Esc 关闭；未完成初始化前会持续引导，直到完成。
+
 ## [1.0.1] - 2026-08-16
 
 ### Fixed
@@ -444,3 +451,4 @@ C++ CLI 原型。
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
 [1.0.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.0
 [1.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.1
+[1.0.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.2
