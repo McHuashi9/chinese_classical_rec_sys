@@ -137,6 +137,23 @@ jobs:
             ~/.pub-cache
           key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
 
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release-keystore.jks
+            # PKCS12/JKS 实际密钥口令为 store 口令；keyPassword 与 storePassword 保持一致。
+            printf 'storeFile=/tmp/release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEYSTORE_PASSWORD" \
+              > flutter_app/android/key.properties
+            echo "Configured release signing from GitHub Secrets."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 missing; release APK will fall back to debug signing."
+          fi
+
       - name: Flutter pub get && build
         run: |
           flutter pub get
@@ -149,6 +166,18 @@ jobs:
           VERSION="${VERSION#v}"
           cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
             "chinese-classical-rec-sys-${VERSION}-android.apk"
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          APK="chinese-classical-rec-sys-${VERSION}-android.apk"
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK"
+          else
+            keytool -printcert -jarfile "$APK" || true
+          fi
       - name: Upload to Release
         uses: softprops/action-gh-release@v3
         with:
