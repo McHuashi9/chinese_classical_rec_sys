@@ -99,6 +99,22 @@ CI 自动构建未签名 `.ipa`，可使用 SideStore / AltStore 自签安装。
 
 > **诚征 macOS 贡献者** — CI 已能构建出未签名 `.ipa`，但维护者没有 Mac / 开发者账号，无法本地测试或签名。对苹果生态不熟悉，有意者欢迎邮件：3407131764@qq.com
 
+### Android 安装包签名验证
+
+v1.0.0 起 Android 使用正式签名。安装 APK 前可用 Android SDK 的 `apksigner` 核对证书指纹，确认安装包由作者发布：
+
+```bash
+$ANDROID_HOME/build-tools/<版本>/apksigner verify --print-certs chinese-classical-rec-sys-1.0.0-android.apk
+```
+
+期望输出中的 SHA-256 指纹：
+
+```text
+B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6:F5:36:FE:46:D7
+```
+
+> 指纹是公开信息，不是密钥；它是用户验证 APK 真伪的锚点。v1.0.0 起签名已从 debug 切换为正式签名，旧 debug 版升级需卸载重装一次。
+
 ### 维护者：数据管线
 
 > 仅维护者需要执行，普通开发无需关心。
