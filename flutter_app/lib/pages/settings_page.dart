@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
@@ -11,6 +12,9 @@ import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
+import 'package:chinese_classical_rec_sys/widgets/announcement_dialog.dart';
+import 'package:chinese_classical_rec_sys/pages/init_onboarding_page.dart';
+import 'package:chinese_classical_rec_sys/engine/announcement.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/engine/github_config.dart';
 
@@ -149,6 +153,54 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       return;
     }
+    // 新档案二选一：继承已有档案 / 完成初始化（强制初始化完成前不能正常使用）
+    final method = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('新档案初始化方式'),
+        children: [
+          ListTile(
+            leading: const Icon(Icons.copy_all_outlined),
+            title: const Text('继承已有档案'),
+            subtitle: const Text('复制某个档案的能力与阅读历史'),
+            onTap: () => Navigator.of(ctx).pop('inherit'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_note),
+            title: const Text('完成初始化'),
+            subtitle: const Text('新档案从零开始，完成 6 道初始化题'),
+            onTap: () => Navigator.of(ctx).pop('init'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || method == null) return;
+
+    if (method == 'inherit') {
+      final source = await _pickSourceProfile(context, coord);
+      if (source == null || !context.mounted) return;
+      final id = coord.createInheritedProfile(name, source.id);
+      if (id == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('创建失败，请检查名称长度')),
+          );
+        }
+        return;
+      }
+      if (!coord.switchProfile(id)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('创建成功，但切换失败')),
+          );
+        }
+        return;
+      }
+      coord.userCtrl.refreshInitState();
+      return;
+    }
+
     final id = coord.createProfile(name);
     if (id == null) {
       if (context.mounted) {
@@ -164,7 +216,34 @@ class _SettingsPageState extends State<SettingsPage> {
           const SnackBar(content: Text('创建成功，但切换失败')),
         );
       }
+      return;
     }
+    coord.userCtrl.refreshInitState();
+    if (context.mounted && !coord.userCtrl.isInitialized) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const InitOnboardingPage()),
+      );
+    }
+  }
+
+  Future<UserProfile?> _pickSourceProfile(
+      BuildContext context, AppCoordinator coord) async {
+    final profiles = coord.userCtrl.profiles;
+    if (profiles.isEmpty) return null;
+    return showDialog<UserProfile>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择要继承的档案'),
+        children: [
+          for (final p in profiles)
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text(p.name),
+              onTap: () => Navigator.of(ctx).pop(p),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showRenameProfileDialog(
@@ -344,6 +423,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildAboutCard(bool isDark, double fontScale) {
     final theme = Theme.of(context);
+    final coord = context.read<AppCoordinator>();
     final secondaryColor =
         isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
     return Card(
@@ -374,6 +454,34 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
             SizedBox(height: context.gapMedium),
+            _AboutDataRow(
+              icon: Icons.storage_outlined,
+              label: '内容数据版本',
+              value: coord.contentDataVersion,
+              color: secondaryColor,
+              fontScale: fontScale,
+            ),
+            SizedBox(height: context.gapSmall),
+            _AboutDataRow(
+              icon: Icons.dataset_outlined,
+              label: '数据库格式版本',
+              value: coord.schemaVersions == null
+                  ? '不可用'
+                  : '内容 ${coord.schemaVersions!.$2} · 用户 ${coord.schemaVersions!.$1}',
+              color: secondaryColor,
+              fontScale: fontScale,
+            ),
+            SizedBox(height: context.gapSmall),
+            _AboutDataRow(
+              icon: Icons.health_and_safety_outlined,
+              label: '存储状态',
+              value: coord.isInitialized
+                  ? '内容库/用户库就绪'
+                  : '异常（${_dbErrorText(coord.dbOpenErrorCode)}）',
+              color: secondaryColor,
+              fontScale: fontScale,
+            ),
+            SizedBox(height: context.gapMedium),
             const Divider(color: AppTheme.border, height: 1),
             SizedBox(height: context.gapMedium),
             _AboutLinkRow(
@@ -382,6 +490,34 @@ class _SettingsPageState extends State<SettingsPage> {
               url: GithubConfig.repoUrl,
               fontScale: fontScale,
               color: secondaryColor,
+            ),
+            SizedBox(height: context.gapSmall),
+            _AboutLinkRow(
+              icon: Icons.update,
+              label: '更新日志',
+              url: GithubConfig.releasesUrl,
+              fontScale: fontScale,
+              color: secondaryColor,
+            ),
+            SizedBox(height: context.gapSmall),
+            InkWell(
+              onTap: () => AnnouncementDialog.show(
+                context,
+                announcement: kCurrentAnnouncement,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.campaign_outlined,
+                        size: 16 * fontScale, color: secondaryColor),
+                    SizedBox(width: context.gapSmall),
+                    Text('公告 / 作者的话',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: secondaryColor)),
+                  ],
+                ),
+              ),
             ),
             SizedBox(height: context.gapMedium),
             Row(
@@ -432,6 +568,21 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  String _dbErrorText(int? code) {
+    switch (code) {
+      case BridgeError.errDbContent:
+        return '内容库缺失或损坏';
+      case BridgeError.errDbUser:
+        return '用户库缺失或损坏';
+      case BridgeError.errDbVersion:
+        return '数据库版本不兼容';
+      case BridgeError.errDbSamePath:
+        return '内容库与用户库路径相同';
+      default:
+        return '请重启应用';
+    }
   }
 
   Widget _buildCheckUpdateButton(BuildContext context, double fontScale) {
@@ -517,6 +668,49 @@ void _launch(BuildContext context, String url) async {
         SnackBar(content: Text('无法打开浏览器，请手动访问: $url')),
       );
     } catch (_) {}
+  }
+}
+
+class _AboutDataRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final double fontScale;
+
+  const _AboutDataRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.fontScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16 * fontScale, color: color),
+        SizedBox(width: context.gapSmall),
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: color)),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }
 
