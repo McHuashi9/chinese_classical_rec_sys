@@ -14,11 +14,13 @@ on:
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'flutter_app/**'
-      - 'scripts/**'
-      - 'articles/**'
+      - 'scripts/subset_fonts.py'
+      - 'scripts/test_coverage_cpp.sh'
+      - 'scripts/summarize_cov.py'
       - 'packaging/**'
       - 'requirements-ci.txt'
       - '.github/workflows/flutter-build.yml'
+      - '.github/actions/**'
 
 jobs:
   build-linux:

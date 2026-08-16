@@ -260,64 +260,6 @@ def create_tables(conn: sqlite3.Connection) -> bool:
     """创建数据库表（如果不存在）"""
     cursor = conn.cursor()
     
-    tables = [
-        ("profiles", "用户档案表（本地多用户）"),
-        ("user", "用户表（10维能力 + 基础能力）"),
-        ("classical_text", "古文表（10维特征）"),
-        ("reading_history", "阅读历史表"),
-        ("learning_increments", "学习增量表"),
-    ]
-    
-    # 创建 profiles 表（与 UserRepository.cpp 完全一致）
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            last_used_at INTEGER NOT NULL,
-            deleted INTEGER NOT NULL DEFAULT 0
-        );
-    """)
-
-    # 创建 user 表（与 UserRepository.cpp 完全一致；多用户化后 id 为普通主键）
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user (
-            id INTEGER PRIMARY KEY,
-            d1_ability REAL DEFAULT 0.0,
-            d2_ability REAL DEFAULT 0.0,
-            d3_ability REAL DEFAULT 0.0,
-            d4_ability REAL DEFAULT 0.0,
-            d5_ability REAL DEFAULT 0.0,
-            d6_ability REAL DEFAULT 0.0,
-            d7_ability REAL DEFAULT 0.0,
-            d8_ability REAL DEFAULT 0.0,
-            d9_ability REAL DEFAULT 0.0,
-            d10_ability REAL DEFAULT 0.0,
-            d1_base_ability REAL DEFAULT 0.0,
-            d2_base_ability REAL DEFAULT 0.0,
-            d3_base_ability REAL DEFAULT 0.0,
-            d4_base_ability REAL DEFAULT 0.0,
-            d5_base_ability REAL DEFAULT 0.0,
-            d6_base_ability REAL DEFAULT 0.0,
-            d7_base_ability REAL DEFAULT 0.0,
-            d8_base_ability REAL DEFAULT 0.0,
-            d9_base_ability REAL DEFAULT 0.0,
-            d10_base_ability REAL DEFAULT 0.0,
-            eta REAL DEFAULT 0.08,
-            d1_quiz_count INTEGER DEFAULT 0,
-            d2_quiz_count INTEGER DEFAULT 0,
-            d3_quiz_count INTEGER DEFAULT 0,
-            d4_quiz_count INTEGER DEFAULT 0,
-            d5_quiz_count INTEGER DEFAULT 0,
-            d6_quiz_count INTEGER DEFAULT 0,
-            d7_quiz_count INTEGER DEFAULT 0,
-            d8_quiz_count INTEGER DEFAULT 0,
-            d9_quiz_count INTEGER DEFAULT 0,
-            d10_quiz_count INTEGER DEFAULT 0,
-            last_read_time INTEGER DEFAULT 0
-        );
-    """)
-    
     # 兼容旧表：若缺少 annotations_raw / translation 则新增列
     try:
         cursor.execute("ALTER TABLE classical_text ADD COLUMN annotations_raw TEXT DEFAULT ''")
@@ -352,35 +294,6 @@ def create_tables(conn: sqlite3.Connection) -> bool:
             f12_allusion_density REAL DEFAULT 0.0,
             f13_semantic_complexity REAL DEFAULT 0.0
         );
-    """)
-    
-    # 创建 reading_history 表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS reading_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL DEFAULT 1,
-            text_id INTEGER NOT NULL,
-            read_time REAL NOT NULL,
-            read_timestamp INTEGER NOT NULL
-        );
-    """)
-    
-    # 创建 learning_increments 表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS learning_increments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL DEFAULT 1,
-            dimension INTEGER NOT NULL,
-            delta REAL NOT NULL,
-            timestamp INTEGER NOT NULL,
-            type TEXT DEFAULT 'read'
-        );
-    """)
-    
-    # 创建索引
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_learning_increments_user_dim
-        ON learning_increments(user_id, dimension);
     """)
 
     # 创建 questions 表（内容库：题目 + 答案 + 解析，随数据包同步）
@@ -460,6 +373,7 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
     try:
         conn = sqlite3.connect(db_path)
         create_tables(conn)
+        conn.execute("PRAGMA user_version = 1")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM classical_text")
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='classical_text'")
@@ -592,6 +506,25 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
                   f"{'，id-map 对齐 ' + str(len(used_ids)) + ' 题' if next_id is not None else ''}）")
         else:
             print(f"题库文件不存在（跳过）: {questions_file}")
+
+        # 内容库纯净断言：只允许内容表 + SQLite 内部表，且 user_version=1
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = {r[0] for r in cursor.fetchall()}
+        forbidden_user_tables = {
+            "profiles", "user", "reading_history", "text_tracking",
+            "learning_increments", "quiz_attempts", "review_items",
+        }
+        bad = tables & forbidden_user_tables
+        if bad:
+            raise RuntimeError(f"内容库包含用户表，重建失败: {sorted(bad)}")
+        required = {"classical_text", "questions"}
+        missing = required - tables
+        if missing:
+            raise RuntimeError(f"内容库缺少必要内容表: {sorted(missing)}")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version != 1:
+            raise RuntimeError(f"内容库 user_version 应为 1，实际为 {version}")
+        print(f"内容库断言通过：表={sorted(tables - {'sqlite_sequence'})}，user_version={version}")
 
         conn.close()
         
