@@ -2,6 +2,74 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-18
+
+### Added
+
+- **反馈 Bug / 意见**：设置页「关于」新增反馈入口，支持选择 Bug / 建议、填写标题与描述，自动附带 App 版本、平台、数据版本、数据库格式和日志尾部；可通过系统默认邮件客户端发送，也提供「复制完整反馈内容」「复制诊断信息」「复制邮箱地址」兜底。
+- **首次建档引导**：首次启动（或升级后首次启动）且当前只有默认档案时，弹窗介绍多用户档案，可直接使用默认用户、新建档案或重命名默认用户，也可跳过；只展示一次。
+- **用户档案列表体验优化**：档案按最近使用时间排序并显示最后使用时间；每个档案使用首字色块头像；切换档案成功后显示「已切换到「档案名」」提示。
+
+### Changed
+
+- **删除用户档案改为彻底删除**：删除档案会同时清除该档案的全部学习记录，且不可恢复；删除确认文案同步更新。历史版本软删除留下的隐藏档案会在启动时自动清理。
+
+## [1.0.2] - 2026-08-16
+
+### Fixed
+
+- **修复初始化阅读显示“暂无内容”**：初始化文章进入阅读页前会先加载完整正文，并正确监听分页变化。
+- **修复初始化流程可被跳过**：初始化确认弹窗与引导页现在禁止通过返回键/ Esc 关闭；未完成初始化前会持续引导，直到完成。
+
+## [1.0.1] - 2026-08-16
+
+### Fixed
+
+- **修复 Windows 首次启动数据库打不开**：Windows 下新建的 `user.db` 与内容库 `classical.db` 编码不一致，导致内容库挂载失败；现已统一为 UTF-8 编码。已受影响的用户需要删除一次应用数据目录（`C:\Users\<用户名>\AppData\Roaming\com.example\chinese_classical_rec_sys`）后重新启动。
+
+## [1.0.0] - 2026-08-16
+
+### 注意
+
+- **首个正式版**：内容库切换为 `db_version=1` 纯内容库；旧开发版数据库不兼容，需使用正式版数据包或全新安装。
+- **Android 正式签名已启用**：从旧 debug 签名版本升级需**卸载重装一次**；签名指纹见下方。
+- **六国论（苏辙）答题记录不保留**：该篇因标题消歧改名为「六国论（苏辙）」，q_key 变化导致该篇历史答题/复习记录不迁移。
+- 新题型（虚词 / 断句）随 v1.0.0 数据包发布后生效。
+
+### Android 正式签名指纹
+
+```text
+SHA1:   33:10:D6:21:2E:73:39:F8:80:FF:3D:10:EC:C7:AC:BD:71:01:31:52
+SHA256: B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6:F5:36:FE:46:D7
+```
+
+### Changed
+
+- **C++ 核心拆双库与强制初始化**：引擎改为 `user.db` 主连接 + `classical.db` 内容库挂载，内容库可整包替换而用户库不再合并/清空；新增强制初始化（6 题贝叶斯）与新建档案继承能力。Dart 绑定已接线：启动解析 `classical.db` + `user.db`，同步成功不再重开引擎/重载档案。
+- **内容同步成功提示更明确**：同步成功统一显示「内容已更新，学习进度已保留」；用户库/内容库打开失败时展示具体错误与重启引导，不再静默卡在加载页。
+- **设置页「关于」升级**：可查看内容数据版本、数据库格式版本（内容库/用户库）、存储状态、更新日志入口与公告回看。
+- **随堂练习题干引号统一为中文弯引号**：划线词/划线字题干的角引号「」统一改为中文弯引号“”，与其他题型及全文引号风格一致；题目 id 保持不变，老用户复习与作答记录不受影响。
+
+### Added
+
+- **本地多用户档案**：支持新建/切换/重命名/删除本地用户档案（自定义名称，方便区分），每个档案的学习历史、已读标记、测验与复习进度完全独立；启动时自动进入上次使用的档案。老用户数据自动归入「默认用户」档案，无需手动迁移。档案名需唯一（不允许重名），最多 32 个档案。
+- **新用户初始化引导**：首次使用需先阅读两篇短文并完成 6 道初始化题；新建档案可选择「继承已有档案」或「完成初始化」。
+- **公告 / 作者的话**：首次进入 v1.0.0 弹出一次，设置页可随时回看。
+- **虚词 / 断句题型徽标**：答题页为 `xuci` / `duanju` 显示「虚词」「断句」中文文案。
+- **新题型生成器：虚词 + 断句**：题库生成管线新增虚词词性判断（实词也可作正确答案）与断句（纯汉字题干 + 斜杠断句选项），随 v1.0.0 数据包发布后生效。
+- **空态优化**：「我的」页无历史且能力全零时显示「去读一篇文章开始吧」引导；推荐空态文案更贴合新用户。
+
+### Fixed
+
+- **远程同步失败不再串档案**：数据包同步失败并重开旧库后，会恢复失败前正在使用的用户档案；此前会回落到「默认用户」，导致后续阅读/答题进度被写进默认档案、重启后丢失。
+- **能力全 0 的用户档案不再被静默重置**：真实学习后能力可能被负增量推到全 0 的档案，切换/启动时会保留原能力与学习痕迹；只有从未使用过的空档案才初始化默认能力。
+- **数据更新检查不再受最近 10 个 release 窗口限制**：启动时数据检查原来只扫描 GitHub 最近 10 个 release（`per_page=10`），数据卷发布后被超过 10 个 App 版本覆盖时，未同步过的用户会永远错过该数据更新；现扩大扫描范围（`per_page=100`），按当前发布节奏足够覆盖数年。
+- **译文模式注释点击失效**：译文交错分页后，点击原文注释标记无法弹出注释——零宽译文标记导致渲染偏移与原始串偏移错位，现已做偏移映射修复。
+- **译文交错分页边界样式反转**：跨页的译文段在下一页可能被误染成原文样式，现记录每页是否从译文段中间开始，分页渲染保持正确样式。
+- **推荐 Tab 陈旧/空推荐永久 spinner**：切到「为你推荐」时立即刷新；空态不再永久转圈。
+- **前台恢复即启动常驻 1 秒计时器**：未在阅读时从后台恢复不再误启动阅读计时器。
+- **切换档案后详情页不刷新**：切换档案后文章详情页的难度匹配/收益区会随用户状态刷新。
+
 ## [0.10.2] - 2026-08-14
 
 ### Added
@@ -263,8 +331,6 @@
 - **作者朝代 overflow 保护**：阅读页、详情页、卡片 subtitle 均加 `overflow: ellipsis, maxLines: 1`
 - **CMakeLists 消除重复编译**：10 个 `.cpp` 在静态库和共享库中各编译一次，浪费约 30% 编译时间。现已改为共享库只编译桥接代码并链接静态库
 
-[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
-
 ## [0.5.1] - 2026-05-15
 
 ### Fixed
@@ -373,24 +439,29 @@ C++ CLI 原型。
 - 知识追踪（IRT 模型）
 - SQLite 本地存储
 
+[0.10.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.2
+[0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1
+[0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
+[0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
+[0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
+[0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
+[0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
+[0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
+[0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
+[0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
+[0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1
+[0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0
+[0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
+[0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
+[0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
+[0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
+[0.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.6.0
 [0.5.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.1
 [0.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.5.0
 [0.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.4.0
 [0.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.3.0
 [0.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.0.1
-[0.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.0
-[0.7.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.1
-[0.7.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.2
-[0.7.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.7.3
-[0.8.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.0
-[0.8.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.1
-[0.8.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.8.2
-[0.9.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.0
-[0.9.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.1
-[0.9.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.2
-[0.9.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.3
-[0.9.4]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.4
-[0.9.5]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.9.5
-[0.10.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.0
-[0.10.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.1
-[0.10.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v0.10.2
+[1.0.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.0
+[1.0.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.1
+[1.0.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.0.2
+[1.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.0

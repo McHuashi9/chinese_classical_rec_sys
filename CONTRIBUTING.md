@@ -13,7 +13,7 @@
 
 ## 开发环境
 
-需要 Flutter 3.41+（与 CI 的 `flutter-version: 3.41.x` 对齐）和 CMake 3.28+。
+需要 Flutter 3.47+（与 CI 的 `flutter-version: 3.47.x` 对齐）和 CMake 3.28+。
 
 ```bash
 # Flutter（如果还没装）

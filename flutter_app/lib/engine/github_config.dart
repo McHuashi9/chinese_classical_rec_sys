@@ -9,7 +9,9 @@ class GithubConfig {
       'https://api.github.com/repos/$repoOwner/$repoName/releases/latest';
 
   static String get releaseApiList =>
-      'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=10';
+      'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=100';
+
+  static String get releasesUrl => '$repoUrl/releases';
 
   static String releaseTagUrl(String version) =>
       '$repoUrl/releases/tag/v$version';

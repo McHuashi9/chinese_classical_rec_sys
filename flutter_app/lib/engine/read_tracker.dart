@@ -38,6 +38,11 @@ class ReadTracker {
     _trim();
   }
 
+  /// 切换档案时清空全部已读状态（随后由 coordinator 回填新档案的 tracked ids）
+  void clear() {
+    _states.clear();
+  }
+
   List<int> getAllTrackedIds() {
     return _states.entries
         .where((e) => e.value.effectApplied)

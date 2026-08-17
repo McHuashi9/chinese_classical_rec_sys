@@ -102,6 +102,7 @@ class AnnotatedTextBuilder {
     TextStyle baseStyle, {
     bool isDark = false,
     Color accentColor = AppTheme.vermilion,
+    bool translationActive = false,
   }) {
     final markerStyle = baseStyle.copyWith(
       color: accentColor,
@@ -118,7 +119,8 @@ class AnnotatedTextBuilder {
     for (final match in re.allMatches(pageContent)) {
       if (match.start > lastEnd) {
         spans.addAll(_buildPlainSpans(
-            pageContent.substring(lastEnd, match.start), translationStyle));
+            pageContent.substring(lastEnd, match.start), translationStyle,
+            initialTranslationActive: translationActive));
       }
       final num = int.parse(match.group(1)!);
       spans.add(TextSpan(
@@ -129,7 +131,8 @@ class AnnotatedTextBuilder {
     }
     if (lastEnd < pageContent.length) {
       spans.addAll(_buildPlainSpans(
-          pageContent.substring(lastEnd), translationStyle));
+          pageContent.substring(lastEnd), translationStyle,
+          initialTranslationActive: translationActive));
       lastEnd = pageContent.length;
     }
     return TextSpan(style: baseStyle, children: spans);
@@ -139,13 +142,14 @@ class AnnotatedTextBuilder {
   /// 标记内文本赋译文样式，标记字符本身不渲染；
   /// 页尾无闭合标记 → 整段按译文样式到结尾；页首残留闭合标记 → 忽略。
   static List<InlineSpan> _buildPlainSpans(
-      String text, TextStyle translationStyle) {
+      String text, TextStyle translationStyle,
+      {bool initialTranslationActive = false}) {
     if (!text.contains(TranslationBuilder.mark)) {
-      return [TextSpan(text: text)];
+      return [TextSpan(text: text, style: initialTranslationActive ? translationStyle : null)];
     }
     final spans = <InlineSpan>[];
     final re = RegExp(TranslationBuilder.mark);
-    var inTranslation = false;
+    var inTranslation = initialTranslationActive;
     var lastEnd = 0;
     for (final match in re.allMatches(text)) {
       if (match.start > lastEnd) {
@@ -181,13 +185,33 @@ class AnnotatedTextBuilder {
     return null;
   }
 
+  /// 渲染偏移 → 原始页串偏移：译文零宽标记不参与排版，需跳过。
+  static int paintedToRawOffset(String pageContent, int paintedOffset) {
+    var raw = 0;
+    var painted = 0;
+    while (raw < pageContent.length && painted < paintedOffset) {
+      if (pageContent[raw] != TranslationBuilder.mark) painted++;
+      raw++;
+    }
+    return raw;
+  }
+
+  /// 原始页串偏移 → 渲染偏移：译文零宽标记不参与排版，需扣除。
+  static int rawToPaintedOffset(String pageContent, int rawOffset) {
+    var painted = 0;
+    for (var i = 0; i < rawOffset && i < pageContent.length; i++) {
+      if (pageContent[i] != TranslationBuilder.mark) painted++;
+    }
+    return painted;
+  }
+
   static TextSelection markerSelection(String pageContent, int number) {
     final re = RegExp(r'〔(\d+)〕');
     for (final match in re.allMatches(pageContent)) {
       if (int.parse(match.group(1)!) == number) {
         return TextSelection(
-          baseOffset: match.start,
-          extentOffset: match.end,
+          baseOffset: rawToPaintedOffset(pageContent, match.start),
+          extentOffset: rawToPaintedOffset(pageContent, match.end),
         );
       }
     }

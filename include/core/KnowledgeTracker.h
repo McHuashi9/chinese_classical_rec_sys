@@ -93,6 +93,12 @@ public:
      * @return 清理的增量数量
      */
     int pruneOldIncrements(User& user, time_t currentTime) const;
+
+    /**
+     * @brief 设置当前用户 id（所有增量读写绑定该 id）
+     */
+    void setUserId(int userId) { userId_ = userId; }
+    int getUserId() const { return userId_; }
     
     /**
      * @brief 计算动态学习率 η(t)
@@ -111,6 +117,7 @@ public:
     
 private:
     LearningIncrementRepository* incrementRepo;
+    int userId_ = 1;
     
     double gaussian(double x) const;
 };

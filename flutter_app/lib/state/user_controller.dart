@@ -1,15 +1,31 @@
 import 'package:flutter/foundation.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
+import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
+import 'package:chinese_classical_rec_sys/engine/user_init_repository.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 
 class UserController extends ChangeNotifier {
   QuizTracker? _tracker;
+  ProfileRepository? _profileRepo;
+  UserInitRepository? _initRepo;
 
   User? _user;
   List<RecommendResult> _recommendations = [];
+
+  List<UserProfile> _profiles = [];
+  int? _activeUserId;
+  String? _activeProfileName;
+
+  /// 当前强制初始化题组（内存所有权由 UserInitRepository 管理；UI 路由持有期间
+  /// 本控制器保留同一引用，路由释放时通过 [disposeQuizQuestions] 统一释放）。
+  List<Question>? _initQuestions;
+
+  /// 当前档案是否已完成强制初始化。
+  bool _isInitialized = false;
 
   /// 到期错题数缓存（-1 = 未加载；答题/复习提交后置脏）
   int _reviewCount = -1;
@@ -18,9 +34,147 @@ class UserController extends ChangeNotifier {
 
   void initTracker(QuizTracker tracker) { _tracker = tracker; }
 
+  /// 注入档案仓库（生产为 FfiProfileRepository；测试可注入 Fake）
+  void initProfiles(ProfileRepository repo) { _profileRepo = repo; }
+
+  /// 注入强制初始化仓库（生产为 FfiUserInitRepository；测试可注入 Fake）
+  void initUserInitRepository(UserInitRepository repo) { _initRepo = repo; }
+
   User? get user => _user;
   double get averageAbility => _user?.averageAbility ?? 0.3;
   List<RecommendResult> get recommendations => _recommendations;
+
+  /// 未删除档案列表（按 id 升序；由 [refreshProfiles] 加载）
+  List<UserProfile> get profiles => List.unmodifiable(_profiles);
+  int? get activeUserId => _activeUserId;
+  String? get activeProfileName => _activeProfileName;
+
+  /// 当前档案是否已完成强制初始化。
+  bool get isInitialized => _isInitialized;
+
+  /// 从 FFI 重拉档案列表与当前档案 id；成功返回 true（仓库未注入返回 false）
+  bool refreshProfiles() {
+    final repo = _profileRepo;
+    if (repo == null) return false;
+    _profiles = repo.listProfiles();
+    _profiles.sort((a, b) {
+      final byLastUsed = b.lastUsedAt.compareTo(a.lastUsedAt);
+      if (byLastUsed != 0) return byLastUsed;
+      return a.id.compareTo(b.id);
+    });
+    final activeId = repo.activeUserId();
+    // C++ 未初始化时返回 0 表示"无当前档案"，与 null 同义（避免出现"用户 0"兜底名）
+    _activeUserId = activeId > 0 ? activeId : null;
+    _activeProfileName = null;
+    final active = _activeUserId;
+    if (active != null) {
+      for (final p in _profiles) {
+        if (p.id == active) {
+          _activeProfileName = p.name;
+          break;
+        }
+      }
+      _activeProfileName ??= '用户 $active';
+    }
+    notifyListeners();
+    return true;
+  }
+
+  /// 未删除档案中是否已存在同名（软删档案名可复用）。
+  /// [excludeId] 重命名时排除自身。
+  bool isProfileNameTaken(String name, {int? excludeId}) {
+    final normalized = normalizeProfileName(name);
+    if (normalized == null) return false;
+    return _profiles.any((p) => p.id != excludeId && p.name == normalized);
+  }
+
+  /// 新建档案；成功后刷新列表并返回新 id
+  int? createProfile(String name) {
+    final repo = _profileRepo;
+    final normalized = normalizeProfileName(name);
+    if (repo == null || normalized == null) return null;
+    final id = repo.createProfile(normalized);
+    if (id == null) return null;
+    refreshProfiles();
+    return id;
+  }
+
+  /// 新建档案并继承已有档案能力与历史；成功后刷新列表并返回新 id
+  int? createInheritedProfile(String name, int sourceId) {
+    final repo = _profileRepo;
+    final normalized = normalizeProfileName(name);
+    if (repo == null || normalized == null) return null;
+    final id = repo.createProfileInherit(normalized, sourceId);
+    if (id == null) return null;
+    refreshProfiles();
+    return id;
+  }
+
+  /// 重查当前档案的强制初始化状态（切换档案 / 初始化完成 / 继承后调用）。
+  /// 返回是否成功读到状态；未注入仓库返回 false。
+  bool refreshInitState() {
+    final repo = _initRepo;
+    if (repo == null) return false;
+    _isInitialized = repo.isInitialized();
+    notifyListeners();
+    return true;
+  }
+
+  /// 取强制初始化题组（6 道）。内部持有当前题组，重复获取会释放旧题组。
+  /// 返回的题组由 UI 路由持有，路由销毁时通过 [disposeQuizQuestions] 释放。
+  List<Question> getInitQuestions() {
+    final repo = _initRepo;
+    if (repo == null) return [];
+    _disposeInitQuestions();
+    _initQuestions = repo.initQuestions();
+    return _initQuestions ?? [];
+  }
+
+  /// 提交强制初始化题组；成功后更新用户、标记已初始化并通知。
+  /// 不自动释放题组：结果页/路由销毁时统一释放。
+  bool applyInit(List<int> qids, List<int> choices) {
+    final repo = _initRepo;
+    if (repo == null || _user == null) return false;
+    if (qids.length != choices.length || qids.isEmpty) return false;
+    final updated = repo.applyInit(qids, choices);
+    if (updated == null) return false;
+    _isInitialized = true;
+    _updateUser(updated);
+    _afterQuizSubmit();
+    return true;
+  }
+
+  /// 释放当前持有的初始化题组（如初始化流程被放弃）。
+  void disposeInitQuestions() {
+    _disposeInitQuestions();
+  }
+
+  void _disposeInitQuestions() {
+    final questions = _initQuestions;
+    _initQuestions = null;
+    if (questions != null && questions.isNotEmpty) {
+      _initRepo?.disposeInitQuestions(questions);
+    }
+  }
+
+  /// 重命名档案；成功后刷新列表
+  bool renameProfile(int id, String name) {
+    final repo = _profileRepo;
+    final normalized = normalizeProfileName(name);
+    if (repo == null || normalized == null) return false;
+    if (!repo.renameProfile(id, normalized)) return false;
+    refreshProfiles();
+    return true;
+  }
+
+  /// 软删档案；成功后刷新列表
+  bool deleteProfile(int id) {
+    final repo = _profileRepo;
+    if (repo == null) return false;
+    if (!repo.deleteProfile(id)) return false;
+    refreshProfiles();
+    return true;
+  }
 
   /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
   /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）
@@ -85,6 +239,10 @@ class UserController extends ChangeNotifier {
   }
 
   void disposeQuizQuestions(List<Question> questions) {
+    if (identical(questions, _initQuestions)) {
+      _disposeInitQuestions();
+      return;
+    }
     _tracker?.disposeQuestions(questions);
   }
 
@@ -168,6 +326,7 @@ class UserController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposeInitQuestions();
     _user?.dispose();
     super.dispose();
   }

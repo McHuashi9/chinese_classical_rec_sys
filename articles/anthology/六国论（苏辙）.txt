@@ -1,5 +1,5 @@
 ---
-title: 六国论
+title: 六国论（苏辙）
 author: 苏辙
 dynasty: 北宋
 source: 古文观止

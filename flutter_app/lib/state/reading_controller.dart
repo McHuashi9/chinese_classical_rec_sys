@@ -19,6 +19,7 @@ class ReadingController extends ChangeNotifier {
   Map<int, String> _annotations = {};
   String _interleavedText = '';
   bool _showTranslation = false;
+  List<bool> _pageStartsInTranslation = [];
 
   ReadingController(this._readTracker);
 
@@ -31,6 +32,7 @@ class ReadingController extends ChangeNotifier {
   int? get readingTextId => _readingTextId;
   Map<int, String> get annotations => _annotations;
   bool get showTranslation => _showTranslation;
+  List<bool> get pageStartsInTranslation => _pageStartsInTranslation;
 
   /// 阅读器内实时切换译文对照（不持久化，重分页由 ReadingFrame 检测）
   void setShowTranslation(bool value) {
@@ -78,6 +80,7 @@ class ReadingController extends ChangeNotifier {
         : TranslationBuilder.toInterleavedText(
             TranslationBuilder.buildInterleaved(text.content, translation));
     _showTranslation = showTranslation;
+    _pageStartsInTranslation = [];
 
     _readTracker.ensureState(textId);
     _elapsedSeconds = 0;
@@ -115,7 +118,11 @@ class ReadingController extends ChangeNotifier {
       return;
     }
 
-    _pages = _splitIntoPages(tp, lineMetrics, linesPerPage, content);
+    final (pages, rawStarts) =
+        _splitIntoPages(tp, lineMetrics, linesPerPage, content);
+    _pages = pages;
+    _pageStartsInTranslation =
+        _computePageStartsInTranslation(content, rawStarts);
     _currentPage = _currentPage.clamp(0, _pages.length - 1);
     notifyListeners();
   }
@@ -157,7 +164,7 @@ class ReadingController extends ChangeNotifier {
   }
 
   void resumeTimer() {
-    if (_readingTimer != null) return;
+    if (_readingTimer != null || _readingText == null) return;
     _readingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _elapsedSeconds++;
       notifyListeners();
@@ -173,12 +180,13 @@ class ReadingController extends ChangeNotifier {
     _annotations = {};
     _interleavedText = '';
     _showTranslation = false;
+    _pageStartsInTranslation = [];
     _readingTimer?.cancel();
     _readingTimer = null;
     notifyListeners();
   }
 
-  List<String> _splitIntoPages(
+  (List<String>, List<int>) _splitIntoPages(
     TextPainter tp,
     List<LineMetrics> lineMetrics,
     int linesPerPage,
@@ -189,21 +197,24 @@ class ReadingController extends ChangeNotifier {
     // 原始字符串会逐页错位、末页截断。先把排版偏移映射回原始字符串偏移。
     final paintedToRaw = _buildPaintedOffsetMap(content);
     final result = <String>[];
+    final rawStarts = <int>[];
     for (int startLine = 0; startLine < lineMetrics.length; startLine += linesPerPage) {
       final startOffset = startLine == 0
           ? 0
           : _getLineStartOffset(tp, lineMetrics, startLine);
+      final rawStart = paintedToRaw[startOffset];
       final endLine = (startLine + linesPerPage - 1).clamp(0, lineMetrics.length - 1);
       final endOffset = tp.getPositionForOffset(
         Offset(tp.width, lineMetrics[endLine].baseline),
       ).offset;
+      rawStarts.add(rawStart);
       result.add(
         content
-            .substring(paintedToRaw[startOffset], paintedToRaw[endOffset])
+            .substring(rawStart, paintedToRaw[endOffset])
             .trimRight(),
       );
     }
-    return result;
+    return (result, rawStarts);
   }
 
   /// 排版偏移 → 原始字符串偏移映射：`map[p]` = 原始串中第 p 个排版字符的位置；
@@ -217,6 +228,19 @@ class ReadingController extends ChangeNotifier {
     }
     map.add(content.length);
     return map;
+  }
+
+  /// 计算每页原始起点是否处于译文段内部（起点前零宽标记数为奇数）。
+  List<bool> _computePageStartsInTranslation(
+      String content, List<int> rawStarts) {
+    final marks = <int>[];
+    for (int i = 0; i < content.length; i++) {
+      if (content[i] == TranslationBuilder.mark) marks.add(i);
+    }
+    return [
+      for (final start in rawStarts)
+        marks.where((m) => m < start).length.isOdd,
+    ];
   }
 
   int _getLineStartOffset(

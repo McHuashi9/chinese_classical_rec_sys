@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include "c_types.h"
+#include "test_helpers.h"
 #include <sqlite3.h>
 #include <cstring>
 #include <cstdlib>
@@ -54,26 +55,27 @@ std::vector<int> parseDimsCsv(const char* csv)
 }
 
 // 独立临时工作库（避免污染共享测试资产）
-std::string quizWorkDb(const std::string& tag)
+std::pair<std::string, std::string> quizWorkDb(const std::string& tag)
 {
-    const std::string path = std::string(TEST_DB_PATH) + "." + tag + ".db";
-    fs::copy_file(TEST_DB_PATH, path, fs::copy_options::overwrite_existing);
-    fs::remove(path + ".bak");
-    return path;
+    return {test_helpers::makeContentDb(tag), test_helpers::makeUserDb(tag)};
 }
 
 extern "C" {
-    int db_open(const char* db_path);
+    int db_open(const char* content_path, const char* user_path);
     void db_close();
+    int db_get_schema_versions(int* user_version, int* content_version);
     int user_load(UserData* out);
     int user_save(const UserData* in);
     int user_init_default();
+    int user_is_initialized();
+    int user_init_questions(QuestionData* out, int max_count);
+    int user_init_apply(const int* qids, const int* choices, int count, int64_t timestamp, UserData* out_user);
     int text_get_count();
     int text_get_detail(int id, TextDetail* out);
     int text_get_translation(int id, char* out, int max_len);
     int text_get_annotations(int id, char* out, int max_len);
     int recommend(const UserData* user, int top_k, int* out_ids, double* out_probs, int out_ids_capacity, int out_probs_capacity);
-    int tracker_apply_read(const UserData* user, int text_id, double read_time, int64_t timestamp, UserData* out_user);
+    int tracker_apply_read(const UserData* user, int text_id, double read_time, int64_t timestamp, UserData* out_user, int skip_effect);
     int tracker_apply_forgetting(const UserData* user, int64_t now, UserData* out_user);
     int tracker_prune(const UserData* user, int64_t now, UserData* out_user);
     int tracker_apply_quiz(const UserData* user, int question_id, int user_choice,
@@ -87,6 +89,19 @@ extern "C" {
     int history_get_recent(int limit, ReadingRecordData* out, int max_count);
     int history_get_total_count();
     int history_get_tracked_text_ids(int* out, int max_count);
+}
+
+// 完成默认档案的强制初始化（固定 6 题，统一选 0；Phase 1 测试只关心初始化状态与后续可用性）
+void initDefaultProfile()
+{
+    QuestionData qs[8];
+    const int n = user_init_questions(qs, 8);
+    REQUIRE(n == 6);
+    int qids[6] = {0};
+    int choices[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < n; i++) qids[i] = qs[i].id;
+    UserData out;
+    REQUIRE(user_init_apply(qids, choices, n, 1700000000LL, &out) == BRIDGE_OK);
 }
 
 TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
@@ -108,7 +123,7 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
 
     REQUIRE(user_save(&user) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(user_init_default() == BRIDGE_ERR_NOT_INIT);
-    REQUIRE(tracker_apply_read(&user, 1, 30.0, now, &out) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(tracker_apply_read(&user, 1, 30.0, now, &out, 0) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(tracker_apply_forgetting(&user, now, &out) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(tracker_prune(&user, now, &out) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(tracker_apply_quiz(&user, 1, 0, now, &out, nullptr, 0) == BRIDGE_ERR_NOT_INIT);
@@ -129,14 +144,30 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
 TEST_CASE("bridge - db_open 无效路径返回错误", "[bridge][smoke]") {
     db_close();
 
-    int rc = db_open("/nonexistent/path/to/db.sqlite");
-    REQUIRE(rc == BRIDGE_ERR_GENERIC);
+    int rc = db_open("/nonexistent/path/to/content.db", "/nonexistent/path/to/user.db");
+    REQUIRE(rc == BRIDGE_ERR_DB_USER);
+}
+
+TEST_CASE("bridge - db_get_schema_versions 返回双库版本", "[bridge][smoke]") {
+    db_close();
+    int uv = -1, cv = -1;
+    REQUIRE(db_get_schema_versions(&uv, &cv) == BRIDGE_ERR_NOT_INIT);
+
+    const auto [work, userPath] = quizWorkDb("schema_ver");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    REQUIRE(db_get_schema_versions(&uv, &cv) == BRIDGE_OK);
+    REQUIRE(uv == 1);
+    REQUIRE(cv == 1);
+
+    db_close();
 }
 
 TEST_CASE("bridge - 完整初始化链路 smoke test", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_1");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     REQUIRE(text_get_count() > 0);
 
@@ -167,8 +198,9 @@ TEST_CASE("bridge - 完整初始化链路 smoke test", "[bridge][smoke]") {
 TEST_CASE("bridge - tracker_apply_quiz 完整链路", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("quiz");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("quiz");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
@@ -205,7 +237,7 @@ TEST_CASE("bridge - tracker_apply_quiz 完整链路", "[bridge][smoke]") {
     // 持久化后重开，quiz_count 仍在
     REQUIRE(user_save(&out) == BRIDGE_OK);
     db_close();
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
     UserData reloaded;
     REQUIRE(user_load(&reloaded) == BRIDGE_OK);
     REQUIRE(reloaded.quiz_counts[dims[0]] == out.quiz_counts[dims[0]]);
@@ -216,8 +248,9 @@ TEST_CASE("bridge - tracker_apply_quiz 完整链路", "[bridge][smoke]") {
 TEST_CASE("bridge - tracker_apply_quiz 答错拉低能力与参数校验", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("quiz_wrong");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("quiz_wrong");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
@@ -259,7 +292,22 @@ TEST_CASE("bridge - tracker_apply_quiz 答错拉低能力与参数校验", "[bri
 TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_2");
+    // 新题库所有文章都有题（断句题每篇 1 题），因此额外插入一篇无题文章，
+    // 专门验证“文章存在但无题 → 返回 0”的降级路径。
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        REQUIRE(sqlite3_exec(db,
+            "INSERT INTO classical_text(id, title, content) "
+            "VALUES(100000, '无题测试', '测试内容');",
+            nullptr, nullptr, &err) == SQLITE_OK);
+        sqlite3_free(err);
+        sqlite3_close(db);
+    }
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     // 文章 1（库中必有题）：最多取 5 题
     QuestionData qs[8];
@@ -305,9 +353,9 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     // 文章不存在返回错误（区别于"无题"返回 0）
     REQUIRE(question_get_by_text(999999, qs, 5, nullptr) == BRIDGE_ERR_TEXT);
 
-    // 无题文章（存在但无题）返回 0：诫兄子严敦书（id=120）为新题库 4 篇零产出之一
+    // 无题文章（存在但无题）返回 0：使用上方插入的无题测试文章
     int answered_all = -1;
-    REQUIRE(question_get_by_text(120, qs, 5, &answered_all) == 0);
+    REQUIRE(question_get_by_text(100000, qs, 5, &answered_all) == 0);
     REQUIRE(answered_all == 0);
 
     // 参数校验
@@ -320,7 +368,9 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
 TEST_CASE("bridge - question_get_by_text 不暴露 answer_index", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_3");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     QuestionData qs[5];
     const int n = question_get_by_text(1, qs, 5, nullptr);
@@ -343,8 +393,9 @@ TEST_CASE("bridge - question_get_by_text 不暴露 answer_index", "[bridge][smok
 TEST_CASE("bridge - 取题排除已答 + 随机轮换 + answered_all（测验闭环）", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("quiz_closure");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("quiz_closure");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
@@ -397,8 +448,9 @@ TEST_CASE("bridge - 取题排除已答 + 随机轮换 + answered_all（测验闭
 TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_review 无效应（测验闭环）", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("quiz_review");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("quiz_review");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
@@ -493,11 +545,13 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
 
 TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）", "[bridge][smoke]") {
     db_close();
-    const std::string work = quizWorkDb("quiz_txn_rollback");
-    // 预埋失败触发器：review_items 插入即 ABORT（模拟事务中途失败）
+    const auto [work, userPath] = quizWorkDb("quiz_txn_rollback");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
+    // 预埋失败触发器：review_items 插入即 ABORT（模拟事务中途失败，触发器建在 user.db）
     {
         sqlite3* db = nullptr;
-        REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+        REQUIRE(sqlite3_open(userPath.c_str(), &db) == SQLITE_OK);
         char* err = nullptr;
         REQUIRE(sqlite3_exec(db,
             "CREATE TRIGGER fail_review_insert BEFORE INSERT ON review_items "
@@ -506,7 +560,6 @@ TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）
         sqlite3_free(err);
         sqlite3_close(db);
     }
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
 
     UserData user;
     REQUIRE(user_load(&user) == BRIDGE_OK);
@@ -535,7 +588,7 @@ TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）
     REQUIRE(reloaded.quiz_counts[d0] == qc_before);
     // 流水未写入（事务整体回滚）
     sqlite3* db = nullptr;
-    REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
+    REQUIRE(sqlite3_open(userPath.c_str(), &db) == SQLITE_OK);
     sqlite3_stmt* stmt = nullptr;
     int attempts = -1;
     if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM quiz_attempts", -1, &stmt, nullptr) == SQLITE_OK) {
@@ -543,15 +596,15 @@ TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）
         sqlite3_finalize(stmt);
     }
     sqlite3_close(db);
-    REQUIRE(attempts == 0);
+    REQUIRE(attempts == 6);  // 仅初始化题 6 条，普通答题流水随事务回滚
 
     db_close();
 }
 
-TEST_CASE("bridge - 老库缺 questions 表：取题/判题优雅降级（不报 GENERIC）", "[bridge][smoke]") {
+TEST_CASE("bridge - 内容库缺 questions 表：db_open 拒绝", "[bridge][smoke]") {
     db_close();
-    const std::string work = quizWorkDb("no_questions");
-    // 从资产库副本删掉 questions 表，模拟"手动替换的旧库"
+    const auto [work, userPath] = quizWorkDb("no_questions");
+    // 从纯内容库副本删掉 questions 表，模拟损坏/不完整内容包
     {
         sqlite3* db = nullptr;
         REQUIRE(sqlite3_open(work.c_str(), &db) == SQLITE_OK);
@@ -560,24 +613,7 @@ TEST_CASE("bridge - 老库缺 questions 表：取题/判题优雅降级（不报
         sqlite3_free(err);
         sqlite3_close(db);
     }
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
-
-    // 取题：按"无题"降级（返回 0 而非 GENERIC）
-    QuestionData qs[1];
-    int answered_all = -1;
-    REQUIRE(question_get_by_text(1, qs, 1, &answered_all) == 0);
-
-    // 判题：按"题目不存在"降级（BRIDGE_ERR_TEXT，Dart 侧已有处理）
-    UserData u;
-    REQUIRE(user_load(&u) == BRIDGE_OK);
-    UserData out;
-    int correct = -1;
-    REQUIRE(tracker_apply_quiz(&u, 1, 0, 1700000000LL, &out, &correct, 0) == BRIDGE_ERR_TEXT);
-
-    // 摘要：不报错，total 保持 0
-    int total = -1, answered = -1, wrong = -1;
-    REQUIRE(quiz_get_attempt_summary(1, &total, &answered, &wrong) == BRIDGE_OK);
-    REQUIRE(total == 0);
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_ERR_DB_CONTENT);
 
     db_close();
 }
@@ -585,8 +621,9 @@ TEST_CASE("bridge - 老库缺 questions 表：取题/判题优雅降级（不报
 TEST_CASE("bridge - quiz_get_attempt_summary 摘要计数", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("quiz_summary");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("quiz_summary");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     int total = -1, answered = -1, wrong = -1;
     REQUIRE(quiz_get_attempt_summary(1, &total, &answered, &wrong) == BRIDGE_OK);
@@ -613,7 +650,9 @@ TEST_CASE("bridge - quiz_get_attempt_summary 摘要计数", "[bridge][smoke]") {
 TEST_CASE("bridge - text_get_translation 完整链路", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_4");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     char buf[65536];
     int rc = text_get_translation(1, buf, sizeof(buf));
@@ -631,7 +670,9 @@ TEST_CASE("bridge - text_get_translation 完整链路", "[bridge][smoke]") {
 TEST_CASE("bridge - text_get_translation 不存在 id 返回错误", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_5");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     char buf[4096];
     REQUIRE(text_get_translation(999999, buf, sizeof(buf)) == BRIDGE_ERR_TEXT);
@@ -642,15 +683,16 @@ TEST_CASE("bridge - text_get_translation 不存在 id 返回错误", "[bridge][s
 TEST_CASE("bridge - history 真实链路：阅读落库 → 查询倒序/截断/去重", "[bridge][smoke]") {
     db_close();
 
-    const std::string work = quizWorkDb("hist");
-    REQUIRE(db_open(work.c_str()) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("hist");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     // 3 次阅读（文章 1 两次 + 文章 2 一次），时间戳刻意乱序
     UserData user, out;
     REQUIRE(user_load(&user) == BRIDGE_OK);
-    REQUIRE(tracker_apply_read(&user, 1, 150.0, 1000, &out) == BRIDGE_OK);
-    REQUIRE(tracker_apply_read(&user, 2, 60.0, 3000, &out) == BRIDGE_OK);
-    REQUIRE(tracker_apply_read(&user, 1, 30.0, 2000, &out) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 1, 150.0, 1000, &out, 0) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 2, 60.0, 3000, &out, 0) == BRIDGE_OK);
+    REQUIRE(tracker_apply_read(&user, 1, 30.0, 2000, &out, 0) == BRIDGE_OK);
 
     REQUIRE(history_get_total_count() == 3);
 
@@ -694,7 +736,9 @@ TEST_CASE("bridge - history 真实链路：阅读落库 → 查询倒序/截断/
 TEST_CASE("bridge - text_get_annotations 完整链路", "[bridge][smoke]") {
     db_close();
 
-    REQUIRE(db_open(TEST_DB_PATH) == BRIDGE_OK);
+    const auto [work, userPath] = quizWorkDb("direct_6");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
 
     char buf[65536];
     int rc = text_get_annotations(1, buf, sizeof(buf));

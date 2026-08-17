@@ -14,21 +14,23 @@ on:
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'flutter_app/**'
-      - 'scripts/**'
-      - 'articles/**'
+      - 'scripts/subset_fonts.py'
+      - 'scripts/test_coverage_cpp.sh'
+      - 'scripts/summarize_cov.py'
       - 'packaging/**'
       - 'requirements-ci.txt'
       - '.github/workflows/flutter-build.yml'
+      - '.github/actions/**'
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
+          flutter-version: '3.47.x'
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config fuse
@@ -49,7 +51,7 @@ jobs:
           ./build/tests/run_tests
 
       - name: Cache Flutter dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
@@ -79,7 +81,7 @@ jobs:
         continue-on-error: true
         run: python3 scripts/summarize_cov.py flutter_app/coverage/lcov.info
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-reports
           path: |
@@ -91,7 +93,7 @@ jobs:
       - name: Package AppImage
         run: bash packaging/appimage/build.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chinese-classical-linux
           path: chinese-classical-rec-sys-*-linux.AppImage
@@ -100,11 +102,11 @@ jobs:
   build-windows:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
+          flutter-version: '3.47.x'
 
       - name: Extract version
         id: version
@@ -114,7 +116,7 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Cache Flutter dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
@@ -125,7 +127,7 @@ jobs:
         with:
           version: ${{ steps.version.outputs.version }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chinese-classical-windows
           path: chinese-classical-rec-sys-*.exe
@@ -134,16 +136,16 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
-      - uses: actions/setup-java@v5
+          flutter-version: '3.47.x'
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: '17'
           distribution: 'temurin'
       - name: Cache Flutter dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
@@ -161,7 +163,7 @@ jobs:
           VERSION=$(grep '^version: ' flutter_app/pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
           cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
             "chinese-classical-rec-sys-${VERSION}-android.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chinese-classical-android
           path: chinese-classical-rec-sys-*-android.apk

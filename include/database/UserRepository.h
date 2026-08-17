@@ -3,7 +3,24 @@
 
 #include "database/DatabaseManager.h"
 #include "models/User.h"
+#include <cstdint>
 #include <string>
+#include <vector>
+
+/// 档案数上限（未删除档案，含默认档案）。个人/家庭设备规模，32 足够；
+/// Dart 侧 kMaxProfiles 与之同步（settings 页满员禁用新建）。
+inline constexpr int kMaxProfiles = 32;
+
+/**
+ * @brief 档案元数据（profiles 表行）
+ */
+struct ProfileInfo {
+    int id = 0;
+    std::string name;
+    int deleted = 0;
+    int64_t createdAt = 0;
+    int64_t lastUsedAt = 0;
+};
 
 /**
  * @brief 用户数据访问类
@@ -20,19 +37,86 @@ public:
     bool initTable();
     
     /**
-     * @brief 获取当前用户信息
+     * @brief 获取指定用户信息
      * @param user 用于存储查询结果的 User 对象
+     * @param userId 用户 id（1-based，对应 user.id / profiles.id）
      * @return true 找到用户，false 未找到或出错
      */
-    bool getUser(User& user);
+    bool getUser(User& user, int userId);
     
     /**
      * @brief 保存完整用户信息（包括能力向量）
      * @param user 用户对象
+     * @param userId 用户 id（写入 user.id）
      * @return true 成功，false 失败
      */
-    bool saveUser(const User& user);
-    
+    bool saveUser(const User& user, int userId);
+
+    /**
+     * @brief 列出未删除档案（按 id 升序）
+     */
+    std::vector<ProfileInfo> listProfiles();
+
+    /**
+     * @brief 新建档案：profiles 行 + user 默认行，事务包裹
+     * @param name 档案名（非空，UTF-8）
+     * @param outId 输出新档案 id
+     * @return true 成功
+     */
+    bool createProfile(const std::string& name, int& outId);
+
+    /**
+     * @brief 重命名未删除档案
+     * @return true = 目标存在且已更新
+     */
+    bool renameProfile(int userId, const std::string& name);
+
+    /**
+     * @brief 彻底删除档案及其全部学习数据（事务包裹，不可恢复）
+     * @return true = 目标存在且已删除
+     */
+    bool deleteProfile(int userId);
+
+    /**
+     * @brief 清理历史遗留的 deleted=1 档案及其数据（升级到“不可恢复”语义后调用）
+     * @return true = 清理成功
+     */
+    bool purgeDeletedProfiles();
+
+    /**
+     * @brief 档案是否存在且未删除
+     */
+    bool isProfileActive(int userId);
+
+    /**
+     * @brief 更新档案最近使用时间
+     */
+    bool touchProfile(int userId);
+
+    /**
+     * @brief 幂等确保档案行存在（老库 id=1 默认档案迁移用；已存在不覆盖）
+     */
+    bool ensureProfileExists(int userId, const std::string& name);
+
+    /**
+     * @brief 查询档案是否已完成强制初始化
+     */
+    bool isInitialized(int userId);
+
+    /**
+     * @brief 将档案标记为已完成初始化
+     */
+    bool setInitialized(int userId);
+
+    /**
+     * @brief 新建档案并原子继承源档案的能力与历史（含 initialized=1）
+     * @param name 新档案名
+     * @param sourceId 源档案 id（须存在且未删除）
+     * @param outId 输出新档案 id
+     * @return true 成功
+     */
+    bool createProfileInherit(const std::string& name, int sourceId, int& outId);
+
 private:
     DatabaseManager* db;
 };

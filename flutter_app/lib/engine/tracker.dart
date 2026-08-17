@@ -111,7 +111,7 @@ class KnowledgeTracker implements QuizTracker {
     final outUser = User.allocate(calloc);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final rc = _bridge.trackerApplyRead(
-        user.ptr, textId, readTime, now, outUser.ptr);
+        user.ptr, textId, readTime, now, outUser.ptr, 0);
     if (rc != BridgeError.ok) {
       outUser.dispose();
       return null;

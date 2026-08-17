@@ -2,6 +2,7 @@ name: Question Generator Reproducibility
 
 # 题库生成器可复现性检查（N19）：同一环境连跑两次 generate_questions.py --json，
 # 比对 questions.json 哈希——防随机流漂移/掉题（前科：4770→4769）。
+# 同时用 check_content_db.py（R15）校验最新 data-* release 的内容库与本地生成产物一致。
 # 触发：
 # - dev/main 上生成器/语料/特征变更（paths 过滤，只跑相关变更）
 # - publish_data.sh 发布数据后显式触发（gh workflow run repro-check.yml）
@@ -11,8 +12,10 @@ on:
     branches: [dev, main]
     paths:
       - 'scripts/project/generate_questions.py'
+      - 'scripts/project/init_data.py'
       - 'scripts/project/features.json'
       - 'scripts/project/check_questions_reproducible.sh'
+      - 'scripts/project/check_content_db.py'
       - 'articles/**'
       - '.github/workflows/repro-check.yml'
   workflow_dispatch:
@@ -21,7 +24,7 @@ jobs:
   repro:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install generator dependencies
         # pypinyin 缺失时换质自动关闭，检查会退化为"无换质模式"——必须装上
@@ -29,3 +32,33 @@ jobs:
 
       - name: Reproducibility check (generate twice, compare hashes)
         run: bash scripts/project/check_questions_reproducible.sh
+
+      - name: Download latest data-* release
+        id: data_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 按 tagName 倒序取最新 data-*：data-YYYYMMDD-HHMMSS 字典序=时间序；
+          # 不用 createdAt，因为 gh release 的 createdAt 是 tag 指向 commit 的日期，
+          # 新 release 可能因 tag 指向旧提交而排到旧 release 前面。
+          TAG="$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,isPrerelease | \
+            python3 -c 'import json,sys; arr=json.load(sys.stdin); arr=[r for r in arr if r.get("isPrerelease") and r.get("tagName","").startswith("data-")]; arr.sort(key=lambda r: r["tagName"], reverse=True); print(arr[0]["tagName"] if arr else "")')"
+          if [ -z "$TAG" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No data-* release found; skip released-db comparison"
+            exit 0
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          mkdir -p /tmp/data-release
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'classical.db.gz' --dir /tmp/data-release
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'db_version.txt' --dir /tmp/data-release
+          gunzip -f /tmp/data-release/classical.db.gz
+
+      - name: Compare released content DB with generated questions
+        if: steps.data_release.outputs.skip != 'true'
+        run: |
+          python3 scripts/project/check_content_db.py \
+            --db /tmp/data-release/classical.db \
+            --questions-json build/data/questions.json \
+            --db-version /tmp/data-release/db_version.txt

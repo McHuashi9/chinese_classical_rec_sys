@@ -3,9 +3,12 @@
 
 用法:
     python3 scripts/project/export_question_id_map.py [db路径] [-o 输出.json]
-- 老库已有 q_key 列 → 直接 SELECT q_key, id
-- 老库无 q_key 列（v0.9.4 及以前）→ 用与 generate_questions.py 相同的指纹函数现算：
+- 始终按 generate_questions.py 当前指纹函数现算（不用库内 q_key 列）：
   answer 文本 = json(options)[answer_index]，title/author 经 classical_text 联表
+- 不用库内列的原因：库内列可能是更早算法版本的指纹（如题干引号样式变更前），
+  与当前算法不一致会导致 id 认领失配、复习数据漂移；现算保证两边同算法。
+- 重建前须先让旧库 = 内容已更新的当前库（或与目标内容指纹一致），
+  否则内容指纹改变（如改题干）的题会认领失败 → 尾部追加新 id
 输出供 init_data.py --id-map 使用：旧题认领旧 id，新题尾部追加，
 老用户 quiz_attempts/review_items 的 question_id 引用不漂移。
 """
@@ -31,21 +34,15 @@ def main():
 
     conn = sqlite3.connect(args.db)
     cur = conn.cursor()
-    cols = [r[1] for r in cur.execute("PRAGMA table_info(questions)").fetchall()]
-    if "q_key" in cols:
-        rows = cur.execute("SELECT q_key, id FROM questions WHERE q_key != ''").fetchall()
-        id_map = {k: i for k, i in rows}
-        print(f"旧库已有 q_key 列：直接导出 {len(id_map)} 条")
-    else:
-        rows = cur.execute("""
-            SELECT q.id, t.title, t.author, q.q_type, q.stem, q.options, q.answer_index
-            FROM questions q JOIN classical_text t ON q.text_id = t.id
-        """).fetchall()
-        id_map = {}
-        for qid, title, author, q_type, stem, options, ans_idx in rows:
-            answer = json.loads(options)[ans_idx]
-            id_map[compute_q_key(title, author or "", q_type, stem, answer)] = qid
-        print(f"旧库无 q_key 列：按指纹现算导出 {len(id_map)} 条")
+    rows = cur.execute("""
+        SELECT q.id, t.title, t.author, q.q_type, q.stem, q.options, q.answer_index
+        FROM questions q JOIN classical_text t ON q.text_id = t.id
+    """).fetchall()
+    id_map = {}
+    for qid, title, author, q_type, stem, options, ans_idx in rows:
+        answer = json.loads(options)[ans_idx]
+        id_map[compute_q_key(title, author or "", q_type, stem, answer)] = qid
+    print(f"按当前指纹现算导出 {len(id_map)} 条（库内 q_key 列值不采用）")
     conn.close()
 
     out = Path(args.out)

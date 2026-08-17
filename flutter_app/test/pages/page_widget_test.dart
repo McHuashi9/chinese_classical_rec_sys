@@ -1,6 +1,8 @@
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -37,6 +39,19 @@ Widget _wrap(Widget child) {
   );
 }
 
+class _EmptyHistoryCoordinator extends AppCoordinator {
+  _EmptyHistoryCoordinator({
+    required super.navCtrl,
+    required super.settingsCtrl,
+    required super.readingCtrl,
+    required super.userCtrl,
+    required super.readTracker,
+  });
+
+  @override
+  int getTotalReadCount() => 0;
+}
+
 void main() {
   group('SettingsPage', () {
     testWidgets('renders appearance and about cards', (tester) async {
@@ -54,6 +69,12 @@ void main() {
       expect(find.text('日志'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
       expect(find.text('v${AppCoordinator.currentVersion}'), findsOneWidget);
+      expect(find.text('内容数据版本'), findsOneWidget);
+      expect(find.text('数据库格式版本'), findsOneWidget);
+      expect(find.text('存储状态'), findsOneWidget);
+      expect(find.text('更新日志'), findsOneWidget);
+      expect(find.text('公告 / 作者的话'), findsOneWidget);
+      expect(find.text('反馈 Bug / 意见'), findsOneWidget);
     });
 
     testWidgets('dark mode toggle switches theme', (tester) async {
@@ -144,6 +165,48 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('无历史且能力全零时显示引导空态', (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final navCtrl = NavigationController();
+      final settingsCtrl = SettingsController();
+      final readTracker = ReadTracker();
+      final readingCtrl = ReadingController(readTracker);
+      final userCtrl = UserController()..setUser(User.allocate(calloc));
+      final coord = _EmptyHistoryCoordinator(
+        navCtrl: navCtrl,
+        settingsCtrl: settingsCtrl,
+        readingCtrl: readingCtrl,
+        userCtrl: userCtrl,
+        readTracker: readTracker,
+      );
+      addTearDown(() {
+        readingCtrl.dispose();
+        userCtrl.dispose();
+      });
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: navCtrl),
+            ChangeNotifierProvider.value(value: settingsCtrl),
+            ChangeNotifierProvider.value(value: readingCtrl),
+            ChangeNotifierProvider.value(value: userCtrl),
+            Provider<AppCoordinator>.value(value: coord),
+          ],
+          child: const MaterialApp(home: Scaffold(body: MyPage())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('去读一篇文章开始吧'), findsOneWidget);
+      expect(find.text('阅读满 30 秒后，这里会展示你的能力画像与阅读统计'), findsOneWidget);
     });
   });
 }

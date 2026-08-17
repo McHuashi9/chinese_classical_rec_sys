@@ -24,6 +24,17 @@ typedef struct {
 } UserData;
 
 /**
+ * @brief C ABI 档案元数据结构（本地多用户）
+ */
+typedef struct {
+    int id;                      ///< 档案 id（= user.id）
+    char name[64];               ///< 档案名 (UTF-8)
+    int64_t created_at;          ///< 创建时间 (Unix 时间戳)
+    int64_t last_used_at;        ///< 最近使用时间 (Unix 时间戳)
+    int deleted;                 ///< 历史软删标记（当前恒为 0；删除已改为彻底删除，字段保留以兼容 ABI）
+} ProfileData;
+
+/**
  * @brief C ABI 文本摘要结构 (用于列表展示)
  */
 typedef struct {
@@ -95,6 +106,11 @@ typedef struct {
 #define BRIDGE_ERR_USER       -3   ///< 用户不存在
 #define BRIDGE_ERR_TEXT       -4   ///< 文本不存在
 #define BRIDGE_ERR_INIT       -5   ///< 初始化失败 (initTable 等)
+#define BRIDGE_ERR_DB_CONTENT -6   ///< 内容库缺失/损坏/缺表/含旧用户表
+#define BRIDGE_ERR_DB_USER    -7   ///< 用户库缺失/损坏
+#define BRIDGE_ERR_DB_VERSION -8   ///< db_version 不兼容（0 或 >1）
+#define BRIDGE_ERR_DB_SAME_PATH -9 ///< user.db 与 classical.db 同路径
+#define BRIDGE_ERR_INIT_INCOMPLETE -10 ///< 强制初始化未完成时使用被禁止的功能
 
 #pragma pack(pop)
 

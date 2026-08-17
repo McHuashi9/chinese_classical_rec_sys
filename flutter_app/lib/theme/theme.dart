@@ -29,6 +29,22 @@ class AppTheme {
   /// 已被自定义色盘替代：暗色强调色由 fromSeed(accentColor, dark) 生成
   static const Color darkVermilion = Color(0xFFC75B5B);
 
+  /// 档案头像色板（按档案 id 稳定分配；与设置页主题色预设共用同一组传统色）
+  static const List<Color> profileAvatarColors = <Color>[
+    Color(0xFFB33A3A), // 朱砂
+    Color(0xFF5B7B4A), // 石绿
+    Color(0xFF3A6B8C), // 靛蓝
+    Color(0xFF8B5E3C), // 赭石
+    Color(0xFF6B4E71), // 紫檀
+    Color(0xFF4A7B6B), // 松花绿
+    Color(0xFF3A4E6B), // 黛蓝
+    Color(0xFF7B3A55), // 绛紫
+    Color(0xFFA87E2B), // 藤黄
+    Color(0xFF4E7B5B), // 竹青
+    Color(0xFF2F4B66), // 藏青
+    Color(0xFF9C3A55), // 胭脂
+  ];
+
   // ─── 字体 ─────────────────────────────────────────────────────
 
   static const String fontTitle = 'LXGWWenKai';

@@ -4,7 +4,7 @@
 !include "FileFunc.nsh"
 
 !define PRODUCT_NAME "文言文推荐系统"
-!define PRODUCT_VERSION "0.10.2"
+!define PRODUCT_VERSION "1.1.0"
 !define PRODUCT_PUBLISHER "AnomalyCo"
 
 ; ── MUI2 界面配置 ──────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ RequestExecutionLevel admin
 
 ; ── 安装包 exe 版本信息（属性页 / UAC 弹窗显示友好名称）───────────────────
 ; bump_version.sh 发布时同步为 X.Y.Z.0
-VIProductVersion "0.10.2.0"
+VIProductVersion "1.1.0.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
 VIAddVersionKey "FileDescription" "${PRODUCT_NAME} 安装程序"

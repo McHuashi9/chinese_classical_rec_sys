@@ -21,6 +21,25 @@ final class UserData extends Struct {
   external int lastReadTime;
 }
 
+/// C ProfileData struct — 本地多用户档案元数据
+@Packed(1)
+final class ProfileData extends Struct {
+  @Int32()
+  external int id;
+
+  @Array(64)
+  external Array<Uint8> name;
+
+  @Int64()
+  external int createdAt;
+
+  @Int64()
+  external int lastUsedAt;
+
+  @Int32()
+  external int deleted;
+}
+
 /// C TextInfo struct — 列表展示用摘要
 @Packed(1)
 final class TextInfo extends Struct {
@@ -148,6 +167,11 @@ abstract class BridgeError {
   static const int errUser = -3;
   static const int errText = -4;
   static const int errInit = -5;
+  static const int errDbContent = -6;
+  static const int errDbUser = -7;
+  static const int errDbVersion = -8;
+  static const int errDbSamePath = -9;
+  static const int errInitIncomplete = -10;
 }
 
 /// 从 C 的 null-terminated Uint8 array 读取 Dart String

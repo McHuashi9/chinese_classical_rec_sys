@@ -12,11 +12,11 @@ jobs:
   flutter-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
+          flutter-version: '3.47.x'
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev liblzma-dev pkg-config fuse
@@ -31,7 +31,7 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target chinese_core -j$(nproc)
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
@@ -71,7 +71,7 @@ jobs:
             echo "No CHANGELOG entry found for v${VERSION}" > /tmp/release_body.md
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: /tmp/release_body.md
           files: chinese-classical-rec-sys-*-linux.AppImage
@@ -79,11 +79,11 @@ jobs:
   flutter-windows:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
+          flutter-version: '3.47.x'
 
       - name: Extract version
         id: version
@@ -98,7 +98,7 @@ jobs:
           python3 -m pip install fonttools
           python3 scripts/subset_fonts.py --check-only
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
@@ -110,18 +110,18 @@ jobs:
           version: ${{ steps.version.outputs.version }}
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: chinese-classical-rec-sys-*.exe
 
   flutter-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
-      - uses: actions/setup-java@v5
+          flutter-version: '3.47.x'
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -130,12 +130,29 @@ jobs:
           python3 -m pip install fonttools
           python3 scripts/subset_fonts.py --check-only
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             flutter_app/.dart_tool
             ~/.pub-cache
           key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
+
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release-keystore.jks
+            # PKCS12/JKS 实际密钥口令为 store 口令；keyPassword 与 storePassword 保持一致。
+            printf 'storeFile=/tmp/release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEYSTORE_PASSWORD" \
+              > flutter_app/android/key.properties
+            echo "Configured release signing from GitHub Secrets."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 missing; release APK will fall back to debug signing."
+          fi
 
       - name: Flutter pub get && build
         run: |
@@ -149,18 +166,30 @@ jobs:
           VERSION="${VERSION#v}"
           cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
             "chinese-classical-rec-sys-${VERSION}-android.apk"
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          APK="chinese-classical-rec-sys-${VERSION}-android.apk"
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK"
+          else
+            keytool -printcert -jarfile "$APK" || true
+          fi
       - name: Upload to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: chinese-classical-rec-sys-*-android.apk
 
   ios-build:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: '3.41.x'
+          flutter-version: '3.47.x'
       - name: Subset fonts
         run: |
           python3 -m pip install fonttools --break-system-packages
@@ -186,11 +215,14 @@ jobs:
         run: |
           mkdir -p output
           cd flutter_app/build/ios/iphoneos && zip -r ../../../../output/Runner.ipa Runner.app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-ipa
           path: output/Runner.ipa
+          # IPA 已同步上传到 Release（下一步 softprops），artifact 仅供留档：
+          # 保留 1 天即过期，避免默认 90 天冗余占用
+          retention-days: 1
       - name: Upload IPA to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: output/Runner.ipa

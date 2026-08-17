@@ -1,0 +1,7 @@
+name = "feedback-telemetry"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[r2_buckets]]
+binding = "FEEDBACK_BUCKET"
+bucket_name = "feedback-telemetry"

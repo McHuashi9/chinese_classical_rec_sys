@@ -34,7 +34,32 @@ public:
      * @brief 关闭数据库连接
      */
     void close();
-    
+
+    /**
+     * @brief 挂载附属数据库（ATTACH）
+     * @param alias 附属库别名（调用方传入受控标识，如 "content"）
+     * @param dbPath 附属库文件路径（绑定参数传递，避免转义问题）
+     * @return true 成功，false 失败
+     */
+    bool attachDatabase(const std::string& alias, const std::string& dbPath);
+
+    /**
+     * @brief 卸载附属数据库（DETACH）
+     * @param alias 附属库别名（调用方传入受控标识）
+     * @return true 成功，false 失败
+     */
+    bool detachDatabase(const std::string& alias);
+
+    /**
+     * @brief 读取主库 PRAGMA user_version
+     */
+    int getUserVersion() const;
+
+    /**
+     * @brief 写入主库 PRAGMA user_version
+     */
+    bool setUserVersion(int version);
+
     /**
      * @brief 执行不返回结果的 SQL 语句（如 CREATE, INSERT, UPDATE）
      * @param sql SQL 语句

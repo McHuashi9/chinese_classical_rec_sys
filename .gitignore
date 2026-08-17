@@ -71,3 +71,5 @@ Thumbs.db
 *~
 .env
 .env.*
+# Wrangler 本地状态
+/worker/.wrangler/

@@ -16,9 +16,13 @@ DatabaseManager::~DatabaseManager() {
 bool DatabaseManager::open(const std::string& dbPath) {
     int rc;
 #ifdef _WIN32
-    // Windows 平台使用宽字符 API 以支持中文路径
-    std::wstring wpath = nowide::widen(dbPath);
-    rc = sqlite3_open16(wpath.c_str(), &db);
+    // Windows 平台需要支持中文路径，但必须保持 SQLite 文本编码为 UTF-8：
+    // sqlite3_open16() 新建的数据库默认编码是 UTF-16，ATTACH UTF-8 的 classical.db 会报
+    // "attached databases must use the same text encoding as main database"。
+    // 因此这里先转宽字符再转回 UTF-8，交给 sqlite3_open()（Windows 上文件名按 UTF-8 解释）。
+    const std::wstring wpath = nowide::widen(dbPath);
+    const std::string utf8Path = nowide::narrow(wpath);
+    rc = sqlite3_open(utf8Path.c_str(), &db);
 #else
     rc = sqlite3_open(dbPath.c_str(), &db);
 #endif
@@ -35,6 +39,54 @@ void DatabaseManager::close() {
         sqlite3_close(db);
         db = nullptr;
     }
+}
+
+bool DatabaseManager::attachDatabase(const std::string& alias, const std::string& dbPath) {
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+    sqlite3_stmt* stmt = nullptr;
+    const std::string sql = "ATTACH DATABASE ? AS " + alias + ";";
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, dbPath.c_str(), -1, SQLITE_TRANSIENT);
+    const int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    return true;
+}
+
+bool DatabaseManager::detachDatabase(const std::string& alias) {
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+    const std::string sql = "DETACH DATABASE " + alias + ";";
+    return executeSQL(sql);
+}
+
+int DatabaseManager::getUserVersion() const {
+    if (!db) return 0;
+    sqlite3_stmt* stmt = nullptr;
+    int version = 0;
+    if (sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nullptr) != SQLITE_OK) {
+        return 0;
+    }
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        version = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return version;
+}
+
+bool DatabaseManager::setUserVersion(int version) {
+    return executeSQL("PRAGMA user_version = " + std::to_string(version) + ";");
 }
 
 bool DatabaseManager::executeSQL(const std::string& sql) {

@@ -3,9 +3,11 @@
 # 用法: bash scripts/project/publish_data.sh
 # 前置: 数据变更已 commit（classical.db 已生成并同步到 assets，见 README「快速开始」）
 # 流程: 校验工作树 → 刷新 db_version.txt 并 amend 进 HEAD → 可复现性检查
-#       → gzip → gh release create（data-* prerelease）→ 触发 repro-check CI → 提醒 push
+#       → R15 内容库一致性校验 → gzip → gh release create（data-* prerelease）
+#       → 触发 repro-check CI → 提醒 push
 # 逃生口: SKIP_REPRO_CHECK=1 跳过可复现性检查；SKIP_AMEND=1 跳过版本号刷新与 amend
 #         （SKIP_AMEND=1 时需已手动生成 db_version.txt，适合本地演练）
+# R15 为发布硬闸门，不提供跳过开关。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -59,7 +61,14 @@ if [ "${SKIP_REPRO_CHECK:-}" != "1" ]; then
   bash "$ROOT/scripts/project/check_questions_reproducible.sh"
 fi
 
-# ── 4. 打包并发布 ────────────────────────────────────────────────────────────
+# ── 4. R15 内容库一致性校验（发布硬闸门）────────────────────────────────────
+echo "[publish_data] R15 内容库一致性校验..."
+python3 "$ROOT/scripts/project/check_content_db.py" \
+  --db "$DB_SRC" \
+  --questions-json "$ROOT/build/data/questions.json" \
+  --db-version "$VER_SRC"
+
+# ── 5. 打包并发布 ────────────────────────────────────────────────────────────
 VER="$(cat "$VER_SRC")"
 TAG="data-$(date +%Y%m%d-%H%M%S)"
 
@@ -79,7 +88,7 @@ gh release create "$TAG" \
 
 echo "[publish_data] Done: https://github.com/$(gh repo view --json nameWithOwner --jq .nameWithOwner)/releases/tag/$TAG"
 
-# ── 5. 触发可复现性 CI + 提醒 push（amend 改写本地提交）─────────────────────
+# ── 6. 触发可复现性 CI + 提醒 push（amend 改写本地提交）─────────────────────
 BRANCH="$(git branch --show-current 2>/dev/null || true)"
 if [ -n "$BRANCH" ] && gh workflow run repro-check.yml --ref "$BRANCH" >/dev/null 2>&1; then
   echo "[publish_data] 已触发 repro-check CI（ref=$BRANCH，发布后留档检查）"

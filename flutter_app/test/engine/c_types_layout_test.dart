@@ -9,6 +9,7 @@ import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 void main() {
   test('C ABI 结构尺寸与 bridge/c_types.h 一致（@Packed(1) 布局）', () {
     expect(sizeOf<UserData>(), 216);
+    expect(sizeOf<ProfileData>(), 88);
     expect(sizeOf<TextInfo>(), 516);
     expect(sizeOf<TextDetail>(), 68184);
     expect(sizeOf<ReadingRecordData>(), 24);
