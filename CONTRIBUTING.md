@@ -13,7 +13,7 @@
 
 ## 开发环境
 
-需要 Flutter 3.47+（与 CI 的 `flutter-version: 3.47.x` 对齐）和 CMake 3.28+。
+需要 Flutter 3.47+（与持续集成（CI）的 `flutter-version: 3.47.x` 对齐）和 CMake 3.28+。
 
 ```bash
 # Flutter（如果还没装）
@@ -40,7 +40,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 3. 确保 Commit 命名符合规范（见下文）
 4. 推送并提交 Pull Request 到 `dev`
 
-如果你只改一个文件，直接在 GitHub 网页上编辑并"Create a new branch for this commit" 提 PR 也行。
+如果你只改一个文件，直接在 GitHub 网页上编辑并"Create a new branch for this commit" 提 Pull Request（PR）也行。
 
 ---
 
@@ -70,12 +70,6 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 - `ChangeNotifier` 必须被 `context.watch` / `Selector` / `Consumer` 监听，否则不重建
 - 每次功能变更同时更新 `CHANGELOG.md`
 
-## 版本号与发版
+## 维护者操作
 
-版本号格式 `major.minor.patch`，Git tag 加 `v` 前缀。来源于`pubspec.yaml`。
-
-发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号与 CHANGELOG）。
-
-数据更新独立于 App 发版：数据变更 commit 后运行 `bash scripts/project/publish_data.sh`——自动刷新 db_version 并 amend 进数据提交、题库可复现性检查、压缩 DB 发布为 prerelease，客户端启动时自动同步（详见 [README.md#快速开始](README.md#快速开始) 维护者操作说明；`SKIP_AMEND=1` / `SKIP_REPRO_CHECK=1` 可分别跳过版本号刷新与可复现性检查）。
-
-发版仅维护者操作，贡献者不要在自己 fork 里执行。
+数据重建、数据库结构（DB Schema）变更、数据发布、版本发版等仅维护者执行的流程见 [docs/maintainer.md](docs/maintainer.md)。贡献者不要在自己 fork 里执行发版。

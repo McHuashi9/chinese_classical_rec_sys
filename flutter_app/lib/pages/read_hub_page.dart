@@ -3,6 +3,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -533,20 +534,22 @@ class _ReadHubPageState extends State<ReadHubPage>
     final coord = context.read<AppCoordinator>();
     if (readingCtrl.hasUnrecordedReading) {
       readingCtrl.pauseTimer();
-      final over30 = readingCtrl.elapsedSeconds >= 30;
+      final text = readingCtrl.readingText;
+      final minReadTime = text == null
+          ? fallbackMinReadTime
+          : minReadTimeSeconds(text.charCount);
+      final overThreshold = readingCtrl.elapsedSeconds >= minReadTime;
       final discard = await showConfirmDialog(context,
         title: '放弃阅读？',
-        content: over30
+        content: overThreshold
             ? '已阅读 ${readingCtrl.formattedReadingTime}，将保存阅读记录。确定放弃？'
-            : '当前阅读未满30秒，记录将不会保存。',
+            : '未达到本文最低阅读时间，记录将不会保存。',
         confirmLabel: '放弃',
       );
       if (!discard) { readingCtrl.resumeTimer(); return; }
     }
     readingCtrl.stopTimer();
-    if (readingCtrl.elapsedSeconds >= 30) {
-      coord.applyReadingEffect();
-    }
+    coord.applyReadingEffect();
     readingCtrl.discardReading();
   }
 

@@ -222,11 +222,22 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   Future<void> _maybeShowAnnouncement(
       AppCoordinator coord, SharedPreferences prefs) async {
-    final seen = prefs.getString('announcement_seen_id');
-    if (seen == kCurrentAnnouncement.id) return;
+    final mode = loadAnnouncementMode(prefs);
+    final seen = prefs.getString(kAnnouncementSeenIdKey);
+    if (mode == AnnouncementMode.onUpdate &&
+        seen == kCurrentAnnouncement.id) {
+      return;
+    }
     if (!mounted) return;
-    await AnnouncementDialog.show(context, announcement: kCurrentAnnouncement);
-    await prefs.setString('announcement_seen_id', kCurrentAnnouncement.id);
+    await AnnouncementDialog.show(
+      context,
+      announcement: kCurrentAnnouncement,
+      initialMode: mode,
+      onModeChanged: (m) async {
+        await saveAnnouncementMode(prefs, m);
+      },
+    );
+    await prefs.setString(kAnnouncementSeenIdKey, kCurrentAnnouncement.id);
   }
 
   Future<void> _showInitGuide(AppCoordinator coord) async {
@@ -607,7 +618,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     final discard = await showConfirmDialog(context,
         title: '确认退出',
-        content: '当前文章阅读未满30秒，未完成追踪。确定要放弃当前阅读记录并退出吗？',
+        content: '当前文章未达到本文最低阅读时间，未完成追踪。确定要放弃当前阅读记录并退出吗？',
         confirmLabel: '放弃并退出');
     if (!context.mounted) return AppExitResponse.exit;
     if (discard) {
@@ -664,7 +675,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final discard = await showConfirmDialog(
       context,
       title: '确认退出',
-      content: '当前文章阅读未满30秒，未完成追踪。放弃并退出？',
+      content: '当前文章未达到本文最低阅读时间，未完成追踪。放弃并退出？',
       confirmLabel: '放弃并退出',
     );
     if (!context.mounted) return;

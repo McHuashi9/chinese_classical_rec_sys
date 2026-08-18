@@ -2,21 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/engine/announcement.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-/// 公告 / 作者的话弹窗：上半作者的话，下半版本改动，按钮「知道了」。
-class AnnouncementDialog extends StatelessWidget {
+/// 公告 / 作者的话弹窗：上半作者的话，下半版本改动，可设置弹出模式。
+class AnnouncementDialog extends StatefulWidget {
   final Announcement announcement;
+  final AnnouncementMode initialMode;
+  final ValueChanged<AnnouncementMode>? onModeChanged;
 
-  const AnnouncementDialog({super.key, required this.announcement});
+  const AnnouncementDialog({
+    super.key,
+    required this.announcement,
+    this.initialMode = AnnouncementMode.always,
+    this.onModeChanged,
+  });
 
   static Future<void> show(
     BuildContext context, {
     required Announcement announcement,
+    AnnouncementMode initialMode = AnnouncementMode.always,
+    ValueChanged<AnnouncementMode>? onModeChanged,
   }) {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AnnouncementDialog(announcement: announcement),
+      builder: (_) => AnnouncementDialog(
+        announcement: announcement,
+        initialMode: initialMode,
+        onModeChanged: onModeChanged,
+      ),
     );
+  }
+
+  @override
+  State<AnnouncementDialog> createState() => _AnnouncementDialogState();
+}
+
+class _AnnouncementDialogState extends State<AnnouncementDialog> {
+  late AnnouncementMode _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.initialMode;
   }
 
   @override
@@ -32,7 +58,7 @@ class AnnouncementDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              announcement.authorMessage,
+              widget.announcement.authorMessage,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
             ),
             const SizedBox(height: 16),
@@ -47,11 +73,27 @@ class AnnouncementDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              announcement.changes,
+              widget.announcement.changes,
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
                   ?.copyWith(color: secondaryColor, height: 1.5),
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _mode == AnnouncementMode.onUpdate,
+              title: const Text('以后只在更新后弹出'),
+              subtitle: const Text('关闭后仅在新版本发布时弹出一次'),
+              onChanged: (v) {
+                setState(() {
+                  _mode = v == true
+                      ? AnnouncementMode.onUpdate
+                      : AnnouncementMode.always;
+                });
+                widget.onModeChanged?.call(_mode);
+              },
             ),
           ],
         ),

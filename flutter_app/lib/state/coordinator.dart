@@ -14,6 +14,7 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/user_init_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
@@ -24,7 +25,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '1.1.0';
+  static const currentVersion = '1.1.1';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -292,10 +293,10 @@ class AppCoordinator {
     final seconds = readingCtrl.elapsedSeconds;
     final text = readingCtrl.readingText;
     if (textId != null &&
-        seconds >= 30 &&
         userCtrl.user != null &&
         text != null &&
-        !readTracker.isTextRead(textId)) {
+        !readTracker.isTextRead(textId) &&
+        seconds >= minReadTimeSeconds(text.charCount)) {
       readTracker.markEffectApplied(textId);
       if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
         _statsGeneration++;
@@ -323,7 +324,7 @@ class AppCoordinator {
       return;
     }
     try {
-      // 已读篇目不进推荐位（读满 30s 且效应已应用）；UserController 侧过取+过滤补足 topK
+      // 已读篇目不进推荐位（达到本文最低阅读时间且效应已应用）；UserController 侧过取+过滤补足 topK
       userCtrl.getRecommendations(_engine, _textRepo.texts, topK,
           excludeTextIds: readTracker.getAllTrackedIds().toSet());
       settingsCtrl.clearError();

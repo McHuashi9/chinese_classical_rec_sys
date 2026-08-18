@@ -102,12 +102,10 @@ class KnowledgeTracker implements QuizTracker {
   KnowledgeTracker(this._bridge);
 
   /// 记录阅读事件，更新用户能力
-  /// [readTime] 阅读时长(秒)，>=30s 才会触发更新
+  /// [readTime] 阅读时长(秒)；是否触发由 C++ 按本文最低阅读时间判定
   /// 返回更新后的用户或 null (读取时间不足)
   @override
   User? applyRead(User user, int textId, double readTime) {
-    if (readTime < 30) return null;
-
     final outUser = User.allocate(calloc);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final rc = _bridge.trackerApplyRead(

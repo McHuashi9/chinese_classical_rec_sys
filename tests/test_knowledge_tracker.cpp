@@ -71,6 +71,38 @@ TEST_CASE_METHOD(KTFixture, "applyReadEffect", "[tracker]") {
     }
 }
 
+TEST_CASE_METHOD(KTFixture, "applyReadEffect 动态阅读阈值", "[tracker]") {
+    SECTION("短文阈值低于30s：达到阈值触发") {
+        text.setCharCount(50);  // T = 50 / 150 * 60 = 20s
+        tracker.applyReadEffect(user, text, 25.0, now);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 10);
+    }
+
+    SECTION("短文阈值低于30s：未达到阈值不触发") {
+        text.setCharCount(50);
+        tracker.applyReadEffect(user, text, 15.0, now);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 0);
+    }
+
+    SECTION("长文阈值高于30s：未达到阈值不触发") {
+        text.setCharCount(1000);  // T = 400s
+        tracker.applyReadEffect(user, text, 300.0, now);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 0);
+    }
+
+    SECTION("长文阈值高于30s：达到阈值触发") {
+        text.setCharCount(1000);
+        tracker.applyReadEffect(user, text, 450.0, now);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 10);
+    }
+
+    SECTION("charCount=0 兜底 30s") {
+        text.setCharCount(0);
+        tracker.applyReadEffect(user, text, 30.0, now);
+        REQUIRE(repo.getIncrementCount(USER_ID) == 10);
+    }
+}
+
 TEST_CASE_METHOD(KTFixture, "calculateCurrentAbility", "[tracker]") {
     SECTION("无增量") {
         std::vector<LearningIncrement> increments;

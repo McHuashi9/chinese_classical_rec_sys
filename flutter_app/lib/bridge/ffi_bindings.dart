@@ -14,6 +14,7 @@ final class NativeBridge {
   late final void Function() dbClose;
   late final int Function(Pointer<Utf8> newPath, Pointer<Utf8> curPath)
       dbReplace;
+  late final int Function(Pointer<Utf8> destPath) userExport;
   late final int Function(Pointer<Int32> userVersion, Pointer<Int32> contentVersion)
       dbGetSchemaVersions;
 
@@ -152,6 +153,10 @@ final class NativeBridge {
     dbClose = _lib.lookupFunction<
         Void Function(),
         void Function()>('db_close');
+
+    userExport = _lib.lookupFunction<
+        Int32 Function(Pointer<Utf8>),
+        int Function(Pointer<Utf8>)>('user_export');
 
     dbReplace = _lib.lookupFunction<
         Int32 Function(Pointer<Utf8>, Pointer<Utf8>),

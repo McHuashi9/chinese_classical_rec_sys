@@ -407,7 +407,7 @@ void main() {
     expect(find.text('开始阅读'), findsNothing);
   });
 
-  testWidgets('在读另一篇未满30秒：弹确认框，取消则留在详情页', (tester) async {
+  testWidgets('在读另一篇未达最低阅读时间：弹确认框，取消则留在详情页', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -443,7 +443,7 @@ void main() {
     await tester.tap(find.text('开始阅读'));
     await tester.pumpAndSettle();
     expect(find.text('确认切换'), findsOneWidget);
-    expect(find.text('当前文章阅读未满30秒，确定放弃？'), findsOneWidget);
+    expect(find.text('当前文章未达到本文最低阅读时间，确定放弃？'), findsOneWidget);
 
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
@@ -452,7 +452,7 @@ void main() {
     readingCtrl.pauseTimer();
   });
 
-  testWidgets('在读另一篇未满30秒：确认放弃则丢弃并切换', (tester) async {
+  testWidgets('在读另一篇未达最低阅读时间：确认放弃则丢弃并切换', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -569,6 +569,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       coord.text = _text();
+      readTracker.markEffectApplied(1);
       userCtrl.initTracker(_QuizFakeTracker(
         summary: const QuizAttemptSummary(3, 3, 2),
         due: const [],
@@ -589,6 +590,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       coord.text = _text();
+      readTracker.markEffectApplied(1);
       userCtrl.initTracker(_QuizFakeTracker(
         summary: const QuizAttemptSummary(3, 3, 2),
         due: [_reviewItem(101)],
@@ -608,6 +610,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       coord.text = _text();
+      readTracker.markEffectApplied(1);
       userCtrl.initTracker(_QuizFakeTracker(
         summary: const QuizAttemptSummary(3, 3, 2),
         due: [_reviewItem(101), _reviewItem(102)],
@@ -627,6 +630,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       coord.text = _text();
+      readTracker.markEffectApplied(1);
       userCtrl.initTracker(_QuizFakeTracker(
         summary: const QuizAttemptSummary(5, 2, 0),
         due: const [],
@@ -647,6 +651,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       coord.text = _text();
+      readTracker.markEffectApplied(1);
       userCtrl.initTracker(_QuizFakeTracker(
         summary: const QuizAttemptSummary(0, 0, 0),
         due: const [],
@@ -655,6 +660,26 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('随堂练习'), findsNothing);
+    });
+
+    testWidgets('未读文章：不渲染随堂练习卡片', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      coord.text = _text();
+      userCtrl.initTracker(_QuizFakeTracker(
+        summary: const QuizAttemptSummary(5, 2, 0),
+        due: const [],
+      ));
+      await tester.pumpWidget(wrap(const ArticleDetailPage(textId: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('随堂练习'), findsNothing);
+      expect(find.text('继续练习'), findsNothing);
+      expect(find.text('复习错题'), findsNothing);
     });
   });
 }

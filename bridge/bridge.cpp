@@ -275,6 +275,13 @@ static int openDatabase(const char* content_path, const char* user_path)
         return BRIDGE_ERR_DB_USER;
     }
 
+    // 先判断 SQLite 可读性/损坏，再判断版本：损坏/非 SQLite 文件不应误报“版本不兼容”
+    if (userExisted && !g_state.db->isReadable()) {
+        LOG_ERROR("bridge: user.db 不是可读 SQLite 或已损坏: {}", g_state.db->getLastError());
+        g_state = {};
+        return BRIDGE_ERR_DB_USER;
+    }
+
     // 旧开发版 user.db（db_version=0）不做升级，直接拒绝；>1 也拒绝
     if (userExisted && g_state.db->getUserVersion() != 1) {
         LOG_ERROR("bridge: user.db db_version={} 不兼容，仅支持 1", g_state.db->getUserVersion());
@@ -364,6 +371,39 @@ extern "C" CHINESE_CORE_EXPORT void db_close()
     std::lock_guard<std::mutex> lock(g_mtx);
     g_state = {};
     LOG_INFO("bridge: db_close 完成");
+}
+
+extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_state.initialized || !g_state.db) return BRIDGE_ERR_NOT_INIT;
+    if (!dest_path || !*dest_path) return BRIDGE_ERR_GENERIC;
+
+    sqlite3* dest = nullptr;
+    const int openRc = sqlite3_open(dest_path, &dest);
+    if (openRc != SQLITE_OK) {
+        if (dest) sqlite3_close(dest);
+        LOG_ERROR("bridge: user_export 打开目标失败: {}", sqlite3_errmsg(dest));
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    sqlite3_backup* backup = sqlite3_backup_init(
+        dest, "main", g_state.db->getConnection(), "main");
+    if (!backup) {
+        LOG_ERROR("bridge: user_export backup_init 失败: {}", sqlite3_errmsg(dest));
+        sqlite3_close(dest);
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    const int stepRc = sqlite3_backup_step(backup, -1);
+    const bool ok = stepRc == SQLITE_DONE;
+    if (!ok) {
+        LOG_ERROR("bridge: user_export backup_step 失败 rc={} msg={}",
+                  stepRc, sqlite3_errmsg(dest));
+    }
+    sqlite3_backup_finish(backup);
+    sqlite3_close(dest);
+    return ok ? BRIDGE_OK : BRIDGE_ERR_GENERIC;
 }
 
 // ─── db_replace（纯内容库替换，user.db 永不替换） ────────────────────────────────

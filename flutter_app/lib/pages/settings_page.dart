@@ -1,8 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/services.dart';
+import 'package:ffi/ffi.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chinese_classical_rec_sys/widgets/feedback_dialog.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
@@ -30,6 +37,11 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _checking = false;
+
+  bool get _isDesktop =>
+      defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS;
 
   @override
   Widget build(BuildContext context) {
@@ -347,6 +359,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildLoggingCard(
       BuildContext context, bool isSmall, String logLevel, double fontScale) {
+    final isDesktop = _isDesktop;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -385,6 +399,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
+            if (isDesktop) ...[
+              SizedBox(height: context.gapSmall),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _openLogLocation,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('打开日志所在位置'),
+                ),
+              ),
+            ] else ...[
+              SizedBox(height: context.gapSmall),
+              Text(
+                '移动端日志已包含在反馈中',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: isDark
+                          ? AppTheme.darkInkSecondary
+                          : AppTheme.inkSecondary,
+                    ),
+              ),
+            ],
           ],
         ),
       ),
@@ -471,10 +506,18 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             SizedBox(height: context.gapSmall),
             InkWell(
-              onTap: () => AnnouncementDialog.show(
-                context,
-                announcement: kCurrentAnnouncement,
-              ),
+              onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                if (!mounted) return;
+                await AnnouncementDialog.show(
+                  context,
+                  announcement: kCurrentAnnouncement,
+                  initialMode: loadAnnouncementMode(prefs),
+                  onModeChanged: (m) async {
+                    await saveAnnouncementMode(prefs, m);
+                  },
+                );
+              },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
@@ -532,6 +575,19 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () => _openFeedbackDialog(context, coord),
             ),
             SizedBox(height: context.gapSmall),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.file_upload_outlined,
+                  size: 20 * fontScale, color: secondaryColor),
+              title: Text('导出学习数据',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: secondaryColor)),
+              subtitle: const Text('生成 user.db 快照，可发给开发者用于参数校准'),
+              trailing: Icon(Icons.chevron_right,
+                  size: 20 * fontScale, color: secondaryColor),
+              onTap: _exportLearningData,
+            ),
+            SizedBox(height: context.gapSmall),
             Row(
               children: [
                 Icon(Icons.article,
@@ -564,6 +620,100 @@ class _SettingsPageState extends State<SettingsPage> {
       contentDataVersion: coord.contentDataVersion,
       schemaVersions: schemaText,
     );
+  }
+
+  Future<void> _openLogLocation() async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      final logDir = Directory('${supportDir.path}/logs');
+      final logFile = File('${logDir.path}/app.log');
+      final uri =
+          logFile.existsSync() ? Uri.file(logFile.path) : Uri.file(logDir.path);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开日志位置')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法打开日志位置：$e')),
+        );
+      }
+    }
+  }
+
+  String _exportFileName() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'profile_backup_${now.year}${two(now.month)}${two(now.day)}_'
+        '${two(now.hour)}${two(now.minute)}.db';
+  }
+
+  Future<void> _exportLearningData() async {
+    final coord = context.read<AppCoordinator>();
+    final bridge = coord.bridge;
+    if (bridge == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('核心引擎未就绪，无法导出')),
+        );
+      }
+      return;
+    }
+
+    final filename = _exportFileName();
+    try {
+      if (_isDesktop) {
+        final location = await getSaveLocation(
+          suggestedName: filename,
+          acceptedTypeGroups: const [
+            XTypeGroup(label: 'SQLite 数据库', extensions: ['db']),
+          ],
+        );
+        if (location == null) return;
+        final path = location.path;
+        final pathPtr = path.toNativeUtf8(allocator: calloc);
+        final rc = bridge.userExport(pathPtr);
+        calloc.free(pathPtr);
+        if (!mounted) return;
+        if (rc == BridgeError.ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已导出到 $path')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('导出失败，请重试')),
+          );
+        }
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$filename');
+        if (file.existsSync()) await file.delete();
+        final pathPtr = file.path.toNativeUtf8(allocator: calloc);
+        final rc = bridge.userExport(pathPtr);
+        calloc.free(pathPtr);
+        if (!mounted) return;
+        if (rc != BridgeError.ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('导出失败，请重试')),
+          );
+          return;
+        }
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(file.path)],
+          fileNameOverrides: [filename],
+          title: '导出学习数据',
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败：$e')),
+        );
+      }
+    }
   }
 
   String _dbErrorText(int? code) {

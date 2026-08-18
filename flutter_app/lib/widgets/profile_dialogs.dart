@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
+import 'package:chinese_classical_rec_sys/pages/init_onboarding_page.dart';
 
 /// 首次建档引导是否已展示的 SharedPreferences 标记。
 const String kProfileOnboardedKey = 'profile_onboarded';
@@ -155,6 +155,13 @@ Future<void> _createProfileFromOnboarding(
     return;
   }
   coord.userCtrl.refreshInitState();
+  // 新建“完成初始化”档案后必须立即进入初始化流程；未完成前退出/杀进程，
+  // 下次启动仍会被主流程拦截继续初始化，避免出现“未初始化但有阅读记录”的中间态。
+  if (context.mounted && !coord.userCtrl.isInitialized) {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const InitOnboardingPage()),
+    );
+  }
 }
 
 Future<void> _renameDefaultFromOnboarding(
@@ -193,12 +200,8 @@ Future<String?> promptProfileName(
       content: TextField(
         controller: controller,
         autofocus: true,
-        inputFormatters: [
-          _Utf8ByteLimitingFormatter(maxProfileNameBytes),
-        ],
         decoration: const InputDecoration(
           hintText: '请输入用户名称',
-          helperText: '最多 63 字节（约 21 个汉字）',
         ),
         onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
       ),
@@ -217,35 +220,15 @@ Future<String?> promptProfileName(
   // 不手动 dispose controller：对话框关闭动画期间 TextField 仍持有监听。
   // 局部 controller 随 GC 回收，短生命周期可接受。
   final name = result?.trim();
-  if (name == null || name.isEmpty) return null;
-  return normalizeProfileName(name);
-}
-
-/// 按 UTF-8 字节数限制输入（档案名 C 侧为定长 64 字节缓冲，超出即非法）
-class _Utf8ByteLimitingFormatter extends TextInputFormatter {
-  final int maxBytes;
-
-  _Utf8ByteLimitingFormatter(this.maxBytes);
-
-  @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
-    if (utf8.encode(newValue.text).length <= maxBytes) return newValue;
-
-    var text = newValue.text;
-    while (text.isNotEmpty && utf8.encode(text).length > maxBytes) {
-      text = text.substring(0, text.length - 1);
-      // 尾部若剩半个代理对（emoji 被拆），继续删，避免悬空代理变乱码字符
-      if (text.isNotEmpty) {
-        final last = text.codeUnitAt(text.length - 1);
-        if (last >= 0xD800 && last <= 0xDBFF) {
-          text = text.substring(0, text.length - 1);
-        }
-      }
-    }
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
+  if (name == null) return null;
+  if (!context.mounted) return null;
+  if (name.isEmpty) {
+    _showSnack(context, '名称不能为空');
+    return null;
   }
+  if (utf8.encode(name).length > maxProfileNameBytes) {
+    _showSnack(context, '名称过长，请缩短');
+    return null;
+  }
+  return normalizeProfileName(name);
 }

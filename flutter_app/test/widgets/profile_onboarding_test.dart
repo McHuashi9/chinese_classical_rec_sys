@@ -7,8 +7,10 @@ import 'package:chinese_classical_rec_sys/engine/profile_repository.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/user_init_repository.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
+import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/user_profile.dart';
+import 'package:chinese_classical_rec_sys/pages/init_onboarding_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -103,6 +105,9 @@ class _FakeCoordinator extends AppCoordinator {
   bool renameCalled = false;
   bool switchCalled = false;
   int? switchedTo;
+
+  @override
+  List<ChineseText> getInitTexts() => [];
 
   @override
   int? createProfile(String name) {
@@ -306,6 +311,8 @@ void main() {
       expect(coord.switchCalled, isTrue);
       expect(coord.switchedTo, 2);
       expect(coord.userCtrl.profiles.map((p) => p.name), contains('小明'));
+      // 新建未初始化档案后必须立即进入初始化流程
+      expect(find.byType(InitOnboardingPage), findsOneWidget);
     });
 
     testWidgets('默认已初始化时新建档案：选择“完成初始化”', (tester) async {
@@ -382,6 +389,42 @@ void main() {
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
 
+      expect(coord.createCalled, isFalse);
+      expect(coord.switchCalled, isFalse);
+      expect(coord.userCtrl.profiles.length, 1);
+    });
+
+    testWidgets('新建档案名超长时拒绝并提示', (tester) async {
+      final coord = _makeCoordinator();
+      await tester.pumpWidget(_host(coord));
+      await tester.tap(find.text('开始引导'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('新建档案'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '长' * 22);
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('名称过长，请缩短'), findsOneWidget);
+      expect(coord.createCalled, isFalse);
+      expect(coord.switchCalled, isFalse);
+      expect(coord.userCtrl.profiles.length, 1);
+    });
+
+    testWidgets('新建档案名为空时提示且不创建', (tester) async {
+      final coord = _makeCoordinator();
+      await tester.pumpWidget(_host(coord));
+      await tester.tap(find.text('开始引导'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('新建档案'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '   ');
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('名称不能为空'), findsOneWidget);
       expect(coord.createCalled, isFalse);
       expect(coord.switchCalled, isFalse);
       expect(coord.userCtrl.profiles.length, 1);

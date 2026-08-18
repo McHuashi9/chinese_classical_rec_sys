@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
+import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -417,7 +418,8 @@ void main() {
     expect(find.textContaining('1 / 2', findRichText: true), findsOneWidget);
     expect(find.textContaining('第1题解析'), findsOneWidget);
     expect(find.textContaining('第2题解析'), findsOneWidget);
-    expect(find.textContaining('你的答案'), findsNWidgets(2));
+    expect(find.text('你的选择'), findsNWidgets(2));
+    expect(find.textContaining('你的答案'), findsNothing);
     expect(find.text('返回文库'), findsOneWidget);
     expect(find.textContaining('能力已随作答更新'), findsOneWidget);
 
@@ -554,10 +556,98 @@ void main() {
     // 只展示已生效的第 1 题，第 2 题不展示
     expect(find.textContaining('第1题解析'), findsOneWidget);
     expect(find.textContaining('第2题解析'), findsNothing);
-    expect(find.textContaining('你的答案'), findsOneWidget);
+    expect(find.text('你的选择'), findsOneWidget);
+    expect(find.textContaining('你的答案'), findsNothing);
 
     // 部分失败路径：sublist 共享同一 owner 块，仍恰好释放一次
     await tester.pumpWidget(const SizedBox());
     expect(tracker.disposeCount, 1);
+  });
+
+  testWidgets('结果页展示全部选项并标记用户选择与正确答案', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+    _writeStr(questions.first.ptr.ref.explanation, '正确答案：B。解析内容');
+    final answers = [
+      QuizAnswer(
+        questionId: 100,
+        selected: 0,
+        correct: false,
+        abilityBefore: List.filled(10, 0.5),
+      ),
+    ];
+
+    final userCtrl = UserController();
+    userCtrl.initTracker(_FakeQuizTracker());
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    await tester.pumpWidget(_wrap(
+      QuizResultPage(
+        articleTitle: '岳阳楼记',
+        answers: answers,
+        questions: questions,
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    // 四个选项全部展示
+    for (var i = 1; i <= 4; i++) {
+      expect(find.text('选项$i释义'), findsOneWidget);
+    }
+    // 用户选 A、正确答案 B → 只有一个对勾（正确选项标记）
+    expect(find.text('你的选择'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('结果页能从解析中的正确答案文本识别正确选项', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+    // 真实数据格式：正确答案后跟选项文本，而不是字母。
+    _writeStr(questions.first.ptr.ref.explanation, '正确答案：选项3释义。解析内容');
+    final answers = [
+      QuizAnswer(
+        questionId: 100,
+        selected: 0,
+        correct: false,
+        abilityBefore: List.filled(10, 0.5),
+      ),
+    ];
+
+    final userCtrl = UserController();
+    userCtrl.initTracker(_FakeQuizTracker());
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    await tester.pumpWidget(_wrap(
+      QuizResultPage(
+        articleTitle: '岳阳楼记',
+        answers: answers,
+        questions: questions,
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    // 用户选 A、正确答案是选项3释义 → 应有一个绿色对勾标记正确选项
+    expect(find.text('你的选择'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
   });
 }

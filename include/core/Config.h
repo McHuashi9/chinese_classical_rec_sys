@@ -40,8 +40,9 @@ struct Config {
     static constexpr long long REVIEW_MAX_INTERVAL = 30LL * 24 * 3600;   // 间隔封顶（秒）
     static constexpr int REVIEW_MASTER_STREAK = 3;                       // 连续答对达到该次数移除（视为掌握）
     
-    // 最小阅读时间阈值（秒）
-    static constexpr int MIN_READ_TIME = 30;
+    // 阅读效应阈值：T_min = charCount / MAX_READ_SPEED * 60；无字数时兜底 MIN_READ_TIME
+    static constexpr int MIN_READ_TIME = 30;          // 兜底最小阅读时间（秒）
+    static constexpr double MAX_READ_SPEED = 150.0;   // 最大阅读速度（字/分钟）
     
     // 增量过滤阈值（低于此值的有意义增量记录将被忽略）
     static constexpr double MIN_DELTA_THRESHOLD = 0.0001;

@@ -41,6 +41,24 @@ void DatabaseManager::close() {
     }
 }
 
+bool DatabaseManager::isReadable() {
+    if (!db) return false;
+    sqlite3_stmt* stmt = nullptr;
+    const int rc = sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master LIMIT 1;", -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    const int stepRc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    // 空库没有 sqlite_master 行，step 返回 SQLITE_DONE，仍属于可读 SQLite。
+    if (stepRc != SQLITE_ROW && stepRc != SQLITE_DONE) {
+        lastError = sqlite3_errmsg(db);
+        return false;
+    }
+    return true;
+}
+
 bool DatabaseManager::attachDatabase(const std::string& alias, const std::string& dbPath) {
     if (!db) {
         lastError = "数据库未打开";

@@ -35,9 +35,13 @@ double KnowledgeTracker::calculateForgettingFactor(double deltaDays) const {
 
 void KnowledgeTracker::applyReadEffect(User& user, const Text& text, double readTime,
                                         time_t timestamp) {
-    // 检查阅读时间是否达到阈值
-    if (readTime < Config::MIN_READ_TIME) {
-        LOG_DEBUG("阅读时间 {:.1f}s 未达到阈值 {}s，不触发知识追踪", readTime, Config::MIN_READ_TIME);
+    // 检查阅读时间是否达到本文最低推荐阅读时间 T_min = L_a / v_max
+    const double minReadTime = text.getCharCount() > 0
+        ? text.getCharCount() / Config::MAX_READ_SPEED * 60.0
+        : static_cast<double>(Config::MIN_READ_TIME);
+    if (readTime < minReadTime) {
+        LOG_DEBUG("阅读时间 {:.1f}s 未达到本文最低阅读时间 {:.1f}s，不触发知识追踪",
+                  readTime, minReadTime);
         return;
     }
     

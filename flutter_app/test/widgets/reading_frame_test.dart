@@ -20,18 +20,22 @@ void main() {
     required bool showTranslation,
     required VoidCallback onToggle,
     required void Function(int, int) onPaginate,
+    int charCount = 0,
+    int elapsedSeconds = 0,
+    VoidCallback? onComplete,
   }) {
     return ReadingViewData(
-      text: const ChineseText(
+      text: ChineseText(
         id: 1, title: '测试', author: 'a', dynasty: '唐',
         content: '原文内容\n\n第二段原文内容',
+        charCount: charCount,
       ),
       pages: const ['第一页原文内容', '第二页原文内容'],
       currentPage: 0,
       totalPages: 2,
       formattedTime: '00:00',
       isDark: false,
-      elapsedSeconds: 0,
+      elapsedSeconds: elapsedSeconds,
       alreadyTracked: false,
       annotations: const {},
       showTranslation: showTranslation,
@@ -39,7 +43,7 @@ void main() {
       onPaginate: onPaginate,
       onNextPage: () {},
       onPrevPage: () {},
-      onComplete: () {},
+      onComplete: onComplete ?? () {},
       onAbandon: () {},
       onExit: () {},
     );
@@ -115,5 +119,69 @@ void main() {
     settings.setFontScale(1.25);
     await tester.pump();
     expect(paginateCount, greaterThan(before));
+  });
+
+  testWidgets('短文完成按钮按动态阈值启用和倒计时', (tester) async {
+    final settings = SettingsController();
+    // charCount=50 -> T_min = 50 / 150 * 60 = 20s
+    var completed = false;
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+        charCount: 50,
+        elapsedSeconds: 19,
+        onComplete: () => completed = true,
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('1s'), findsOneWidget);
+    expect(find.text('完成'), findsNothing);
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+        charCount: 50,
+        elapsedSeconds: 20,
+        onComplete: () => completed = true,
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('完成'), findsOneWidget);
+    await tester.tap(find.text('完成'));
+    expect(completed, isTrue);
+  });
+
+  testWidgets('长文完成按钮在 30s 时仍按动态阈值禁用', (tester) async {
+    final settings = SettingsController();
+    // charCount=1000 -> T_min = 1000 / 150 * 60 = 400s
+    var completed = false;
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+        charCount: 1000,
+        elapsedSeconds: 30,
+        onComplete: () => completed = true,
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('370s'), findsOneWidget);
+    expect(find.text('完成'), findsNothing);
+
+    await tester.tap(find.text('370s'));
+    expect(completed, isFalse);
   });
 }

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <set>
 #include <sstream>
 #include <string>
@@ -63,6 +64,7 @@ std::pair<std::string, std::string> quizWorkDb(const std::string& tag)
 extern "C" {
     int db_open(const char* content_path, const char* user_path);
     void db_close();
+    int user_export(const char* dest_path);
     int db_get_schema_versions(int* user_version, int* content_version);
     int user_load(UserData* out);
     int user_save(const UserData* in);
@@ -146,6 +148,66 @@ TEST_CASE("bridge - db_open 无效路径返回错误", "[bridge][smoke]") {
 
     int rc = db_open("/nonexistent/path/to/content.db", "/nonexistent/path/to/user.db");
     REQUIRE(rc == BRIDGE_ERR_DB_USER);
+}
+
+TEST_CASE("bridge - 损坏 user.db 返回 DB_USER 而非 DB_VERSION", "[bridge][smoke]") {
+    db_close();
+    const std::string content = test_helpers::makeContentDb("open_corrupt_user");
+    const std::string user = test_helpers::makeUserDb("open_corrupt_user");
+    {
+        std::ofstream out(user, std::ios::binary);
+        out << "this is not a sqlite database\n";
+    }
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_ERR_DB_USER);
+    db_close();
+}
+
+TEST_CASE("bridge - user_export 生成一致性 SQLite 快照", "[bridge][smoke]") {
+    db_close();
+    const auto [content, user] = quizWorkDb("user_export");
+    REQUIRE(db_open(content.c_str(), user.c_str()) == BRIDGE_OK);
+
+    const std::string dest =
+        test_helpers::workDir("user_export") + "/exported.db";
+    std::error_code ec;
+    std::filesystem::remove(dest, ec);
+    REQUIRE(user_export(dest.c_str()) == BRIDGE_OK);
+
+    auto collectTables = [](const std::string& path) {
+        std::set<std::string> names;
+        sqlite3* db = nullptr;
+        if (sqlite3_open(path.c_str(), &db) != SQLITE_OK) return names;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db,
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                names.insert(reinterpret_cast<const char*>(
+                    sqlite3_column_text(stmt, 0)));
+            }
+        }
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return names;
+    };
+
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(dest.c_str(), &db) == SQLITE_OK);
+    int version = -1;
+    sqlite3_stmt* stmt = nullptr;
+    REQUIRE(sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nullptr)
+            == SQLITE_OK);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        version = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    REQUIRE(version == 1);
+
+    const auto sourceTables = collectTables(user);
+    const auto exportedTables = collectTables(dest);
+    REQUIRE(exportedTables == sourceTables);
+    db_close();
 }
 
 TEST_CASE("bridge - db_get_schema_versions 返回双库版本", "[bridge][smoke]") {

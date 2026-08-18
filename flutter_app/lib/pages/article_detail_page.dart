@@ -25,8 +25,7 @@ class ArticleDetailPage extends StatelessWidget {
   const ArticleDetailPage({super.key, required this.textId});
 
   double _estimatedMinutes(int charCount) {
-    const vMax = 150;
-    final minutes = charCount / vMax;
+    final minutes = charCount / maxReadSpeed;
     return minutes < 1.0 ? 1.0 : double.parse(minutes.toStringAsFixed(1));
   }
 
@@ -333,7 +332,7 @@ class ArticleDetailPage extends StatelessWidget {
       readingCtrl.pauseTimer();
       final discard = await showConfirmDialog(context,
         title: '确认切换',
-        content: '当前文章阅读未满30秒，确定放弃？',
+        content: '当前文章未达到本文最低阅读时间，确定放弃？',
         confirmLabel: '放弃',
       );
       if (!discard) {
@@ -427,6 +426,11 @@ class _QuizSectionState extends State<_QuizSection> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.select((SettingsController s) => s.darkMode);
+    // 随堂练习只对已读文章展示：未读文章不显示“继续练习/复习错题”入口。
+    final coord = context.read<AppCoordinator>();
+    if (!coord.readTracker.isTextRead(widget.textId)) {
+      return const SizedBox.shrink();
+    }
     final summary = _summary;
     if (summary == null || summary.total <= 0) return const SizedBox.shrink();
 

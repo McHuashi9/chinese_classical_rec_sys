@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
 import 'package:chinese_classical_rec_sys/widgets/annotation_popup.dart';
 
@@ -291,6 +292,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
   Widget _buildNavigationBar(BuildContext context) {
     final hasPrev = widget.viewData.currentPage > 0;
     final hasNext = widget.viewData.currentPage < widget.viewData.totalPages - 1;
+    final minReadTime = minReadTimeSeconds(widget.viewData.text.charCount);
+    final canComplete = widget.viewData.elapsedSeconds >= minReadTime;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -336,8 +339,10 @@ class _ReadingFrameState extends State<ReadingFrame> {
           )
         else
           TextButton(
-            onPressed: widget.viewData.elapsedSeconds >= 30 ? widget.viewData.onComplete : null,
-            child: Text(widget.viewData.elapsedSeconds >= 30 ? '完成' : '${30 - widget.viewData.elapsedSeconds}s'),
+            onPressed: canComplete ? widget.viewData.onComplete : null,
+            child: Text(canComplete
+                ? '完成'
+                : '${(minReadTime - widget.viewData.elapsedSeconds).ceil()}s'),
           ),
       ],
     );

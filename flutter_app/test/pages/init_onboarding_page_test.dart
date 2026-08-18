@@ -131,7 +131,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('暂无内容'), findsNothing);
-    expect(find.text('严先生祠堂记'), findsWidgets);
+    // 初始化阅读页与正常阅读页一致：无 AppBar 返回按钮、标题只出现一次（在 ReadingFrame 内）
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
+    expect(find.text('严先生祠堂记'), findsOneWidget);
   });
 
   testWidgets('两篇均已读后按钮变为开始初始化', (tester) async {

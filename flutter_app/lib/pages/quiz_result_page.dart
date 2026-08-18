@@ -7,6 +7,40 @@ import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 
+/// 从解析文案“正确答案：X。”中解析正确选项下标。
+/// 优先支持“正确答案：B。”这类字母写法；真实数据为“正确答案：<选项文本>。”，
+/// 因此再按选项文本在“正确答案：”后最早出现的位置匹配。
+final RegExp _correctAnswerPattern = RegExp(r'正确答案[:：]\s*([A-D])');
+final RegExp _correctAnswerMarkerPattern = RegExp(r'正确答案[:：]\s*');
+
+int? _correctOptionIndex(Question q) {
+  final explanation = q.explanation;
+  final letterMatch = _correctAnswerPattern.firstMatch(explanation);
+  if (letterMatch != null) {
+    return letterMatch.group(1)!.codeUnitAt(0) - 0x41;
+  }
+  final markerMatch = _correctAnswerMarkerPattern.firstMatch(explanation);
+  if (markerMatch == null) return null;
+  final rest = explanation.substring(markerMatch.end);
+  int? bestIndex;
+  var bestStart = -1;
+  var bestLen = -1;
+  for (var i = 0; i < 4; i++) {
+    final option = q.option(i).trim();
+    if (option.isEmpty) continue;
+    final start = rest.indexOf(option);
+    if (start < 0) continue;
+    if (bestIndex == null ||
+        start < bestStart ||
+        (start == bestStart && option.length > bestLen)) {
+      bestIndex = i;
+      bestStart = start;
+      bestLen = option.length;
+    }
+  }
+  return bestIndex;
+}
+
 /// 答题结果页：对错统计 + 每题解析 + 能力变化摘要
 /// 持有题目列表的内存所有权（QuizPage 提交时转移过来），销毁时统一释放
 class QuizResultPage extends StatefulWidget {
@@ -181,7 +215,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
   Widget _reviewTile(BuildContext context, int i, bool isDark) {
     final q = widget.questions[i];
     final a = widget.answers[i];
-    final optionChar = String.fromCharCode(0x41 + a.selected);
+    final correctIndex = _correctOptionIndex(q);
 
     return Padding(
       padding: EdgeInsets.only(bottom: context.gapMedium),
@@ -215,14 +249,6 @@ class _QuizResultPageState extends State<QuizResultPage> {
                         ),
                   ),
                 ),
-                Text(
-                  '你的答案 $optionChar',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isDark
-                            ? AppTheme.darkInkSecondary
-                            : AppTheme.inkSecondary,
-                      ),
-                ),
               ],
             ),
             SizedBox(height: context.gapSmall),
@@ -247,6 +273,19 @@ class _QuizResultPageState extends State<QuizResultPage> {
               ),
             ],
             SizedBox(height: context.gapSmall),
+            for (var idx = 0; idx < 4; idx++) ...[
+              if (q.option(idx).isNotEmpty) ...[
+                _OptionTile(
+                  label: String.fromCharCode(0x41 + idx),
+                  text: q.option(idx),
+                  isSelected: idx == a.selected,
+                  isCorrect: idx == correctIndex,
+                  isDark: isDark,
+                ),
+                if (idx < 3) SizedBox(height: context.gapTiny),
+              ],
+            ],
+            SizedBox(height: context.gapSmall),
             Text(
               '解析：${q.explanation}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -256,6 +295,78 @@ class _QuizResultPageState extends State<QuizResultPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  final String label;
+  final String text;
+  final bool isSelected;
+  final bool isCorrect;
+  final bool isDark;
+
+  const _OptionTile({
+    required this.label,
+    required this.text,
+    required this.isSelected,
+    required this.isCorrect,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderColor;
+    final Color? bgColor;
+    if (isSelected) {
+      borderColor = isCorrect ? AppTheme.stoneGreen : context.accent;
+      bgColor = (isCorrect ? AppTheme.stoneGreen : context.accent)
+          .withAlpha(isDark ? 30 : 15);
+    } else if (isCorrect) {
+      borderColor = AppTheme.stoneGreen;
+      bgColor = null;
+    } else {
+      borderColor = isDark ? AppTheme.borderLight : AppTheme.border;
+      bgColor = null;
+    }
+    final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '$label.',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: borderColor,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: textColor, height: 1.3),
+            ),
+          ),
+          if (isSelected) ...[
+            const SizedBox(width: 8),
+            Text(
+              '你的选择',
+              style: TextStyle(fontSize: 12, color: borderColor),
+            ),
+          ],
+          if (isCorrect) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.check_circle, size: 16, color: AppTheme.stoneGreen),
+          ],
+        ],
       ),
     );
   }

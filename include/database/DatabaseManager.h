@@ -36,6 +36,14 @@ public:
     void close();
 
     /**
+     * @brief 检查已打开的主库是否为可读 SQLite 数据库
+     *
+     * 空文件（0 字节）会被 SQLite 当作空库，属于可读；非 SQLite/损坏文件
+     * 在访问 sqlite_master 时会返回 SQLITE_NOTADB，视为不可读。
+     */
+    bool isReadable();
+
+    /**
      * @brief 挂载附属数据库（ATTACH）
      * @param alias 附属库别名（调用方传入受控标识，如 "content"）
      * @param dbPath 附属库文件路径（绑定参数传递，避免转义问题）

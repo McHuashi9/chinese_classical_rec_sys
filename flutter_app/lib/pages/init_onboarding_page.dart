@@ -257,19 +257,6 @@ class _InitReadingPageState extends State<InitReadingPage> {
 
         return Scaffold(
           backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back,
-                  color: isDark ? AppTheme.darkInk : AppTheme.ink),
-              onPressed: _finish,
-            ),
-            title: Text(widget.text.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFamily: AppTheme.fontTitle,
-                    )),
-          ),
           body: SafeArea(
             child: ReadingFrame(
               viewData: ReadingViewData(
