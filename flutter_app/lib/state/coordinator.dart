@@ -303,6 +303,20 @@ class AppCoordinator {
     applyReadingEffect();
   }
 
+  /// 用户在“退出/放弃”确认后的统一收尾。
+  ///
+  /// [discard] 为 true 时按 [finishReadingSession] 语义补结算并丢弃阅读状态；
+  /// 为 false 时恢复计时（保留阅读状态，等待继续阅读）。
+  /// 若调用方已先调用 [stopAndApplyReadingEffect]，此处重复结算幂等：
+  /// [applyReadingEffect] 内部有已读标记，不会二次应用阅读效应。
+  void settleReadingAfterDiscardChoice({required bool discard}) {
+    if (discard) {
+      finishReadingSession();
+    } else {
+      readingCtrl.resumeTimer();
+    }
+  }
+
   void applyReadingEffect() {
     // 替换窗口内引擎关闭：跳过阅读效应（防静默失败；当前窗口为原子段，正常不可达）
     if (syncing.value) return;

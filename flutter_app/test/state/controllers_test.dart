@@ -6,6 +6,7 @@ import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -315,6 +316,58 @@ void main() {
       expect(identical(ctrl.user, u1), isTrue);
       ctrl.setUser(u2);
       expect(identical(ctrl.user, u2), isTrue);
+    });
+  });
+
+  group('AppCoordinator 阅读结算收尾', () {
+    late NavigationController navCtrl;
+    late SettingsController settingsCtrl;
+    late ReadTracker readTracker;
+    late ReadingController readingCtrl;
+    late UserController userCtrl;
+    late AppCoordinator coord;
+
+    setUp(() {
+      navCtrl = NavigationController();
+      settingsCtrl = SettingsController();
+      readTracker = ReadTracker();
+      readingCtrl = ReadingController(readTracker);
+      userCtrl = UserController();
+      coord = AppCoordinator(
+        navCtrl: navCtrl,
+        settingsCtrl: settingsCtrl,
+        readingCtrl: readingCtrl,
+        userCtrl: userCtrl,
+        readTracker: readTracker,
+      );
+      readingCtrl.loadText(
+        const ChineseText(
+          id: 1,
+          title: '岳阳楼记',
+          author: '范仲淹',
+          dynasty: '宋',
+          content: '庆历四年春',
+          charCount: 20,
+        ),
+      );
+    });
+
+    tearDown(() {
+      readingCtrl.stopTimer();
+      readingCtrl.dispose();
+      userCtrl.dispose();
+    });
+
+    test('discard=false 保留阅读状态并恢复计时', () {
+      coord.settleReadingAfterDiscardChoice(discard: false);
+      expect(readingCtrl.isReading, isTrue);
+      expect(readingCtrl.hasUnrecordedReading, isTrue);
+    });
+
+    test('discard=true 结算并丢弃阅读状态', () {
+      coord.settleReadingAfterDiscardChoice(discard: true);
+      expect(readingCtrl.isReading, isFalse);
+      expect(readingCtrl.hasUnrecordedReading, isFalse);
     });
   });
 }

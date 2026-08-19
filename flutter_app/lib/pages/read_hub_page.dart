@@ -671,9 +671,11 @@ class _ReadHubPageState extends State<ReadHubPage>
         confirmLabel: '放弃',
       );
       if (!discard) {
-        readingCtrl.resumeTimer();
+        coord.settleReadingAfterDiscardChoice(discard: false);
         return;
       }
+      coord.settleReadingAfterDiscardChoice(discard: true);
+      return;
     }
     coord.finishReadingSession();
   }
