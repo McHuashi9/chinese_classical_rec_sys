@@ -46,14 +46,15 @@ class ArticleDetailPage extends StatelessWidget {
     final estMinutes = _estimatedMinutes(text.charCount);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+      backgroundColor: context.appColors.paper,
       appBar: AppBar(
+        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back,
-            color: isDark ? AppTheme.darkInk : AppTheme.ink,
+            color: context.appColors.ink,
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -66,15 +67,17 @@ class ArticleDetailPage extends StatelessWidget {
             Text(
               text.title,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontFamily: AppTheme.fontTitle,
-              ),
+                    fontFamily: AppTheme.fontTitle,
+                  ),
             ),
             SizedBox(height: context.gapSmall),
             Text(
-              text.dynasty.isEmpty ? text.author : '${text.author} · ${text.dynasty}',
+              text.dynasty.isEmpty
+                  ? text.author
+                  : '${text.author} · ${text.dynasty}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
@@ -86,8 +89,8 @@ class ArticleDetailPage extends StatelessWidget {
                 children: [
                   Chip(
                     label: Text(text.source),
-                    backgroundColor: isDark ? AppTheme.darkCard : AppTheme.cardBg,
-                    side: BorderSide(color: isDark ? AppTheme.borderLight : AppTheme.border),
+                    backgroundColor: context.appColors.cardBg,
+                    side: BorderSide(color: context.appColors.border),
                   ),
                   if (text.background.startsWith('【特征待定】'))
                     Chip(
@@ -104,39 +107,40 @@ class ArticleDetailPage extends StatelessWidget {
               ),
             ],
             SizedBox(height: context.gapLg),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: context.appColors.border, height: 1),
             SizedBox(height: context.gapMedium),
             Row(
               children: [
-                Icon(Icons.schedule, size: 18,
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                Icon(Icons.schedule,
+                    size: 18, color: context.appColors.inkSecondary),
                 SizedBox(width: context.gapSmall),
                 Text(
                   '预计阅读 $estMinutes 分钟 · 共 ${text.charCount} 字',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                  ),
+                        color: context.appColors.inkSecondary,
+                      ),
                 ),
               ],
             ),
             SizedBox(height: context.gapLg),
-            if (userCtrl.user != null && text.difficulties.length == abilityCount) ...[
-              _buildDifficultyMatchSection(context, text, userCtrl.user!, isDark),
+            if (userCtrl.user != null &&
+                text.difficulties.length == abilityCount) ...[
+              _buildDifficultyMatchSection(context, text, userCtrl.user!),
               SizedBox(height: context.gapLg),
-              _buildEstimatedGainSection(context, text, userCtrl.user!, isDark),
+              _buildEstimatedGainSection(context, text, userCtrl.user!),
               SizedBox(height: context.gapLg),
             ],
             if (text.background.isNotEmpty) ...[
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16,
-                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                  Icon(Icons.info_outline,
+                      size: 16, color: context.appColors.inkSecondary),
                   SizedBox(width: context.gapSmall),
                   Text(
                     '背景介绍',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                    ),
+                          color: context.appColors.inkSecondary,
+                        ),
                   ),
                 ],
               ),
@@ -144,8 +148,8 @@ class ArticleDetailPage extends StatelessWidget {
               Text(
                 text.background,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.6,
-                ),
+                      height: 1.6,
+                    ),
               ),
               SizedBox(height: context.gapXl),
             ],
@@ -155,7 +159,7 @@ class ArticleDetailPage extends StatelessWidget {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: context.accent,
-                  foregroundColor: AppTheme.cardBg,
+                  foregroundColor: context.appColors.onAccent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
@@ -165,9 +169,9 @@ class ArticleDetailPage extends StatelessWidget {
                 child: Text(
                   '开始阅读',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.cardBg,
-                    fontWeight: FontWeight.w700,
-                  ),
+                        color: context.appColors.onAccent,
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ),
             ),
@@ -179,8 +183,9 @@ class ArticleDetailPage extends StatelessWidget {
   }
 
   Widget _buildDifficultyMatchSection(
-      BuildContext context, ChineseText text, User user, bool isDark) {
-    final abilities = List.generate(abilityCount, (i) => user.getAbility(i).toDouble());
+      BuildContext context, ChineseText text, User user) {
+    final abilities =
+        List.generate(abilityCount, (i) => user.getAbility(i).toDouble());
     final difficulties = text.difficulties;
 
     return Column(
@@ -188,14 +193,13 @@ class ArticleDetailPage extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.radar, size: 16,
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+            Icon(Icons.radar, size: 16, color: context.appColors.inkSecondary),
             SizedBox(width: context.gapSmall),
             Text(
               '难度匹配',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
             ),
           ],
         ),
@@ -215,7 +219,7 @@ class ArticleDetailPage extends StatelessWidget {
   }
 
   Widget _buildEstimatedGainSection(
-      BuildContext context, ChineseText text, User user, bool isDark) {
+      BuildContext context, ChineseText text, User user) {
     final gains = <double>[];
     for (int i = 0; i < abilityCount; i++) {
       gains.add(_learningGain(text.difficulties[i], user.getAbility(i)));
@@ -228,14 +232,14 @@ class ArticleDetailPage extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.trending_up, size: 16,
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+            Icon(Icons.trending_up,
+                size: 16, color: context.appColors.inkSecondary),
             SizedBox(width: context.gapSmall),
             Text(
               '预计阅读收益',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
             ),
           ],
         ),
@@ -245,32 +249,33 @@ class ArticleDetailPage extends StatelessWidget {
             Text(
               '综合收益 ',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
             ),
             Text(
               '$totalPct%',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontFamily: AppTheme.fontUI,
-                color: AppTheme.stoneGreen,
-                fontWeight: FontWeight.w700,
-              ),
+                    fontFamily: AppTheme.fontUI,
+                    color: context.appColors.success,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             Text(
               '  ·  $abilityCount 维平均',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
             ),
           ],
         ),
         SizedBox(height: context.gapMedium),
-        ...List.generate(abilityCount, (i) => _buildGainBar(context, i, gains[i], isDark)),
+        ...List.generate(
+            abilityCount, (i) => _buildGainBar(context, i, gains[i])),
       ],
     );
   }
 
-  Widget _buildGainBar(BuildContext context, int idx, double gain, bool isDark) {
+  Widget _buildGainBar(BuildContext context, int idx, double gain) {
     final pct = (gain * 100).toStringAsFixed(0);
 
     return Padding(
@@ -282,8 +287,8 @@ class ArticleDetailPage extends StatelessWidget {
             child: Text(
               abilityLabels[idx],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -293,14 +298,14 @@ class ArticleDetailPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
               child: Container(
                 height: 10,
-                color: AppTheme.stoneGreen.withAlpha(31),
+                color: context.appColors.success.withAlpha(31),
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
                   widthFactor: gain.clamp(0.0, 1.0),
                   child: Container(
                     height: 10,
                     decoration: BoxDecoration(
-                      color: AppTheme.stoneGreen,
+                      color: context.appColors.success,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -315,8 +320,8 @@ class ArticleDetailPage extends StatelessWidget {
               '$pct%',
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -328,9 +333,11 @@ class ArticleDetailPage extends StatelessWidget {
   void _startReading(BuildContext context, ChineseText text) async {
     final readingCtrl = context.read<ReadingController>();
     final coord = context.read<AppCoordinator>();
-    if (readingCtrl.hasUnrecordedReading && readingCtrl.readingText?.id != text.id) {
+    if (readingCtrl.hasUnrecordedReading &&
+        readingCtrl.readingText?.id != text.id) {
       readingCtrl.pauseTimer();
-      final discard = await showConfirmDialog(context,
+      final discard = await showConfirmDialog(
+        context,
         title: '确认切换',
         content: '当前文章未达到本文最低阅读时间，确定放弃？',
         confirmLabel: '放弃',
@@ -406,7 +413,8 @@ class _QuizSectionState extends State<_QuizSection> {
     final userCtrl = _userCtrl!;
     final due = userCtrl.getDueReviews(widget.textId);
     if (due.isEmpty) return;
-    final ids = due.take(KnowledgeTracker.quizBatchSize)
+    final ids = due
+        .take(KnowledgeTracker.quizBatchSize)
         .map((r) => r.questionId)
         .toList();
     final questions = userCtrl.getQuestionsByIds(ids);
@@ -425,7 +433,6 @@ class _QuizSectionState extends State<_QuizSection> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.select((SettingsController s) => s.darkMode);
     // 随堂练习只对已读文章展示：未读文章不显示“继续练习/复习错题”入口。
     final coord = context.read<AppCoordinator>();
     if (!coord.readTracker.isTextRead(widget.textId)) {
@@ -454,13 +461,13 @@ class _QuizSectionState extends State<_QuizSection> {
         children: [
           Row(
             children: [
-              Icon(Icons.edit_note, size: 16,
-                  color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+              Icon(Icons.edit_note,
+                  size: 16, color: context.appColors.inkSecondary),
               SizedBox(width: context.gapSmall),
               Text(
                 '随堂练习',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                      color: context.appColors.inkSecondary,
                     ),
               ),
               const Spacer(),
@@ -470,7 +477,7 @@ class _QuizSectionState extends State<_QuizSection> {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: hasWrong
                           ? context.accent
-                          : (isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                          : context.appColors.inkSecondary,
                     ),
               ),
             ],

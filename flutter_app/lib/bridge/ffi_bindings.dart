@@ -111,6 +111,9 @@ final class NativeBridge {
   /// 到期错题总数（textId=0 全部；COUNT 聚合，无上限截断——徽标数字通道）
   late final int Function(int textId) quizGetDueReviewCount;
 
+  /// 错题总数（textId=0 全部；含未到期，COUNT 聚合，无上限截断）
+  late final int Function(int textId) quizGetReviewCount;
+
   /// 按 id 取题（复习通道，不受"排除已答"影响；缺失 id 跳过）
   late final int Function(
     Pointer<Int32> ids,
@@ -276,6 +279,9 @@ final class NativeBridge {
 
     quizGetDueReviewCount = _lib.lookupFunction<
         Int32 Function(Int32), int Function(int)>('quiz_get_due_review_count');
+
+    quizGetReviewCount = _lib.lookupFunction<
+        Int32 Function(Int32), int Function(int)>('quiz_get_review_count');
 
     quizGetQuestionsByIds = _lib.lookupFunction<
         Int32 Function(Pointer<Int32>, Int32, Pointer<QuestionData>, Int32),

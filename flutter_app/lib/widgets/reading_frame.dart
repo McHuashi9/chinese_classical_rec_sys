@@ -12,9 +12,29 @@ import 'package:chinese_classical_rec_sys/widgets/annotation_popup.dart';
 class ReadingFrame extends StatefulWidget {
   final ReadingViewData viewData;
 
+  /// 供外部（如初始化教程）定位正文/注释标记的可选 Key。
+  final GlobalKey? textKey;
+
+  /// 供外部定位“译文对照”按钮的可选 Key。
+  final GlobalKey? translationButtonKey;
+
+  /// 供外部定位“下一页”按钮的可选 Key。
+  final GlobalKey? nextPageButtonKey;
+
+  /// 供外部定位“做题”按钮的可选 Key（F1 初始化教程第 4 步用）。
+  final GlobalKey? quizButtonKey;
+
+  /// 非空时在底部工具栏显示“做题”按钮（有题才由调用方传入）。
+  final VoidCallback? onStartQuiz;
+
   const ReadingFrame({
     super.key,
     required this.viewData,
+    this.textKey,
+    this.translationButtonKey,
+    this.nextPageButtonKey,
+    this.quizButtonKey,
+    this.onStartQuiz,
   });
 
   @override
@@ -28,6 +48,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
   double _framePadding = 16;
   double _lastFontScale = 1.0;
   final _textKey = GlobalKey();
+
+  GlobalKey get _effectiveTextKey => widget.textKey ?? _textKey;
   OverlayEntry? _annotationOverlay;
   int? _currentAnnotationNumber;
 
@@ -61,9 +83,10 @@ class _ReadingFrameState extends State<ReadingFrame> {
     final fontScale = context.read<SettingsController>().fontScale;
     _currentAnnotationNumber = number;
     _annotationOverlay = AnnotationPopup.show(
-      context, number, text,
+      context,
+      number,
+      text,
       fontScale: fontScale,
-      isDark: widget.viewData.isDark,
       markerCenterGlobal: markerCenterGlobal,
       onDismissed: () {
         _annotationOverlay = null;
@@ -73,16 +96,20 @@ class _ReadingFrameState extends State<ReadingFrame> {
   }
 
   void _handleTextTap(TapUpDetails details) {
-    final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
+    final current = widget.viewData.pages.isNotEmpty
+        ? widget.viewData.pages[widget.viewData.currentPage]
+        : '';
     if (current.isEmpty) return;
 
-    final renderParagraph = _textKey.currentContext?.findRenderObject();
+    final renderParagraph = _effectiveTextKey.currentContext?.findRenderObject();
     if (renderParagraph is! RenderParagraph) return;
 
     final localPos = renderParagraph.globalToLocal(details.globalPosition);
 
-    if (localPos.dx < 0 || localPos.dx > renderParagraph.size.width ||
-        localPos.dy < 0 || localPos.dy > renderParagraph.size.height) {
+    if (localPos.dx < 0 ||
+        localPos.dx > renderParagraph.size.width ||
+        localPos.dy < 0 ||
+        localPos.dy > renderParagraph.size.height) {
       return;
     }
 
@@ -91,7 +118,9 @@ class _ReadingFrameState extends State<ReadingFrame> {
     final rawOffset =
         AnnotatedTextBuilder.paintedToRawOffset(current, textPos.offset);
     final num = AnnotatedTextBuilder.findAnnotationAtOffset(
-      current, rawOffset, widget.viewData.annotations,
+      current,
+      rawOffset,
+      widget.viewData.annotations,
     );
 
     if (num == null) {
@@ -176,18 +205,19 @@ class _ReadingFrameState extends State<ReadingFrame> {
       onKeyEvent: _handleKey,
       child: Padding(
         padding: EdgeInsets.symmetric(
-            horizontal: context.pagePadding,
-            vertical: context.gapLg),
+            horizontal: context.pagePadding, vertical: context.gapLg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.viewData.text.title,
-                style: Theme.of(context).textTheme.headlineMedium,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+            Text(
+              widget.viewData.text.title,
+              style: Theme.of(context).textTheme.headlineMedium,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             SizedBox(height: context.gapSmall),
-            Text('${widget.viewData.text.author} · ${widget.viewData.text.dynasty}',
+            Text(
+                '${widget.viewData.text.author} · ${widget.viewData.text.dynasty}',
                 style: Theme.of(context).textTheme.bodyMedium,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1),
@@ -205,15 +235,16 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
   Widget _buildReadingFrame(BuildContext context, double framePadding,
       double fontScale, bool showRuledLines) {
-    final bgColor = widget.viewData.isDark ? AppTheme.darkCard : AppTheme.cardBg;
+    final bgColor = context.appColors.cardBg;
     final bodyStyle = AppTheme.bodyReadingSize(
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width),
         fontScale);
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final needsIt = _needsPaginate
-            || (constraints.biggest != _frameSize && constraints.biggest != Size.zero);
+        final needsIt = _needsPaginate ||
+            (constraints.biggest != _frameSize &&
+                constraints.biggest != Size.zero);
         if (needsIt) {
           _needsPaginate = false;
           _frameSize = constraints.biggest;
@@ -221,11 +252,13 @@ class _ReadingFrameState extends State<ReadingFrame> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _doPaginate());
         }
 
-        final current = widget.viewData.pages.isNotEmpty ? widget.viewData.pages[widget.viewData.currentPage] : '';
-        final textColor = widget.viewData.isDark ? AppTheme.darkInk : AppTheme.ink;
+        final current = widget.viewData.pages.isNotEmpty
+            ? widget.viewData.pages[widget.viewData.currentPage]
+            : '';
+        final textColor = context.appColors.ink;
         final pageStarts = widget.viewData.pageStartsInTranslation;
         final translationActive = pageStarts != null &&
-            pageStarts.length > widget.viewData.currentPage
+                pageStarts.length > widget.viewData.currentPage
             ? pageStarts[widget.viewData.currentPage]
             : false;
         final textSpan = AnnotatedTextBuilder.build(
@@ -240,7 +273,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
         return Container(
           decoration: BoxDecoration(
             color: bgColor,
-            border: Border.all(color: AppTheme.border, width: 1),
+            border: Border.all(color: context.appColors.border, width: 1),
             borderRadius: BorderRadius.circular(4),
           ),
           child: ClipRRect(
@@ -254,8 +287,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
                               textSpan: textSpan,
                               maxWidth: constraints.maxWidth - framePadding * 2,
                               lineColor: widget.viewData.isDark
-                                  ? AppTheme.borderLight.withAlpha(60)
-                                  : AppTheme.borderLight,
+                                  ? context.appColors.borderLight.withAlpha(60)
+                                  : context.appColors.borderLight,
                               padding: framePadding,
                             )
                           : null,
@@ -266,7 +299,7 @@ class _ReadingFrameState extends State<ReadingFrame> {
                           height: double.infinity,
                           child: Text.rich(
                             textSpan,
-                            key: _textKey,
+                            key: _effectiveTextKey,
                           ),
                         ),
                       ),
@@ -291,60 +324,160 @@ class _ReadingFrameState extends State<ReadingFrame> {
 
   Widget _buildNavigationBar(BuildContext context) {
     final hasPrev = widget.viewData.currentPage > 0;
-    final hasNext = widget.viewData.currentPage < widget.viewData.totalPages - 1;
+    final hasNext =
+        widget.viewData.currentPage < widget.viewData.totalPages - 1;
     final minReadTime = minReadTimeSeconds(widget.viewData.text.charCount);
     final canComplete = widget.viewData.elapsedSeconds >= minReadTime;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        IconButton(
-          tooltip: '译文对照',
-          onPressed: widget.viewData.onToggleTranslation,
-          visualDensity: VisualDensity.compact,
-          icon: Icon(
-            Icons.translate,
-            size: 20,
-            color: widget.viewData.showTranslation
-                ? Theme.of(context).colorScheme.primary
-                : (widget.viewData.isDark
-                    ? AppTheme.darkInkSecondary
-                    : AppTheme.inkSecondary),
+    final pageLabel =
+        '第 ${widget.viewData.currentPage + 1} / ${widget.viewData.totalPages} 页';
+    final progress = widget.viewData.totalPages <= 0
+        ? 0.0
+        : (widget.viewData.currentPage + 1) / widget.viewData.totalPages;
+    final timerText = Text(
+      widget.viewData.formattedTime,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: context.appColors.inkSecondary,
           ),
-        ),
-        if (!widget.viewData.alreadyTracked)
-          TextButton(
+    );
+    final translationButton = IconButton(
+      key: widget.translationButtonKey,
+      tooltip: '译文对照',
+      onPressed: widget.viewData.onToggleTranslation,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(
+        Icons.translate,
+        size: 20,
+        color: widget.viewData.showTranslation
+            ? Theme.of(context).colorScheme.primary
+            : context.appColors.inkSecondary,
+      ),
+    );
+    final abandonButton = !widget.viewData.alreadyTracked
+        ? TextButton(
             onPressed: widget.viewData.onAbandon,
             child: Text('放弃',
-                style: TextStyle(color: widget.viewData.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary)),
-          ),
-        TextButton(
-          onPressed: hasPrev ? widget.viewData.onPrevPage : null,
-          child: const Text('◀ 上一页'),
-        ),
-        Text(
-          widget.viewData.formattedTime,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: widget.viewData.isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-          ),
-        ),
-        TextButton(
-          onPressed: hasNext ? widget.viewData.onNextPage : null,
-          child: const Text('下一页 ▶'),
-        ),
-        if (widget.viewData.alreadyTracked)
-          TextButton(
+                style: TextStyle(color: context.appColors.inkSecondary)),
+          )
+        : null;
+    final prevButton = TextButton(
+      onPressed: hasPrev ? widget.viewData.onPrevPage : null,
+      child: const Text('◀ 上一页'),
+    );
+    final nextButton = TextButton(
+      key: widget.nextPageButtonKey,
+      onPressed: hasNext ? widget.viewData.onNextPage : null,
+      child: const Text('下一页 ▶'),
+    );
+    final finishButton = widget.viewData.alreadyTracked
+        ? TextButton(
             onPressed: widget.viewData.onExit,
             child: const Text('返回'),
           )
-        else
-          TextButton(
+        : TextButton(
             onPressed: canComplete ? widget.viewData.onComplete : null,
             child: Text(canComplete
                 ? '完成'
                 : '${(minReadTime - widget.viewData.elapsedSeconds).ceil()}s'),
-          ),
-      ],
+          );
+    final quizButton = widget.onStartQuiz == null
+        ? null
+        : TextButton.icon(
+            key: widget.quizButtonKey,
+            onPressed: widget.onStartQuiz,
+            style: TextButton.styleFrom(
+              foregroundColor: context.accent,
+            ),
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: const Text('做题'),
+          );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      pageLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: context.appColors.inkSecondary,
+                          ),
+                    ),
+                  ),
+                  timerText,
+                ],
+              ),
+              SizedBox(height: context.gapSmall),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 3,
+                  backgroundColor: context.appColors.borderLight.withAlpha(80),
+                  valueColor: AlwaysStoppedAnimation(context.accent),
+                ),
+              ),
+              SizedBox(height: context.gapSmall),
+              // M3 F9 加入“做题”按钮时，直接追加到该 Wrap 即可，布局会自动换行。
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  translationButton,
+                  if (quizButton != null) quizButton,
+                  if (abandonButton != null) abandonButton,
+                  prevButton,
+                  nextButton,
+                  finishButton,
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            translationButton,
+            if (quizButton != null) quizButton,
+            if (abandonButton != null) abandonButton,
+            prevButton,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    pageLabel,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: context.appColors.inkSecondary,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 2,
+                      backgroundColor:
+                          context.appColors.borderLight.withAlpha(80),
+                      valueColor: AlwaysStoppedAnimation(context.accent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            timerText,
+            nextButton,
+            finishButton,
+          ],
+        );
+      },
     );
   }
 }
@@ -380,7 +513,8 @@ class _TextRuledPainter extends CustomPainter {
     for (final line in metrics) {
       if (line.width == 0) continue;
       final y = padding + line.baseline;
-      canvas.drawLine(Offset(padding, y), Offset(size.width - padding, y), paint);
+      canvas.drawLine(
+          Offset(padding, y), Offset(size.width - padding, y), paint);
     }
   }
 

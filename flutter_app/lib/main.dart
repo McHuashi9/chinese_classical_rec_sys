@@ -28,6 +28,7 @@ import 'pages/read_hub_page.dart';
 import 'pages/my_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/init_onboarding_page.dart';
+import 'pages/welcome_page.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/profile_dialogs.dart';
@@ -185,17 +186,22 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     coord.setContentDataVersion(await _readLocalDbVersion());
     coord.initRemoteDbSync(prefs, dbDir);
     // 在 activateSavedProfile 之前先判定，避免用 active_user_id 做“是否已引导”的标记。
-    final shouldShowOnboarding =
-        shouldShowProfileOnboarding(prefs, coord.userCtrl.profiles);
+    final shouldShowWelcome = shouldShowNewUserWelcome(
+        prefs, coord.userCtrl.profiles, coord.userCtrl.isInitialized);
     coord.activateSavedProfile();
     coord.getRecommendations(10);
     await coord.settingsCtrl.init(prefs, coord.bridge);
     if (!mounted) return;
     await _maybeShowAnnouncement(coord, prefs);
     if (!mounted) return;
-    if (shouldShowOnboarding) {
-      await runProfileOnboarding(context, coord);
-      await markProfileOnboardingSeen(prefs);
+    if (shouldShowWelcome) {
+      final completed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const WelcomePage()),
+      );
+      if (completed == true && mounted) {
+        await markNewUserWelcomeSeen(prefs);
+        await markProfileOnboardingSeen(prefs);
+      }
       if (!mounted) return;
     }
     if (!coord.userCtrl.isInitialized) {
@@ -595,9 +601,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       confirmLabel: '放弃',
     );
     if (discard) {
-      coord.readingCtrl.stopTimer();
-      coord.applyReadingEffect();
-      coord.readingCtrl.discardReading();
+      coord.finishReadingSession();
       coord.navCtrl.switchPage(targetIndex);
     } else {
       coord.readingCtrl.resumeTimer();
@@ -611,8 +615,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final coord = _coord;
     if (coord == null) return AppExitResponse.exit;
 
-    coord.readingCtrl.stopTimer();
-    coord.applyReadingEffect();
+    coord.stopAndApplyReadingEffect();
 
     if (!coord.readingCtrl.hasUnrecordedReading) return AppExitResponse.exit;
 
@@ -654,8 +657,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       return;
     }
 
-    coord.readingCtrl.stopTimer();
-    coord.applyReadingEffect();
+    coord.stopAndApplyReadingEffect();
 
     if (!coord.readingCtrl.hasUnrecordedReading) {
       final exit = await showConfirmDialog(

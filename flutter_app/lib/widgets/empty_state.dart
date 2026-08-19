@@ -18,9 +18,7 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
+    final secondary = context.appColors.inkSecondary;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -75,8 +73,7 @@ class _ScrollEmblemPainter extends CustomPainter {
     // 轴头
     final rollerPaint = Paint()..color = accent;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, h * 0.12, rollerW, h * 0.76),
+      RRect.fromRectAndRadius(Rect.fromLTWH(0, h * 0.12, rollerW, h * 0.76),
           const Radius.circular(2)),
       rollerPaint,
     );

@@ -13,7 +13,7 @@ void main() {
     expect(sizeOf<TextInfo>(), 516);
     expect(sizeOf<TextDetail>(), 68184);
     expect(sizeOf<ReadingRecordData>(), 24);
-    expect(sizeOf<QuestionData>(), 6244);
+    expect(sizeOf<QuestionData>(), 6248);
     expect(sizeOf<ReviewItemData>(), 24);
   });
 }

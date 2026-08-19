@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
@@ -149,7 +148,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 在取色器 HSV 区域拖动 → onColorChanged → picked 更新
-    final area = find.byType(ColorPickerArea);
+    final area = find.byKey(const ValueKey('custom-hsv-area'));
     expect(area, findsOneWidget);
     await tester.drag(area, const Offset(60, -80));
     await tester.pumpAndSettle();

@@ -10,7 +10,6 @@ class StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final fontScale = context.select((SettingsController s) => s.fontScale);
     return Card(
       child: Padding(
@@ -24,22 +23,18 @@ class StatsCard extends StatelessWidget {
             _StatItem(
               label: '总阅读时间',
               value: _formatDuration(stats.totalSeconds),
-              isDark: isDark,
             ),
             _StatItem(
               label: '已读篇数',
               value: '${stats.totalTexts} 篇',
-              isDark: isDark,
             ),
             _StatItem(
               label: '日均阅读',
               value: '${(stats.dailyAvgSeconds / 60).round()} 分钟',
-              isDark: isDark,
             ),
             _StatItem(
               label: '最长连续',
               value: '${stats.longestStreak} 天',
-              isDark: isDark,
             ),
           ],
         ),
@@ -58,11 +53,9 @@ class StatsCard extends StatelessWidget {
 class _StatItem extends StatelessWidget {
   final String label;
   final String value;
-  final bool isDark;
   const _StatItem({
     required this.label,
     required this.value,
-    required this.isDark,
   });
 
   @override
@@ -75,13 +68,13 @@ class _StatItem extends StatelessWidget {
         children: [
           Text(label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              )),
+                    color: context.appColors.inkSecondary,
+                  )),
           SizedBox(height: context.gapTiny),
           Text(value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: isDark ? AppTheme.darkInk : AppTheme.ink,
-              )),
+                    color: context.appColors.ink,
+                  )),
         ],
       ),
     );

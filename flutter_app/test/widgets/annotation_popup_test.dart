@@ -20,7 +20,6 @@ void main() {
       text: text,
       onDismiss: onDismiss ?? () {},
       fontScale: 1.0,
-      isDark: false,
       markerCenterGlobal: marker,
     );
   }
@@ -76,7 +75,6 @@ void main() {
       '词：义',
       onDismissed: () => dismissed++,
       fontScale: 1.0,
-      isDark: false,
       markerCenterGlobal: const Offset(100, 100),
     );
     await tester.pump();

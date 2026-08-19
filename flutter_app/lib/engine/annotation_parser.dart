@@ -110,7 +110,7 @@ class AnnotatedTextBuilder {
       fontWeight: FontWeight.w600,
     );
     final translationStyle = baseStyle.copyWith(
-      color: isDark ? AppTheme.darkInkSecondary : AppTheme.stoneGreen,
+      color: isDark ? AppColors.dark.inkSecondary : AppColors.light.success,
       fontSize: baseStyle.fontSize != null ? baseStyle.fontSize! * 0.9 : null,
     );
     final spans = <InlineSpan>[];
@@ -145,7 +145,11 @@ class AnnotatedTextBuilder {
       String text, TextStyle translationStyle,
       {bool initialTranslationActive = false}) {
     if (!text.contains(TranslationBuilder.mark)) {
-      return [TextSpan(text: text, style: initialTranslationActive ? translationStyle : null)];
+      return [
+        TextSpan(
+            text: text,
+            style: initialTranslationActive ? translationStyle : null)
+      ];
     }
     final spans = <InlineSpan>[];
     final re = RegExp(TranslationBuilder.mark);

@@ -25,7 +25,7 @@ import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 class AppCoordinator {
-  static const currentVersion = '1.1.1';
+  static const currentVersion = '1.2.0';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;
@@ -280,10 +280,27 @@ class AppCoordinator {
   }
 
   void goHome(int targetPage) {
+    finishReadingSession();
+    navCtrl.switchPage(targetPage.clamp(0, 2));
+  }
+
+  /// 结束当前活动阅读会话：停止计时 → 尝试结算阅读效应 → 丢弃阅读状态。
+  /// 阅读时间不足时 applyReadingEffect 内部会跳过，仅丢弃状态。
+  void finishReadingSession() {
+    if (!readingCtrl.isReading) return;
     readingCtrl.stopTimer();
     applyReadingEffect();
     readingCtrl.discardReading();
-    navCtrl.switchPage(targetPage.clamp(0, 2));
+  }
+
+  /// 停止计时并尝试结算阅读效应，但保留阅读状态。
+  ///
+  /// 用于“退出/返回”等需要先结算、再根据是否达到阈值决定是否丢弃的路径；
+  /// 确认丢弃后再调用 [ReadingController.discardReading]。
+  void stopAndApplyReadingEffect() {
+    if (!readingCtrl.isReading) return;
+    readingCtrl.stopTimer();
+    applyReadingEffect();
   }
 
   void applyReadingEffect() {

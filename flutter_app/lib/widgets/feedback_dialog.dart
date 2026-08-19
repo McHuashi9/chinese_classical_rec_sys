@@ -40,7 +40,8 @@ Future<void> showFeedbackDialog(
           },
       logTailLoader: loadLogTail,
       mailtoLauncher: mailtoLauncher ?? _defaultMailtoLauncher,
-      submitFeedback: submitFeedback ?? (draft) => submitFeedbackToWorker(draft: draft),
+      submitFeedback:
+          submitFeedback ?? (draft) => submitFeedbackToWorker(draft: draft),
     ),
   );
 }
@@ -69,7 +70,8 @@ class FeedbackDialog extends StatefulWidget {
   final Future<String> Function() diagnosticsLoader;
   final Future<String> Function() logTailLoader;
   final Future<bool> Function(Uri uri) mailtoLauncher;
-  final Future<FeedbackSubmitResult> Function(FeedbackDraft draft) submitFeedback;
+  final Future<FeedbackSubmitResult> Function(FeedbackDraft draft)
+      submitFeedback;
 
   @override
   State<FeedbackDialog> createState() => _FeedbackDialogState();
@@ -203,9 +205,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final secondaryColor = theme.brightness == Brightness.dark
-        ? AppTheme.darkInkSecondary
-        : AppTheme.inkSecondary;
+    final secondaryColor = context.appColors.inkSecondary;
 
     return AlertDialog(
       title: const Text('反馈 Bug / 意见'),
@@ -238,7 +238,9 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                         controller: _titleController,
                         decoration: const InputDecoration(labelText: '标题 *'),
                         validator: (value) =>
-                            (value == null || value.trim().isEmpty) ? '请填写标题' : null,
+                            (value == null || value.trim().isEmpty)
+                                ? '请填写标题'
+                                : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -249,7 +251,9 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                         ),
                         maxLines: 4,
                         validator: (value) =>
-                            (value == null || value.trim().isEmpty) ? '请填写描述' : null,
+                            (value == null || value.trim().isEmpty)
+                                ? '请填写描述'
+                                : null,
                       ),
                       const SizedBox(height: 8),
                       InkWell(
@@ -280,7 +284,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                         FutureBuilder<String>(
                           future: _diagnosticsFuture,
                           builder: (context, snapshot) {
-                            if (snapshot.connectionState != ConnectionState.done) {
+                            if (snapshot.connectionState !=
+                                ConnectionState.done) {
                               return const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8),
                                 child: LinearProgressIndicator(),
@@ -290,7 +295,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -303,7 +309,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                       const SizedBox(height: 8),
                       Text(
                         '默认邮件客户端不是你想用的？请点“复制完整反馈内容”，到任意网页邮箱粘贴发送。',
-                        style: theme.textTheme.bodySmall?.copyWith(color: secondaryColor),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: secondaryColor),
                       ),
                     ],
                   ),

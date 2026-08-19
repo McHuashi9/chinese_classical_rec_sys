@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
 import 'package:chinese_classical_rec_sys/pages/init_result_page.dart';
+import 'package:chinese_classical_rec_sys/pages/reading_preview_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
@@ -11,11 +13,22 @@ import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
 /// [isReview] 错题复习模式：标题区分，提交走复习通道（不产生答题效应）
+/// [isInitPart] 初始化按篇模式：只记录答案并返回，不调用 user_init_apply。
+/// [readingController] 从活动阅读进入时传入同一 ReadingController，供“原文”复用。
 class QuizPage extends StatefulWidget {
   final String articleTitle;
   final List<Question> questions;
   final bool isReview;
   final bool isInit;
+  final bool isInitPart;
+
+  /// 初始化按篇模式共享的答案表（questionId -> choice），选择时直接写入；
+  /// 传 null 时使用页内私有状态（普通/复习/整组初始化）。
+  final Map<int, int?>? initAnswers;
+
+  /// 活动阅读会话（普通阅读为全局 ReadingController，初始化阅读为页内局部
+  /// ReadingController）；null 表示独立答题，原文走只读预览。
+  final ReadingController? readingController;
 
   const QuizPage({
     super.key,
@@ -23,6 +36,9 @@ class QuizPage extends StatefulWidget {
     required this.questions,
     this.isReview = false,
     this.isInit = false,
+    this.isInitPart = false,
+    this.initAnswers,
+    this.readingController,
   });
 
   @override
@@ -49,7 +65,8 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   void dispose() {
-    if (!_ownershipTransferred) {
+    // 初始化按篇模式使用共享答案表和共享题组内存，不由本页释放。
+    if (!widget.isInitPart && !_ownershipTransferred) {
       _userCtrl?.disposeQuizQuestions(widget.questions);
     }
     super.dispose();
@@ -60,6 +77,11 @@ class _QuizPageState extends State<QuizPage> {
     super.initState();
     // 定长作答数组：前进后退只移动指针，回改不丢后续答案
     _choices = List<int?>.filled(widget.questions.length, null);
+    if (widget.isInitPart && widget.initAnswers != null) {
+      for (var i = 0; i < widget.questions.length; i++) {
+        _choices[i] = widget.initAnswers![widget.questions[i].id];
+      }
+    }
   }
 
   bool get _isLast => _index == widget.questions.length - 1;
@@ -71,6 +93,9 @@ class _QuizPageState extends State<QuizPage> {
 
   void _selectOption(int opt) {
     setState(() => _choices[_index] = opt);
+    if (widget.isInitPart && widget.initAnswers != null) {
+      widget.initAnswers![widget.questions[_index].id] = opt;
+    }
   }
 
   void _next() {
@@ -84,6 +109,12 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _submit() async {
+    // 初始化按篇模式：只记录答案并返回，不调用 user_init_apply。
+    if (widget.isInitPart) {
+      _finishPart();
+      return;
+    }
+
     final coord = context.read<AppCoordinator>();
     // 数据库替换窗口（引擎关闭重开）内提交会静默 NOT_INIT：短路并提示重试
     if (coord.syncing.value) {
@@ -114,6 +145,10 @@ class _QuizPageState extends State<QuizPage> {
       );
       return;
     }
+
+    // 从活动阅读进入的普通答题：提交时统一结算阅读效应并丢弃阅读状态。
+    _settleActiveReadingIfNeeded();
+
     final answers = userCtrl.submitQuiz(
       widget.questions,
       choices,
@@ -147,33 +182,73 @@ class _QuizPageState extends State<QuizPage> {
     );
   }
 
+  void _finishPart() {
+    Navigator.of(context).pop();
+  }
+
+  void _settleActiveReadingIfNeeded() {
+    final controller = widget.readingController;
+    if (controller == null || !controller.isReading) return;
+    final coord = context.read<AppCoordinator>();
+    // 只有全局阅读会话才由 coordinator 统一结算；初始化局部阅读不走这里。
+    if (identical(controller, coord.readingCtrl)) {
+      coord.finishReadingSession();
+    }
+  }
+
+  Future<void> _openOriginal() async {
+    final textId = widget.questions.isEmpty ? 0 : widget.questions.first.textId;
+    if (textId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法打开原文：缺少文章信息')),
+      );
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ReadingPreviewPage(
+          textId: textId,
+          activeController: widget.readingController,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = widget.questions[_index];
-    final isDark = context.select((SettingsController s) => s.darkMode);
     final progress = (_index + 1) / widget.questions.length;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+      backgroundColor: context.appColors.paper,
       appBar: AppBar(
+        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back,
-              color: isDark ? AppTheme.darkInk : AppTheme.ink),
+          icon: Icon(Icons.arrow_back, color: context.appColors.ink),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          widget.isInit
-              ? '初始化测验 · ${widget.articleTitle}'
-              : widget.isReview
-                  ? '错题复习 · ${widget.articleTitle}'
-                  : '随堂练习 · ${widget.articleTitle}',
+          widget.isInitPart
+              ? '初始化答题 · ${widget.articleTitle}'
+              : widget.isInit
+                  ? '初始化测验 · ${widget.articleTitle}'
+                  : widget.isReview
+                      ? '错题复习 · ${widget.articleTitle}'
+                      : '随堂练习 · ${widget.articleTitle}',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontFamily: AppTheme.fontTitle,
               ),
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            tooltip: '原文',
+            icon: Icon(Icons.menu_book, color: context.appColors.ink),
+            onPressed: _openOriginal,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -186,9 +261,7 @@ class _QuizPageState extends State<QuizPage> {
                   Text(
                     '第 ${_index + 1}/${widget.questions.length} 题',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: isDark
-                              ? AppTheme.darkInkSecondary
-                              : AppTheme.inkSecondary,
+                          color: context.appColors.inkSecondary,
                         ),
                   ),
                   SizedBox(
@@ -199,8 +272,7 @@ class _QuizPageState extends State<QuizPage> {
                     child: LinearProgressIndicator(
                       value: progress,
                       minHeight: 4,
-                      backgroundColor:
-                          isDark ? AppTheme.borderLight : AppTheme.border,
+                      backgroundColor: context.appColors.border,
                       valueColor: AlwaysStoppedAnimation(context.accent),
                     ),
                   ),
@@ -209,8 +281,8 @@ class _QuizPageState extends State<QuizPage> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                    context.pagePadding, 0, context.pagePadding, context.pagePadding),
+                padding: EdgeInsets.fromLTRB(context.pagePadding, 0,
+                    context.pagePadding, context.pagePadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -248,7 +320,9 @@ class _QuizPageState extends State<QuizPage> {
                     Padding(
                       padding: EdgeInsets.only(bottom: context.gapMedium),
                       child: Text(
-                        '还有 $_unansweredCount 题未作答，可返回补充后再提交',
+                        widget.isInitPart
+                            ? '还有 $_unansweredCount 题未作答，可返回补充后再完成本篇'
+                            : '还有 $_unansweredCount 题未作答，可返回补充后再提交',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: context.accent,
                             ),
@@ -270,22 +344,23 @@ class _QuizPageState extends State<QuizPage> {
                         child: FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor: context.accent,
-                            foregroundColor: AppTheme.cardBg,
+                            foregroundColor: context.appColors.onAccent,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
-                          onPressed: _isLast
-                              ? (_allowSubmit ? _submit : null)
-                              : _next,
+                          onPressed:
+                              _isLast ? (_allowSubmit ? _submit : null) : _next,
                           child: Text(
-                            _isLast ? '提交' : '下一题',
+                            _isLast
+                                ? (widget.isInitPart ? '完成本篇' : '提交')
+                                : '下一题',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(
-                                  color: AppTheme.cardBg,
+                                  color: context.appColors.onAccent,
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
@@ -349,7 +424,7 @@ class _QuizPageState extends State<QuizPage> {
       child: Material(
         color: selected
             ? context.accent.withAlpha(isDark ? 60 : 24)
-            : (isDark ? AppTheme.darkCard : AppTheme.cardBg),
+            : context.appColors.cardBg,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
@@ -361,9 +436,7 @@ class _QuizPageState extends State<QuizPage> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: selected
-                    ? context.accent
-                    : (isDark ? AppTheme.borderLight : AppTheme.border),
+                color: selected ? context.accent : context.appColors.border,
               ),
             ),
             child: Row(
@@ -378,16 +451,20 @@ class _QuizPageState extends State<QuizPage> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected ? context.accent : AppTheme.inkSecondary,
+                      color: selected
+                          ? context.accent
+                          : context.appColors.inkSecondary,
                     ),
-                    color:
-                        selected ? context.accent : Colors.transparent,
+                    // 合法例外：透明用于未选中选项的圆形占位。
+                    color: selected ? context.accent : Colors.transparent,
                   ),
                   child: Text(
                     String.fromCharCode(0x41 + i),
                     style: TextStyle(
                       fontSize: 12,
-                      color: selected ? AppTheme.cardBg : AppTheme.inkSecondary,
+                      color: selected
+                          ? context.appColors.onAccent
+                          : context.appColors.inkSecondary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -57,15 +57,17 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Text('设置', style: Theme.of(context).textTheme.headlineLarge),
           SizedBox(height: context.gapLg),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: context.appColors.border, height: 1),
           SizedBox(height: context.gapXl),
+          _buildAboutCard(fontScale),
+          SizedBox(height: context.gapLg),
           _buildProfileCard(context, fontScale),
           SizedBox(height: context.gapLg),
           _buildAppearanceCard(context, isDark, fontScale),
           SizedBox(height: context.gapLg),
           _buildLoggingCard(context, isSmall, logLevel, fontScale),
           SizedBox(height: context.gapLg),
-          _buildAboutCard(isDark, fontScale),
+          _buildDataFeedbackCard(fontScale),
         ],
       ),
     );
@@ -124,7 +126,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       IconButton(
                         tooltip: '重命名',
                         icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _showRenameProfileDialog(context, coord, p),
+                        onPressed: () =>
+                            _showRenameProfileDialog(context, coord, p),
                       ),
                       IconButton(
                         tooltip: isActive ? '不能删除当前用户' : '删除',
@@ -135,9 +138,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ],
                   ),
-                  onTap: isActive
-                      ? null
-                      : () => _switchProfile(context, coord, p),
+                  onTap:
+                      isActive ? null : () => _switchProfile(context, coord, p),
                 );
               }),
           ],
@@ -269,8 +271,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _showRenameProfileDialog(
       BuildContext context, AppCoordinator coord, UserProfile profile) async {
-    final name = await promptProfileName(context,
-        title: '重命名用户', initial: profile.name);
+    final name =
+        await promptProfileName(context, title: '重命名用户', initial: profile.name);
     if (name == null || !context.mounted) return;
     // 排除自身后重名才算冲突
     if (coord.userCtrl.isProfileNameTaken(name, excludeId: profile.id)) {
@@ -360,7 +362,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildLoggingCard(
       BuildContext context, bool isSmall, String logLevel, double fontScale) {
     final isDesktop = _isDesktop;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       child: Padding(
         padding: EdgeInsets.all(context.cardPaddingH),
@@ -377,8 +378,7 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: context.gapSmall),
             Row(
               children: [
-                Text('日志级别',
-                    style: Theme.of(context).textTheme.labelLarge),
+                Text('日志级别', style: Theme.of(context).textTheme.labelLarge),
                 SizedBox(width: isSmall ? context.gapXl : 0),
                 if (!isSmall) const Spacer(),
                 SizedBox(
@@ -387,8 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     key: ValueKey(logLevel),
                     initialValue: logLevel,
                     items: ['INFO', 'DEBUG', 'WARN', 'ERROR']
-                        .map((l) =>
-                            DropdownMenuItem(value: l, child: Text(l)))
+                        .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                         .toList(),
                     onChanged: (v) {
                       if (v != null) {
@@ -414,9 +413,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 '移动端日志已包含在反馈中',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isDark
-                          ? AppTheme.darkInkSecondary
-                          : AppTheme.inkSecondary,
+                      color: context.appColors.inkSecondary,
                     ),
               ),
             ],
@@ -426,16 +423,14 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildAboutCard(bool isDark, double fontScale) {
+  Widget _buildAboutCard(double fontScale) {
     final theme = Theme.of(context);
     final coord = context.read<AppCoordinator>();
-    final secondaryColor =
-        isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
+    final secondaryColor = context.appColors.inkSecondary;
     return Card(
       child: Padding(
         padding: EdgeInsets.symmetric(
-            horizontal: context.cardPaddingH,
-            vertical: context.cardPaddingV),
+            horizontal: context.cardPaddingH, vertical: context.cardPaddingV),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -476,18 +471,8 @@ class _SettingsPageState extends State<SettingsPage> {
               color: secondaryColor,
               fontScale: fontScale,
             ),
-            SizedBox(height: context.gapSmall),
-            _AboutDataRow(
-              icon: Icons.health_and_safety_outlined,
-              label: '存储状态',
-              value: coord.isInitialized
-                  ? '内容库/用户库就绪'
-                  : '异常（${_dbErrorText(coord.dbOpenErrorCode)}）',
-              color: secondaryColor,
-              fontScale: fontScale,
-            ),
             SizedBox(height: context.gapMedium),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: context.appColors.border, height: 1),
             SizedBox(height: context.gapMedium),
             _AboutLinkRow(
               icon: Icons.code,
@@ -563,18 +548,57 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
             SizedBox(height: context.gapMedium),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.feedback_outlined,
-                  size: 20 * fontScale, color: secondaryColor),
-              title: Text('反馈 Bug / 意见',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: secondaryColor)),
-              trailing: Icon(Icons.chevron_right,
-                  size: 20 * fontScale, color: secondaryColor),
-              onTap: () => _openFeedbackDialog(context, coord),
+            Row(
+              children: [
+                Icon(Icons.article,
+                    size: 16 * fontScale, color: secondaryColor),
+                SizedBox(width: context.gapSmall),
+                Text('MIT License',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: secondaryColor)),
+              ],
+            ),
+            SizedBox(height: context.gapMedium),
+            Divider(color: context.appColors.border, height: 1),
+            SizedBox(height: context.gapMedium),
+            _buildCheckUpdateButton(context, fontScale),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataFeedbackCard(double fontScale) {
+    final theme = Theme.of(context);
+    final coord = context.read<AppCoordinator>();
+    final secondaryColor = context.appColors.inkSecondary;
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+            horizontal: context.cardPaddingH, vertical: context.cardPaddingV),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.storage_outlined, size: 20 * fontScale),
+                SizedBox(width: context.gapSmall),
+                Text('数据与反馈', style: theme.textTheme.titleLarge),
+              ],
             ),
             SizedBox(height: context.gapSmall),
+            _AboutDataRow(
+              icon: Icons.health_and_safety_outlined,
+              label: '存储状态',
+              value: coord.isInitialized
+                  ? '内容库/用户库就绪'
+                  : '异常（${_dbErrorText(coord.dbOpenErrorCode)}）',
+              color: secondaryColor,
+              fontScale: fontScale,
+            ),
+            SizedBox(height: context.gapMedium),
+            Divider(color: context.appColors.border, height: 1),
+            SizedBox(height: context.gapMedium),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.file_upload_outlined,
@@ -588,20 +612,17 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: _exportLearningData,
             ),
             SizedBox(height: context.gapSmall),
-            Row(
-              children: [
-                Icon(Icons.article,
-                    size: 16 * fontScale, color: secondaryColor),
-                SizedBox(width: context.gapSmall),
-                Text('MIT License',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: secondaryColor)),
-              ],
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.feedback_outlined,
+                  size: 20 * fontScale, color: secondaryColor),
+              title: Text('反馈 Bug / 意见',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: secondaryColor)),
+              trailing: Icon(Icons.chevron_right,
+                  size: 20 * fontScale, color: secondaryColor),
+              onTap: () => _openFeedbackDialog(context, coord),
             ),
-            SizedBox(height: context.gapMedium),
-            const Divider(color: AppTheme.border, height: 1),
-            SizedBox(height: context.gapMedium),
-            _buildCheckUpdateButton(context, fontScale),
           ],
         ),
       ),
@@ -610,9 +631,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _openFeedbackDialog(BuildContext context, AppCoordinator coord) {
     final schema = coord.schemaVersions;
-    final schemaText = schema == null
-        ? '不可用'
-        : '用户 ${schema.$1} · 内容 ${schema.$2}';
+    final schemaText =
+        schema == null ? '不可用' : '用户 ${schema.$1} · 内容 ${schema.$2}';
     showFeedbackDialog(
       context,
       appVersion: AppCoordinator.currentVersion,
@@ -740,8 +760,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ? SizedBox(
                 width: 16 * fontScale,
                 height: 16 * fontScale,
-                child:
-                    CircularProgressIndicator(strokeWidth: 2 * fontScale),
+                child: CircularProgressIndicator(strokeWidth: 2 * fontScale),
               )
             : Icon(Icons.system_update, size: 18 * fontScale),
         label: Text(_checking ? '检查中...' : '检查更新'),
@@ -758,7 +777,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final current = Version.parse(AppCoordinator.currentVersion);
 
     try {
-      final latest = await settingsCtrl.manualCheckForUpdates(AppCoordinator.currentVersion);
+      final latest = await settingsCtrl
+          .manualCheckForUpdates(AppCoordinator.currentVersion);
 
       if (!mounted) return;
 
@@ -767,7 +787,8 @@ class _SettingsPageState extends State<SettingsPage> {
         messenger.showSnackBar(SnackBar(content: Text(reason)));
       } else if (latest == current) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('已是最新版本 ${AppCoordinator.currentVersion}')),
+          const SnackBar(
+              content: Text('已是最新版本 ${AppCoordinator.currentVersion}')),
         );
       } else if (latest > current) {
         await _showUpdateDialog(latest.toString());
@@ -847,10 +868,8 @@ class _AboutDataRow extends StatelessWidget {
         Icon(icon, size: 16 * fontScale, color: color),
         SizedBox(width: context.gapSmall),
         Text(label,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: color)),
+            style:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(color: color)),
         const Spacer(),
         Flexible(
           child: Text(
@@ -917,8 +936,7 @@ class _AccentColorSelector extends StatelessWidget {
     final current =
         Color(context.select((SettingsController s) => s.accentColorValue));
     final settingsCtrl = context.read<SettingsController>();
-    final isDark = context.select((SettingsController s) => s.darkMode);
-    final ringColor = isDark ? AppTheme.darkInk : AppTheme.ink;
+    final ringColor = context.appColors.ink;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -957,32 +975,164 @@ class _AccentColorSelector extends StatelessWidget {
   Future<void> _pickCustomColor(
       BuildContext context, SettingsController settingsCtrl) async {
     final current = Color(settingsCtrl.accentColorValue);
-    var picked = current;
-    final result = await showDialog<Color>(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('自定义主题色'),
-        content: SizedBox(
-          width: 320,
-          child: ColorPicker(
-            pickerColor: current,
-            onColorChanged: (c) => picked = c,
-            enableAlpha: false,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(picked),
-            child: const Text('确定'),
-          ),
-        ],
+      builder: (_) => _CustomColorPickerDialog(
+        initialColor: current,
+        onConfirm: (color) => settingsCtrl.setAccentColor(color.toARGB32()),
       ),
     );
-    if (result != null) settingsCtrl.setAccentColor(result.toARGB32());
+  }
+}
+
+/// 自定义主题色对话框：色盘 + RGB 滑杆联动，避免 flutter_colorpicker
+/// 在横屏/窄宽度下的 Row 溢出，并提供可操作的 RGB 调整。
+class _CustomColorPickerDialog extends StatefulWidget {
+  final Color initialColor;
+  final ValueChanged<Color> onConfirm;
+
+  const _CustomColorPickerDialog({
+    required this.initialColor,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_CustomColorPickerDialog> createState() =>
+      _CustomColorPickerDialogState();
+}
+
+class _CustomColorPickerDialogState extends State<_CustomColorPickerDialog> {
+  late Color _color;
+
+  @override
+  void initState() {
+    super.initState();
+    _color = widget.initialColor;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hsv = HSVColor.fromColor(_color);
+    return AlertDialog(
+      title: const Text('自定义主题色'),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 280,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _color,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: context.appColors.border),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 180,
+                child: _HsvArea(
+                  key: const ValueKey('custom-hsv-area'),
+                  hsvColor: hsv,
+                  onChanged: (c) => setState(() => _color = c),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text('基础色（Hue）',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  Expanded(
+                    child: Slider(
+                      value: hsv.hue,
+                      max: 360,
+                      onChanged: (hue) => setState(() {
+                        _color = HSVColor.fromAHSV(
+                          1,
+                          hue,
+                          hsv.saturation,
+                          hsv.value,
+                        ).toColor();
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SlidePicker(
+                pickerColor: _color,
+                onColorChanged: (c) => setState(() => _color = c),
+                colorModel: ColorModel.rgb,
+                enableAlpha: false,
+                showIndicator: false,
+                labelTypes: const [],
+                sliderSize: const Size(260, 40),
+                showSliderText: true,
+                showParams: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            widget.onConfirm(_color);
+            Navigator.of(context).pop();
+          },
+          child: const Text('确定'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 自绘 HSV 色盘区域：用标准 GestureDetector 替代 flutter_colorpicker 的
+/// RawGestureDetector，避免部分平台/布局下色盘点击不生效的问题。
+class _HsvArea extends StatelessWidget {
+  final HSVColor hsvColor;
+  final ValueChanged<Color> onChanged;
+
+  const _HsvArea({
+    super.key,
+    required this.hsvColor,
+    required this.onChanged,
+  });
+
+  void _update(Offset local, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final saturation = (local.dx / size.width).clamp(0.0, 1.0);
+    final value = (1 - local.dy / size.height).clamp(0.0, 1.0);
+    onChanged(
+      HSVColor.fromAHSV(1, hsvColor.hue, saturation, value).toColor(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _update(d.localPosition, size),
+          onPanDown: (d) => _update(d.localPosition, size),
+          onPanUpdate: (d) => _update(d.localPosition, size),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: CustomPaint(
+              size: size,
+              painter: HSVWithHueColorPainter(hsvColor),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -1013,9 +1163,9 @@ class _AccentSwatchState extends State<_AccentSwatch> {
   @override
   Widget build(BuildContext context) {
     final showAdd = widget.isCustom && !widget.selected;
-    final iconColor = widget.color.computeLuminance() > 0.5
-        ? Colors.black54
-        : Colors.white;
+    // 合法例外：取色器色块上根据背景亮度动态计算对比前景色。
+    final iconColor =
+        widget.color.computeLuminance() > 0.5 ? Colors.black54 : Colors.white;
     return InkWell(
       customBorder: const CircleBorder(),
       onTap: widget.onTap,
@@ -1030,6 +1180,7 @@ class _AccentSwatchState extends State<_AccentSwatch> {
           height: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            // 合法例外：透明仅用于“自定义取色”未选中时的占位。
             color: showAdd ? Colors.transparent : widget.color,
             border: Border.all(
               color: widget.ringColor,
@@ -1052,7 +1203,14 @@ class _FontScaleSelector extends StatelessWidget {
 
   static const _values = SettingsController.fontScaleSteps;
   static const _labels = [
-    '0.75x', '1.0x', '1.25x', '1.5x', '1.75x', '2.0x', '2.25x', '2.5x',
+    '0.75x',
+    '1.0x',
+    '1.25x',
+    '1.5x',
+    '1.75x',
+    '2.0x',
+    '2.25x',
+    '2.5x',
   ];
 
   @override

@@ -85,6 +85,7 @@ extern "C" {
     int question_get_by_text(int text_id, QuestionData* out, int max_count, int* answered_all);
     int quiz_get_review_items(int text_id, ReviewItemData* out, int max_count);
     int quiz_get_due_review_count(int text_id);
+    int quiz_get_review_count(int text_id);
     int quiz_get_questions_by_ids(const int* ids, int count, QuestionData* out, int max_count);
     int quiz_get_attempt_summary(int text_id, int* total, int* answered, int* wrong);
     int history_add_record(int text_id, double read_time, int64_t timestamp);
@@ -99,6 +100,7 @@ void initDefaultProfile()
     QuestionData qs[8];
     const int n = user_init_questions(qs, 8);
     REQUIRE(n == 6);
+    for (int i = 0; i < n; i++) REQUIRE(qs[i].text_id > 0);
     int qids[6] = {0};
     int choices[6] = {0, 0, 0, 0, 0, 0};
     for (int i = 0; i < n; i++) qids[i] = qs[i].id;
@@ -135,6 +137,7 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
     int t = 0, a = 0, w = 0;
     REQUIRE(quiz_get_review_items(0, ritems, 2) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(quiz_get_due_review_count(0) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(quiz_get_review_count(0) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(quiz_get_questions_by_ids(qids, 2, qout, 2) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(quiz_get_attempt_summary(1, &t, &a, &w) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(history_add_record(1, 30.0, now) == BRIDGE_ERR_NOT_INIT);
@@ -538,10 +541,13 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(correct == 0);
     user = out;
 
-    // 未到期：复习列表为空（3 天后才到期）
+    // 未到期：复习列表为空（3 天后才到期），但错题总数应含未到期条目
     ReviewItemData items[8];
     REQUIRE(quiz_get_review_items(0, items, 8) == 0);
     REQUIRE(quiz_get_due_review_count(0) == 0);
+    REQUIRE(quiz_get_review_count(0) == 1);
+    REQUIRE(quiz_get_review_count(1) == 1);
+    REQUIRE(quiz_get_review_count(2) == 0);
 
     // 用过去时间戳再答错（模拟 3 天前）→ 已到期，wrong_count 累计
     const int64_t past = now - 4LL * 24 * 3600;
@@ -556,6 +562,7 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(quiz_get_due_review_count(0) == 1);
     REQUIRE(quiz_get_due_review_count(1) == 1);
     REQUIRE(quiz_get_due_review_count(2) == 0);
+    REQUIRE(quiz_get_review_count(0) == 1);
     // 按篇过滤
     REQUIRE(quiz_get_review_items(2, items, 8) == 0);
     REQUIRE(quiz_get_review_items(1, items, 8) == 1);
@@ -576,14 +583,16 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(outReview.abilities[d0] == u_before);
     REQUIRE(outReview.quiz_counts[d0] == qc_before);
     REQUIRE(outReview.eta == eta_before);
-    // streak=1 → 下次到期在将来 → 到期列表为空
+    // streak=1 → 下次到期在将来 → 到期列表为空，但错题总数仍含该未到期条目
     REQUIRE(quiz_get_review_items(0, items, 8) == 0);
     REQUIRE(quiz_get_due_review_count(0) == 0);
+    REQUIRE(quiz_get_review_count(0) == 1);
 
     // 连续答对 2 次（累计 streak=3）→ 从复习队列移除
     REQUIRE(tracker_apply_quiz(&user, qid, right_choice, past, &outReview, &correct, 1) == BRIDGE_OK);
     REQUIRE(tracker_apply_quiz(&user, qid, right_choice, past, &outReview, &correct, 1) == BRIDGE_OK);
     REQUIRE(quiz_get_review_items(1, items, 8) == 0);
+    REQUIRE(quiz_get_review_count(1) == 0);
     // 移除后按 id 仍可取题（数据完整性不受影响）
     REQUIRE(quiz_get_questions_by_ids(ids, 1, rq, 1) == 1);
 
@@ -592,11 +601,13 @@ TEST_CASE("bridge - 复习通道：错题入队/到期过滤/按 id 取题/is_re
     REQUIRE(correct == 0);
     REQUIRE(quiz_get_review_items(1, items, 8) == 1);
     REQUIRE(items[0].correct_streak == 0);
+    REQUIRE(quiz_get_review_count(1) == 1);
 
     // 正式测验答对在队错题 → 从 review_items 移除（视为已掌握）
     REQUIRE(tracker_apply_quiz(&user, qid, right_choice, past, &out, &correct, 0) == BRIDGE_OK);
     REQUIRE(correct == 1);
     REQUIRE(quiz_get_review_items(1, items, 8) == 0);
+    REQUIRE(quiz_get_review_count(1) == 0);
 
     // 参数校验
     REQUIRE(quiz_get_review_items(0, nullptr, 8) == BRIDGE_ERR_GENERIC);

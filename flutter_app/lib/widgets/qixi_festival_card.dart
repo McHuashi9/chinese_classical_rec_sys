@@ -14,8 +14,7 @@ class QixiFestivalCard extends StatefulWidget {
 }
 
 class _QixiFestivalCardState extends State<QixiFestivalCard> {
-  static const _poemExcerpt =
-      '纤云弄巧，飞星传恨，银汉迢迢暗度。\n'
+  static const _poemExcerpt = '纤云弄巧，飞星传恨，银汉迢迢暗度。\n'
       '金风玉露一相逢，便胜却人间无数。\n'
       '柔情似水，佳期如梦，忍顾鹊桥归路。\n'
       '两情若是久长时，又岂在朝朝暮暮。';
@@ -25,7 +24,6 @@ class _QixiFestivalCardState extends State<QixiFestivalCard> {
     final now = widget.now ?? DateTime.now();
     if (!isQixiToday(now)) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: EdgeInsets.zero,
       child: ExpansionTile(
@@ -40,9 +38,7 @@ class _QixiFestivalCardState extends State<QixiFestivalCard> {
             _poemExcerpt,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.7,
-                  color: isDark
-                      ? AppTheme.darkInkSecondary
-                      : AppTheme.inkSecondary,
+                  color: context.appColors.inkSecondary,
                 ),
           ),
         ],

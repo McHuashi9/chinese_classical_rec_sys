@@ -75,6 +75,7 @@ typedef struct {
  */
 typedef struct {
     int id;                       ///< 题 id（tracker_apply_quiz 判题用）
+    int text_id;                  ///< 所属文章 id（初始化按篇分组等用）
     char q_type[16];              ///< 题型 (shici / tongjia / fanyi)
     char stem[1024];              ///< 题干 (UTF-8)
     char options[4][512];         ///< 4 个选项 (UTF-8)

@@ -27,10 +27,7 @@ class _TextCardState extends State<TextCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final borderColor = _hovering
-        ? context.accent
-        : (isDark ? AppTheme.borderLight : AppTheme.border);
+    final borderColor = _hovering ? context.accent : context.appColors.border;
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4),

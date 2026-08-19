@@ -47,9 +47,7 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondaryColor =
-        isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
+    final secondaryColor = context.appColors.inkSecondary;
     return AlertDialog(
       title: const Text('作者的话'),
       content: SingleChildScrollView(
@@ -59,10 +57,11 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
           children: [
             Text(
               widget.announcement.authorMessage,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+              style:
+                  Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
             ),
             const SizedBox(height: 16),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: context.appColors.border, height: 1),
             const SizedBox(height: 16),
             Text(
               '版本改动',

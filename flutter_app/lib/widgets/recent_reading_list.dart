@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
+import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
 
 class RecentReadingList extends StatelessWidget {
   final List<ReadingRecord> records;
@@ -14,8 +15,12 @@ class RecentReadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (records.isEmpty) return const SizedBox.shrink();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (records.isEmpty) {
+      return const EmptyState(
+        title: '暂无最近阅读',
+        subtitle: '读完文章后会出现在这里',
+      );
+    }
 
     return Card(
       child: Column(
@@ -30,35 +35,41 @@ class RecentReadingList extends StatelessWidget {
             ),
             child: Text('最近阅读',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: isDark ? AppTheme.darkInk : AppTheme.ink,
-                )),
+                      color: context.appColors.ink,
+                    )),
           ),
-          const Divider(color: AppTheme.border, height: 1),
-          ...records.take(10).map((r) => _buildItem(context, r, isDark)),
+          Divider(color: context.appColors.border, height: 1),
+          ...records.take(10).map((r) => _buildItem(context, r)),
         ],
       ),
     );
   }
 
-  Widget _buildItem(BuildContext context, ReadingRecord r, bool isDark) {
+  Widget _buildItem(BuildContext context, ReadingRecord r) {
     final dateStr = _formatDate(r.date);
     final minutes = (r.readTime / 60).round();
     return ListTile(
-      leading: Icon(Icons.menu_book, size: 20,
-        color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
-      title: Text('${r.title} · ${r.author}',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: isDark ? AppTheme.darkInk : AppTheme.ink,
-          ),
-          overflow: TextOverflow.ellipsis),
+      leading: Icon(Icons.menu_book,
+          size: 20, color: context.appColors.inkSecondary),
+      title: Text(
+        r.title,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: context.appColors.ink,
+              fontWeight: FontWeight.w600,
+            ),
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${r.author} · $dateStr',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: context.appColors.inkSecondary,
+            ),
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: Text('$minutes 分钟',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-          )),
-      subtitle: Text(dateStr,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-          )),
+                color: context.appColors.inkSecondary,
+              )),
       dense: true,
       onTap: onTap != null ? () => onTap!(r.textId) : null,
     );
@@ -69,12 +80,18 @@ class RecentReadingList extends StatelessWidget {
     final today = DateTime(now.year, now.month, now.day);
     final d = DateTime(date.year, date.month, date.day);
     final diff = today.difference(d).inDays;
-    if (diff == 0) return '今天';
-    if (diff == 1) return '昨天';
+    final time = _formatTime(date);
+    if (diff == 0) return '今天 $time';
+    if (diff == 1) return '昨天 $time';
     if (diff <= 7) {
       const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-      return days[d.weekday - 1];
+      return '${days[d.weekday - 1]} $time';
     }
-    return '${d.month}/${d.day}';
+    return '${d.month}/${d.day} $time';
+  }
+
+  String _formatTime(DateTime date) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(date.hour)}:${two(date.minute)}';
   }
 }

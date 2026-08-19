@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
+import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
@@ -90,6 +91,9 @@ class _FakeQuizTracker implements QuizTracker {
   int getDueReviewCount(int textId) => 0;
 
   @override
+  int getTotalReviewCount(int textId) => 0;
+
+  @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
 
   @override
@@ -101,11 +105,61 @@ class _FakeQuizTracker implements QuizTracker {
   }
 }
 
+class _PreviewCoordinator extends AppCoordinator {
+  _PreviewCoordinator({
+    required super.navCtrl,
+    required super.settingsCtrl,
+    required super.readingCtrl,
+    required super.userCtrl,
+    required super.readTracker,
+  });
+
+  final ChineseText previewText = ChineseText(
+    id: 1,
+    title: '岳阳楼记',
+    author: '范仲淹',
+    dynasty: '宋',
+    source: '古文观止',
+    content: '庆历四年春，滕子京谪守巴陵郡。',
+    charCount: 20,
+    difficulties: List.filled(10, 0.5),
+  );
+
+  @override
+  ChineseText? getTextDetail(int textId) =>
+      textId == previewText.id ? previewText : null;
+
+  @override
+  String getAnnotations(int textId) => '';
+
+  @override
+  String getTranslation(int textId) => '';
+}
+
+class _CountingCoordinator extends AppCoordinator {
+  _CountingCoordinator({
+    required super.navCtrl,
+    required super.settingsCtrl,
+    required super.readingCtrl,
+    required super.userCtrl,
+    required super.readTracker,
+  });
+
+  int finishCount = 0;
+
+  @override
+  void finishReadingSession() {
+    finishCount++;
+    super.finishReadingSession();
+  }
+}
+
 List<Question> _fakeQuestions(int n) {
   final block = calloc<QuestionData>(n);
   for (int i = 0; i < n; i++) {
     final q = (block + i).ref;
     q.id = 100 + i;
+    q.textId = 1;
     _writeStr(q.qType, 'shici');
     _writeStr(q.stem, '第${i + 1}题题干：加点词解释');
     for (int k = 0; k < 4; k++) {
@@ -474,6 +528,110 @@ void main() {
     expect(tracker.disposeCount, 1);
   });
 
+  testWidgets('AppBar 原文按钮打开只读预览', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final settingsCtrl = SettingsController();
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    final coord = _PreviewCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: settingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: userCtrl,
+      readTracker: readTracker,
+    );
+    addTearDown(() {
+      readingCtrl.dispose();
+      userCtrl.dispose();
+    });
+
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
+      ),
+      coord: coord,
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('原文 · 岳阳楼记'), findsOneWidget);
+    expect(find.textContaining('庆历四年春', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('初始化按篇模式记录答案并返回，不调用 applyInit', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final answers = <int, int?>{100: null, 101: null};
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    await tester.pumpWidget(_wrap(
+      Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () async {
+                await Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => QuizPage(
+                      articleTitle: '严先生祠堂记',
+                      questions: questions,
+                      isInitPart: true,
+                      initAnswers: answers,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('打开答题'),
+            ),
+          ),
+        ),
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('初始化答题'), findsOneWidget);
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项2释义'));
+    await tester.pump();
+
+    expect(answers[100], 0);
+    expect(answers[101], 1);
+
+    await tester.tap(find.text('完成本篇'));
+    await tester.pumpAndSettle();
+    expect(find.text('打开答题'), findsOneWidget);
+    expect(userCtrl.isInitialized, isFalse);
+  });
+
   testWidgets('正式测验答错：结果页提示错题已入复习队列', (tester) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1.0;
@@ -649,5 +807,142 @@ void main() {
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('活动阅读进入答题并提交：finishReadingSession 恰好一次并丢弃阅读状态', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final settingsCtrl = SettingsController();
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    readingCtrl.loadText(ChineseText(
+      id: 1,
+      title: '岳阳楼记',
+      author: '范仲淹',
+      dynasty: '宋',
+      source: '古文观止',
+      content: '庆历四年春，滕子京谪守巴陵郡。',
+      charCount: 20,
+      difficulties: List.filled(10, 0.5),
+    ));
+    final userCtrl = UserController();
+    final tracker = _FakeQuizTracker();
+    userCtrl.initTracker(tracker);
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+    final coord = _CountingCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: settingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: userCtrl,
+      readTracker: readTracker,
+    );
+    addTearDown(readingCtrl.dispose);
+
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
+        readingController: readingCtrl,
+      ),
+      coord: coord,
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项2释义'));
+    await tester.pump();
+    await tester.tap(find.text('提交'));
+    await tester.pumpAndSettle();
+
+    expect(coord.finishCount, 1);
+    expect(readingCtrl.isReading, isFalse);
+  });
+
+  testWidgets('活动阅读进入答题后返回：不结算且阅读状态保留', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(2);
+    addTearDown(() => calloc.free(questions.first.owner));
+
+    final settingsCtrl = SettingsController();
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    readingCtrl.loadText(ChineseText(
+      id: 1,
+      title: '岳阳楼记',
+      author: '范仲淹',
+      dynasty: '宋',
+      source: '古文观止',
+      content: '庆历四年春，滕子京谪守巴陵郡。',
+      charCount: 20,
+      difficulties: List.filled(10, 0.5),
+    ));
+    final userCtrl = UserController();
+    userCtrl.initTracker(_FakeQuizTracker());
+    userCtrl.setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+    final coord = _CountingCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: settingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: userCtrl,
+      readTracker: readTracker,
+    );
+
+    await tester.pumpWidget(_wrap(
+      Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () async {
+                await Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => QuizPage(
+                      articleTitle: '岳阳楼记',
+                      questions: questions,
+                      readingController: readingCtrl,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('打开答题'),
+            ),
+          ),
+        ),
+      ),
+      coord: coord,
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+    expect(find.text('第 1/2 题'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    expect(find.text('打开答题'), findsOneWidget);
+    expect(coord.finishCount, 0);
+    expect(readingCtrl.isReading, isTrue);
+    readingCtrl.dispose();
   });
 }

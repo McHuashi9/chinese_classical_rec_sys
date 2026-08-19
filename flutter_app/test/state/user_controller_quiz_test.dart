@@ -26,6 +26,9 @@ class _ScriptedQuizTracker implements QuizTracker {
   /// null 走默认 0
   int Function()? dueReviewCountOverride;
 
+  /// getTotalReviewCount 的替代实现；null 走默认 0
+  int Function()? totalReviewCountOverride;
+
   @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice,
       {bool isReview = false}) {
@@ -50,6 +53,10 @@ class _ScriptedQuizTracker implements QuizTracker {
   @override
   int getDueReviewCount(int textId) =>
       dueReviewCountOverride?.call() ?? 0;
+
+  @override
+  int getTotalReviewCount(int textId) =>
+      totalReviewCountOverride?.call() ?? 0;
 
   @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
@@ -254,6 +261,22 @@ void main() {
       // 模拟到期 523 条（> 旧实现 500 上限）：count 通道返回真实数字
       tracker.dueReviewCountOverride = () => 523;
       expect(ctrl.reviewCount, 523);
+    });
+
+    test('totalReviewCount 懒查并随提交置脏重查', () {
+      freshUser();
+      tracker.results.addAll([(User.allocate(calloc), true)]);
+      var totalQueries = 0;
+      tracker.totalReviewCountOverride = () {
+        totalQueries++;
+        return 7;
+      };
+
+      expect(ctrl.totalReviewCount, 7);
+      expect(totalQueries, 1);
+      ctrl.submitQuiz(questions(1), [0]);
+      expect(ctrl.totalReviewCount, 7); // 提交后置脏 → 重查
+      expect(totalQueries, 2);
     });
   });
 }

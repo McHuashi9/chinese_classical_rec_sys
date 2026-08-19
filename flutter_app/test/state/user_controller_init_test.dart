@@ -60,6 +60,9 @@ class _NoopTracker implements QuizTracker {
   int getDueReviewCount(int textId) => 0;
 
   @override
+  int getTotalReviewCount(int textId) => 0;
+
+  @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
 
   @override

@@ -30,6 +30,9 @@ class UserController extends ChangeNotifier {
   /// 到期错题数缓存（-1 = 未加载；答题/复习提交后置脏）
   int _reviewCount = -1;
 
+  /// 错题总数缓存（-1 = 未加载；答题/复习提交后置脏）
+  int _totalReviewCount = -1;
+
   UserController();
 
   void initTracker(QuizTracker tracker) { _tracker = tracker; }
@@ -185,6 +188,16 @@ class UserController extends ChangeNotifier {
     return _reviewCount;
   }
 
+  /// 错题总数（懒查 quiz_get_review_count 计数，MyPage 等通过 watch/select 消费）
+  /// 含未到期条目，COUNT 聚合通道无 500 上限；置脏与通知走 _afterQuizSubmit
+  int get totalReviewCount {
+    if (_tracker == null) return 0;
+    if (_totalReviewCount < 0) {
+      _totalReviewCount = _tracker!.getTotalReviewCount(0);
+    }
+    return _totalReviewCount;
+  }
+
   void getRecommendations(RecommendationEngine engine, List<ChineseText> textCache, int topK,
       {Set<int>? excludeTextIds}) {
     if (_user == null) {
@@ -314,6 +327,7 @@ class UserController extends ChangeNotifier {
   /// 提交后的收尾：复习状态可能已变（错题入队/移除），置脏错题数并通知
   void _afterQuizSubmit() {
     _reviewCount = -1;
+    _totalReviewCount = -1;
     notifyListeners();
   }
 
@@ -321,6 +335,7 @@ class UserController extends ChangeNotifier {
   /// 置脏到期错题数缓存并通知，页面懒查刷新
   void invalidateQuizData() {
     _reviewCount = -1;
+    _totalReviewCount = -1;
     notifyListeners();
   }
 

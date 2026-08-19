@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/engine/chinese_festivals.dart';
 import 'package:chinese_classical_rec_sys/pages/review_list_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
-import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
@@ -24,13 +23,17 @@ class MyPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.select((UserController u) => u.user);
     final reviewCount = context.select((UserController u) => u.reviewCount);
-    final profileName = context.select((UserController u) => u.activeProfileName);
+    final totalReviewCount =
+        context.select((UserController u) => u.totalReviewCount);
+    final profileName =
+        context.select((UserController u) => u.activeProfileName);
     final activeUserId = context.select((UserController u) => u.activeUserId);
 
     return user != null
         ? _MyContent(
             user: user,
             reviewCount: reviewCount,
+            totalReviewCount: totalReviewCount,
             profileName: profileName,
             activeUserId: activeUserId,
             now: now,
@@ -42,6 +45,7 @@ class MyPage extends StatelessWidget {
 class _MyContent extends StatelessWidget {
   final User user;
   final int reviewCount;
+  final int totalReviewCount;
   final String? profileName;
   final int? activeUserId;
   final DateTime? now;
@@ -49,6 +53,7 @@ class _MyContent extends StatelessWidget {
   const _MyContent({
     required this.user,
     required this.reviewCount,
+    required this.totalReviewCount,
     required this.profileName,
     required this.activeUserId,
     this.now,
@@ -64,7 +69,6 @@ class _MyContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.read<SettingsController>().darkMode;
     final coord = context.read<AppCoordinator>();
 
     if (_average <= 0.001 && coord.getTotalReadCount() == 0) {
@@ -92,11 +96,12 @@ class _MyContent extends StatelessWidget {
         children: [
           // 节日彩蛋（仅节日当天显示；非节日时组件自身不渲染）
           QixiFestivalCard(now: now),
-          if (isQixiToday(now ?? DateTime.now())) SizedBox(height: context.gapLg),
+          if (isQixiToday(now ?? DateTime.now()))
+            SizedBox(height: context.gapLg),
           // header
-          _buildHeader(context, isDark),
+          _buildHeader(context),
           SizedBox(height: context.gapLg),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: context.appColors.border, height: 1),
           SizedBox(height: context.gapXl),
 
           // radar
@@ -106,14 +111,14 @@ class _MyContent extends StatelessWidget {
           // 2x2 stats
           _buildStats(context, coord),
 
-          // 错题复习入口（兜底通道：只有到期错题才显示）
-          if (reviewCount > 0) ...[
+          // 错题复习入口：有错题总数即显示（含未到期），到期数并列展示。
+          if (totalReviewCount > 0) ...[
             SizedBox(height: context.gapLg),
-            _buildReviewCard(context, isDark, reviewCount),
+            _buildReviewCard(context, reviewCount, totalReviewCount),
           ],
 
           // dimension bars
-          ...List.generate(10, (i) => _buildDimBar(context, i, isDark)),
+          ...List.generate(10, (i) => _buildDimBar(context, i)),
           SizedBox(height: context.gapXxl),
 
           // recent reading list
@@ -123,7 +128,7 @@ class _MyContent extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isDark) {
+  Widget _buildHeader(BuildContext context) {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         if (constraints.maxWidth < 480) {
@@ -138,8 +143,8 @@ class _MyContent extends StatelessWidget {
               SizedBox(height: context.gapSmall),
               Text('综合: ${(_average * 100).toStringAsFixed(1)}%',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                  )),
+                        color: context.appColors.inkSecondary,
+                      )),
               if (profileName != null) ...[
                 SizedBox(height: context.gapSmall),
                 Row(
@@ -149,9 +154,10 @@ class _MyContent extends StatelessWidget {
                     SizedBox(width: context.gapSmall),
                     Flexible(
                       child: Text('当前用户 · $profileName',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: context.accent,
-                              )),
+                          style:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: context.accent,
+                                  )),
                     ),
                   ],
                 ),
@@ -182,8 +188,8 @@ class _MyContent extends StatelessWidget {
               const Spacer(),
             Text('综合: ${(_average * 100).toStringAsFixed(1)}%',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-                )),
+                      color: context.appColors.inkSecondary,
+                    )),
           ],
         );
       },
@@ -198,7 +204,9 @@ class _MyContent extends StatelessWidget {
           child: SizedBox(
             width: sz,
             height: sz,
-            child: RadarChart(targetValues: List.generate(10, (i) => user.getAbility(i).toDouble())),
+            child: RadarChart(
+                targetValues:
+                    List.generate(10, (i) => user.getAbility(i).toDouble())),
           ),
         );
       },
@@ -217,11 +225,11 @@ class _MyContent extends StatelessWidget {
     );
   }
 
-  Widget _buildReviewCard(BuildContext context, bool isDark, int count) {
+  Widget _buildReviewCard(BuildContext context, int count, int total) {
     return Padding(
       padding: EdgeInsets.only(bottom: context.gapXxl),
       child: Material(
-        color: isDark ? AppTheme.darkCard : AppTheme.cardBg,
+        color: context.appColors.cardBg,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
@@ -240,15 +248,14 @@ class _MyContent extends StatelessWidget {
                 SizedBox(width: context.gapMedium),
                 Expanded(
                   child: Text(
-                    '错题复习 · $count 道到期',
+                    '错题复习 · 共 $total 题 · $count 道到期',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: context.accent,
                         ),
                   ),
                 ),
                 Icon(Icons.chevron_right,
-                    size: 20,
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                    size: 20, color: context.appColors.inkSecondary),
               ],
             ),
           ),
@@ -259,7 +266,6 @@ class _MyContent extends StatelessWidget {
 
   Widget _buildRecentList(BuildContext context, AppCoordinator coord) {
     final records = coord.getRecentHistory();
-    if (records.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -278,7 +284,7 @@ class _MyContent extends StatelessWidget {
     );
   }
 
-  Widget _buildDimBar(BuildContext context, int idx, bool isDark) {
+  Widget _buildDimBar(BuildContext context, int idx) {
     final val = user.getAbility(idx).toDouble().clamp(0.0, 1.0);
     final pct = (val * 100).toStringAsFixed(0);
 
@@ -291,8 +297,8 @@ class _MyContent extends StatelessWidget {
             child: Text(
               abilityLabels[idx],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -330,8 +336,8 @@ class _MyContent extends StatelessWidget {
               '$pct%',
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
-              ),
+                    color: context.appColors.inkSecondary,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),

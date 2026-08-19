@@ -15,6 +15,8 @@ class Question {
 
   int get id => ptr.ref.id;
 
+  int get textId => ptr.ref.textId;
+
   String get qType => readCString(ptr.ref.qType, 16);
 
   String get stem => readCString(ptr.ref.stem, 1024);

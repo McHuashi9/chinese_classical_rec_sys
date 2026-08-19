@@ -60,7 +60,7 @@ static_assert(sizeof(UserData) == 216, "UserData ABI 尺寸不符，检查 #prag
 static_assert(sizeof(TextInfo) == 516, "TextInfo ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(TextDetail) == 68184, "TextDetail ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(ReadingRecordData) == 24, "ReadingRecordData ABI 尺寸不符，检查 #pragma pack");
-static_assert(sizeof(QuestionData) == 6244, "QuestionData ABI 尺寸不符，检查 #pragma pack");
+static_assert(sizeof(QuestionData) == 6248, "QuestionData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(ReviewItemData) == 24, "ReviewItemData ABI 尺寸不符，检查 #pragma pack");
 static_assert(sizeof(ProfileData) == 88, "ProfileData ABI 尺寸不符，检查 #pragma pack");
 
@@ -566,7 +566,7 @@ bool isInitQKey(const std::string& key)
 
 bool fetchQuestionByQKey(sqlite3* db, const std::string& qkey, QuestionData& out)
 {
-    const char* sql = "SELECT id, q_type, stem, "
+    const char* sql = "SELECT id, text_id, q_type, stem, "
                       "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
                       "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
                       "dims, explanation, difficulty, "
@@ -579,17 +579,18 @@ bool fetchQuestionByQKey(sqlite3* db, const std::string& qkey, QuestionData& out
     if (ok) {
         std::memset(&out, 0, sizeof(out));
         out.id = sqlite3_column_int(stmt, 0);
-        copyCString(out.q_type, sizeof(out.q_type), sqlite3_column_text(stmt, 1));
-        copyCString(out.stem, sizeof(out.stem), sqlite3_column_text(stmt, 2));
+        out.text_id = sqlite3_column_int(stmt, 1);
+        copyCString(out.q_type, sizeof(out.q_type), sqlite3_column_text(stmt, 2));
+        copyCString(out.stem, sizeof(out.stem), sqlite3_column_text(stmt, 3));
         for (int i = 0; i < 4; i++) {
-            copyCString(out.options[i], sizeof(out.options[0]), sqlite3_column_text(stmt, 3 + i));
+            copyCString(out.options[i], sizeof(out.options[0]), sqlite3_column_text(stmt, 4 + i));
         }
-        copyCString(out.dims, sizeof(out.dims), sqlite3_column_text(stmt, 7));
-        copyCString(out.explanation, sizeof(out.explanation), sqlite3_column_text(stmt, 8));
-        out.difficulty = sqlite3_column_double(stmt, 9);
-        copyCString(out.context, sizeof(out.context), sqlite3_column_text(stmt, 10));
-        out.mark_start = sqlite3_column_int(stmt, 11);
-        out.mark_len = sqlite3_column_int(stmt, 12);
+        copyCString(out.dims, sizeof(out.dims), sqlite3_column_text(stmt, 8));
+        copyCString(out.explanation, sizeof(out.explanation), sqlite3_column_text(stmt, 9));
+        out.difficulty = sqlite3_column_double(stmt, 10);
+        copyCString(out.context, sizeof(out.context), sqlite3_column_text(stmt, 11));
+        out.mark_start = sqlite3_column_int(stmt, 12);
+        out.mark_len = sqlite3_column_int(stmt, 13);
     }
     sqlite3_finalize(stmt);
     return ok;
@@ -1261,7 +1262,7 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
     std::vector<QuestionData> pool;
     {
         sqlite3_stmt* stmt = nullptr;
-        const char* sql = "SELECT id, q_type, stem, "
+        const char* sql = "SELECT id, text_id, q_type, stem, "
                           "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
                           "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
                           "dims, explanation, difficulty, "
@@ -1281,17 +1282,18 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
             QuestionData q;
             std::memset(&q, 0, sizeof(q));
             q.id = sqlite3_column_int(stmt, 0);
-            copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
-            copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
+            q.text_id = sqlite3_column_int(stmt, 1);
+            copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 2));
+            copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 3));
             for (int i = 0; i < 4; i++) {
-                copyCString(q.options[i], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + i));
+                copyCString(q.options[i], sizeof(q.options[0]), sqlite3_column_text(stmt, 4 + i));
             }
-            copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
-            copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
-            q.difficulty = sqlite3_column_double(stmt, 9);
-            copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
-            q.mark_start = sqlite3_column_int(stmt, 11);
-            q.mark_len = sqlite3_column_int(stmt, 12);
+            copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 8));
+            copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 9));
+            q.difficulty = sqlite3_column_double(stmt, 10);
+            copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 11));
+            q.mark_start = sqlite3_column_int(stmt, 12);
+            q.mark_len = sqlite3_column_int(stmt, 13);
             pool.push_back(q);
         }
         sqlite3_finalize(stmt);
@@ -1653,6 +1655,38 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
     sqlite3_finalize(stmt);
     return count;
 }
+
+// 错题总数：当前用户 review_items 全部条目数（含未到期，过滤悬空题目）。
+// 与到期数分离，MyPage“错题总数 Y 题”用此通道。
+extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
+{
+    std::lock_guard<std::mutex> lock(g_mtx);
+    const int initRc = requireInitialized();
+    if (initRc != BRIDGE_OK) return initRc;
+    if (text_id < 0) return BRIDGE_ERR_GENERIC;
+
+    const bool hasQuestions = questionsTableExists();
+    std::string sql = "SELECT COUNT(*) FROM review_items WHERE user_id = ? "
+                      "AND (? = 0 OR text_id = ?)";
+    if (hasQuestions) sql += " AND question_id IN (SELECT id FROM questions)";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(g_state.db->getConnection(), sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG_ERROR("bridge: quiz_get_review_count prepare 失败: {}",
+                  sqlite3_errmsg(g_state.db->getConnection()));
+        return BRIDGE_ERR_GENERIC;
+    }
+    sqlite3_bind_int(stmt, 1, g_state.activeUserId);
+    sqlite3_bind_int(stmt, 2, text_id);
+    sqlite3_bind_int(stmt, 3, text_id);
+
+    int count = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        count = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return count;
+}
 // 按 id 取题专用通道（复习用）：复习题是已答题，question_get_by_text 排除已答后拿不到，
 // 此通道不受排除已答影响。按输入顺序返回，上限 max_count（不校验 id 是否存在，
 // 缺失 id 被跳过）。返回实际条数
@@ -1665,7 +1699,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
     if (!ids || !out || count <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT id, q_type, stem, "
+    const char* sql = "SELECT id, text_id, q_type, stem, "
                       "json_extract(options, '$[0]'), json_extract(options, '$[1]'), "
                       "json_extract(options, '$[2]'), json_extract(options, '$[3]'), "
                       "dims, explanation, difficulty, "
@@ -1686,17 +1720,18 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
         QuestionData& q = out[filled];
         std::memset(&q, 0, sizeof(q));
         q.id = sqlite3_column_int(stmt, 0);
-        copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 1));
-        copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 2));
+        q.text_id = sqlite3_column_int(stmt, 1);
+        copyCString(q.q_type, sizeof(q.q_type), sqlite3_column_text(stmt, 2));
+        copyCString(q.stem, sizeof(q.stem), sqlite3_column_text(stmt, 3));
         for (int k = 0; k < 4; k++) {
-            copyCString(q.options[k], sizeof(q.options[0]), sqlite3_column_text(stmt, 3 + k));
+            copyCString(q.options[k], sizeof(q.options[0]), sqlite3_column_text(stmt, 4 + k));
         }
-        copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 7));
-        copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 8));
-        q.difficulty = sqlite3_column_double(stmt, 9);
-        copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 10));
-        q.mark_start = sqlite3_column_int(stmt, 11);
-        q.mark_len = sqlite3_column_int(stmt, 12);
+        copyCString(q.dims, sizeof(q.dims), sqlite3_column_text(stmt, 8));
+        copyCString(q.explanation, sizeof(q.explanation), sqlite3_column_text(stmt, 9));
+        q.difficulty = sqlite3_column_double(stmt, 10);
+        copyCString(q.context, sizeof(q.context), sqlite3_column_text(stmt, 11));
+        q.mark_start = sqlite3_column_int(stmt, 12);
+        q.mark_len = sqlite3_column_int(stmt, 13);
         filled++;
     }
     sqlite3_finalize(stmt);

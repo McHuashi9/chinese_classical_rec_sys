@@ -80,6 +80,9 @@ abstract class QuizTracker {
   /// （徽标等"只要数字"的场景用，避免拿截断后的明细长度冒充总数）
   int getDueReviewCount(int textId);
 
+  /// 错题总数（textId=0 取全部；含未到期）：COUNT 聚合，不受列表上限截断
+  int getTotalReviewCount(int textId);
+
   /// 按 id 取题（复习通道，不受"排除已答"影响）
   List<Question> getQuestionsByIds(List<int> ids);
 
@@ -191,6 +194,14 @@ class KnowledgeTracker implements QuizTracker {
   @override
   int getDueReviewCount(int textId) {
     final n = _bridge.quizGetDueReviewCount(textId);
+    return n < 0 ? 0 : n;
+  }
+
+  /// 错题总数：COUNT 聚合通道，含未到期，无 500 上限
+  /// 失败（未初始化/参数非法）返回 0，与"无错题"同语义
+  @override
+  int getTotalReviewCount(int textId) {
+    final n = _bridge.quizGetReviewCount(textId);
     return n < 0 ? 0 : n;
   }
 

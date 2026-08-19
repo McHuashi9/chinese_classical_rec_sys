@@ -54,10 +54,12 @@ class _RadarChartState extends State<RadarChart>
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
-        final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 400.0;
+        final h =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 400.0;
         return AnimatedBuilder(
           animation: _anim,
           builder: (ctx, _) {
+            final colors = context.appColors;
             return CustomPaint(
               size: Size(w, h),
               painter: _RadarChartPainter(
@@ -68,6 +70,9 @@ class _RadarChartState extends State<RadarChart>
                 labels: abilityLabels,
                 progress: _anim.value,
                 accentColor: accent,
+                borderColor: colors.border,
+                borderLightColor: colors.borderLight,
+                inkSecondaryColor: colors.inkSecondary,
               ),
             );
           },
@@ -88,6 +93,9 @@ class _RadarChartPainter extends CustomPainter {
   final List<String> labels;
   final double progress;
   final Color accentColor;
+  final Color borderColor;
+  final Color borderLightColor;
+  final Color inkSecondaryColor;
 
   _RadarChartPainter({
     required this.values,
@@ -95,6 +103,9 @@ class _RadarChartPainter extends CustomPainter {
     required this.labels,
     required this.progress,
     required this.accentColor,
+    required this.borderColor,
+    required this.borderLightColor,
+    required this.inkSecondaryColor,
   });
 
   @override
@@ -106,7 +117,7 @@ class _RadarChartPainter extends CustomPainter {
 
     // grid polygons
     final gridPaint = Paint()
-      ..color = AppTheme.borderLight
+      ..color = borderLightColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
@@ -115,7 +126,8 @@ class _RadarChartPainter extends CustomPainter {
       final path = Path();
       for (int i = 0; i < abilityCount; i++) {
         final angle = startAngle + i * angleStep;
-        final p = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        final p =
+            Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
         if (i == 0) {
           path.moveTo(p.dx, p.dy);
         } else {
@@ -128,7 +140,7 @@ class _RadarChartPainter extends CustomPainter {
 
     // axis lines
     final axisPaint = Paint()
-      ..color = AppTheme.border
+      ..color = borderColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
@@ -136,7 +148,8 @@ class _RadarChartPainter extends CustomPainter {
       final angle = startAngle + i * angleStep;
       canvas.drawLine(
         center,
-        Offset(center.dx + radius * cos(angle), center.dy + radius * sin(angle)),
+        Offset(
+            center.dx + radius * cos(angle), center.dy + radius * sin(angle)),
         axisPaint,
       );
     }
@@ -147,7 +160,8 @@ class _RadarChartPainter extends CustomPainter {
       for (int i = 0; i < abilityCount; i++) {
         final angle = startAngle + i * angleStep;
         final r = radius * overlayValues![i].clamp(0.0, 1.0);
-        final p = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        final p =
+            Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
         if (i == 0) {
           overlayPath.moveTo(p.dx, p.dy);
         } else {
@@ -234,10 +248,10 @@ class _RadarChartPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: labels[i],
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontFamily: AppTheme.fontUI,
-            color: AppTheme.inkSecondary,
+            color: inkSecondaryColor,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -282,10 +296,10 @@ class _RadarChartPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontFamily: AppTheme.fontUI,
-          color: AppTheme.inkSecondary,
+          color: inkSecondaryColor,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -298,5 +312,9 @@ class _RadarChartPainter extends CustomPainter {
       old.progress != progress ||
       old.values != values ||
       old.overlayValues != overlayValues ||
-      old.labels != labels;
+      old.labels != labels ||
+      old.accentColor != accentColor ||
+      old.borderColor != borderColor ||
+      old.borderLightColor != borderLightColor ||
+      old.inkSecondaryColor != inkSecondaryColor;
 }

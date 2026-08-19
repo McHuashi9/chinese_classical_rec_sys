@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
-import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
@@ -36,9 +35,11 @@ class _ReviewListPageState extends State<ReviewListPage> {
     setState(() => _due = _userCtrl?.getDueReviews(0) ?? []);
   }
 
-  Future<void> _startGroup(int textId, String title, List<ReviewItem> items) async {
+  Future<void> _startGroup(
+      int textId, String title, List<ReviewItem> items) async {
     final userCtrl = _userCtrl!;
-    final ids = items.take(KnowledgeTracker.quizBatchSize)
+    final ids = items
+        .take(KnowledgeTracker.quizBatchSize)
         .map((r) => r.questionId)
         .toList();
     final questions = userCtrl.getQuestionsByIds(ids);
@@ -58,7 +59,6 @@ class _ReviewListPageState extends State<ReviewListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.select((SettingsController s) => s.darkMode);
     final coord = context.read<AppCoordinator>();
 
     // 按篇分组（到期顺序全局排序，组内保序）
@@ -68,13 +68,13 @@ class _ReviewListPageState extends State<ReviewListPage> {
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+      backgroundColor: context.appColors.paper,
       appBar: AppBar(
+        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back,
-              color: isDark ? AppTheme.darkInk : AppTheme.ink),
+          icon: Icon(Icons.arrow_back, color: context.appColors.ink),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -95,8 +95,10 @@ class _ReviewListPageState extends State<ReviewListPage> {
                 for (final entry in groups.entries)
                   _groupCard(
                     context,
-                    isDark,
-                    coord.texts.where((t) => t.id == entry.key).firstOrNull?.title,
+                    coord.texts
+                        .where((t) => t.id == entry.key)
+                        .firstOrNull
+                        ?.title,
                     entry.value,
                   ),
               ],
@@ -104,13 +106,21 @@ class _ReviewListPageState extends State<ReviewListPage> {
     );
   }
 
-  Widget _groupCard(BuildContext context, bool isDark, String? title,
-      List<ReviewItem> items) {
+  Widget _groupCard(
+      BuildContext context, String? title, List<ReviewItem> items) {
     final displayTitle = title ?? '文章 #${items.first.textId}';
+    var earliest = items.first.nextReviewAt;
+    var maxStreak = 0;
+    var totalWrong = 0;
+    for (final r in items) {
+      if (r.nextReviewAt < earliest) earliest = r.nextReviewAt;
+      if (r.correctStreak > maxStreak) maxStreak = r.correctStreak;
+      totalWrong += r.wrongCount;
+    }
     return Padding(
       padding: EdgeInsets.only(bottom: context.gapMedium),
       child: Material(
-        color: isDark ? AppTheme.darkCard : AppTheme.cardBg,
+        color: context.appColors.cardBg,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
@@ -120,7 +130,7 @@ class _ReviewListPageState extends State<ReviewListPage> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: isDark ? AppTheme.borderLight : AppTheme.border,
+                color: context.appColors.border,
               ),
             ),
             child: Row(
@@ -144,17 +154,36 @@ class _ReviewListPageState extends State<ReviewListPage> {
                               color: context.accent,
                             ),
                       ),
+                      SizedBox(height: context.gapTiny),
+                      Text(
+                        '下次复习 ${_formatNextReviewTime(earliest)} · '
+                        '连续答对 $maxStreak 次 · 累计答错 $totalWrong 次',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: context.appColors.inkSecondary,
+                            ),
+                      ),
                     ],
                   ),
                 ),
                 Icon(Icons.chevron_right,
-                    size: 20,
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary),
+                    size: 20, color: context.appColors.inkSecondary),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  String _formatNextReviewTime(int ts) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final hm = '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
+    if (day == today) return '今天 $hm';
+    if (day == today.add(const Duration(days: 1))) return '明天 $hm';
+    return '${dt.month}月${dt.day}日 $hm';
   }
 }

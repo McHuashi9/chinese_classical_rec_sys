@@ -18,6 +18,8 @@ ReadingRecord rec(int textId, double minutes, int dayOffset) {
   );
 }
 
+String _time() => '00:00';
+
 void main() {
   Widget wrap(List<ReadingRecord> records, {void Function(int)? onTap}) {
     return MaterialApp(
@@ -30,16 +32,17 @@ void main() {
     );
   }
 
-  testWidgets('空列表渲染 SizedBox.shrink，无标题', (tester) async {
+  testWidgets('空列表复用 EmptyState', (tester) async {
     await tester.pumpWidget(wrap(const []));
-    expect(find.byType(SizedBox), findsOneWidget);
+    expect(find.text('暂无最近阅读'), findsOneWidget);
     expect(find.text('最近阅读'), findsNothing);
   });
 
-  testWidgets('渲染标题、作者与阅读分钟', (tester) async {
+  testWidgets('渲染标题、作者、精确时间与阅读分钟', (tester) async {
     await tester.pumpWidget(wrap([rec(1, 30, 0)]));
     expect(find.text('最近阅读'), findsOneWidget);
-    expect(find.text('文章1 · 作者1'), findsOneWidget);
+    expect(find.text('文章1'), findsOneWidget);
+    expect(find.text('作者1 · 今天 ${_time()}'), findsOneWidget);
     expect(find.text('30 分钟'), findsOneWidget);
   });
 
@@ -48,31 +51,48 @@ void main() {
       wrap([for (var i = 1; i <= 11; i++) rec(i, 10, i)]),
     );
     expect(find.byType(ListTile), findsNWidgets(10));
-    expect(find.text('文章11 · 作者11'), findsNothing);
+    expect(find.text('文章11'), findsNothing);
   });
 
-  testWidgets('日期：今天显示"今天"', (tester) async {
+  testWidgets('日期：今天显示"今天 + 时刻"', (tester) async {
     await tester.pumpWidget(wrap([rec(1, 10, 0)]));
-    expect(find.text('今天'), findsOneWidget);
+    expect(find.textContaining('今天 ${_time()}'), findsOneWidget);
   });
 
-  testWidgets('日期：昨天显示"昨天"', (tester) async {
+  testWidgets('日期：昨天显示"昨天 + 时刻"', (tester) async {
     await tester.pumpWidget(wrap([rec(1, 10, 1)]));
-    expect(find.text('昨天'), findsOneWidget);
+    expect(find.textContaining('昨天 ${_time()}'), findsOneWidget);
   });
 
-  testWidgets('日期：2~7 天前显示星期', (tester) async {
+  testWidgets('日期：2~7 天前显示星期 + 时刻', (tester) async {
     await tester.pumpWidget(wrap([rec(1, 10, 3)]));
     const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
     final expected = days[
         DateTime.now().subtract(const Duration(days: 3)).weekday - 1];
-    expect(find.text(expected), findsOneWidget);
+    expect(find.textContaining('$expected ${_time()}'), findsOneWidget);
   });
 
-  testWidgets('日期：8 天前显示月/日', (tester) async {
+  testWidgets('日期：8 天前显示月/日 + 时刻', (tester) async {
     await tester.pumpWidget(wrap([rec(1, 10, 8)]));
     final d = DateTime.now().subtract(const Duration(days: 8));
-    expect(find.text('${d.month}/${d.day}'), findsOneWidget);
+    expect(find.textContaining('${d.month}/${d.day} ${_time()}'), findsOneWidget);
+  });
+
+  testWidgets('长标题不溢出且可点击', (tester) async {
+    const longTitle = '这是一篇非常非常非常非常非常非常非常非常非常长的文言文标题';
+    final record = ReadingRecord(
+      textId: 9,
+      title: longTitle,
+      author: '作者9',
+      dynasty: '唐',
+      readTime: 600,
+      timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
+    int? tappedId;
+    await tester.pumpWidget(wrap([record], onTap: (id) => tappedId = id));
+    expect(find.text(longTitle), findsOneWidget);
+    await tester.tap(find.text(longTitle));
+    expect(tappedId, 9);
   });
 
   testWidgets('点击条目触发 onTap 并携带 textId', (tester) async {
@@ -80,7 +100,7 @@ void main() {
     await tester.pumpWidget(
       wrap([rec(7, 10, 0)], onTap: (id) => tappedId = id),
     );
-    await tester.tap(find.text('文章7 · 作者7'));
+    await tester.tap(find.text('文章7'));
     expect(tappedId, 7);
   });
 

@@ -60,7 +60,8 @@ class ReadingController extends ChangeNotifier {
   bool loadText(ChineseText text,
       {Map<int, String> annotations = const {},
       String translation = '',
-      bool showTranslation = false}) {
+      bool showTranslation = false,
+      bool autoStart = true}) {
     final textId = text.id;
 
     if (_readingTextId != null) {
@@ -85,7 +86,7 @@ class ReadingController extends ChangeNotifier {
     _readTracker.ensureState(textId);
     _elapsedSeconds = 0;
 
-    startTimer();
+    if (autoStart) startTimer();
     notifyListeners();
     return true;
   }

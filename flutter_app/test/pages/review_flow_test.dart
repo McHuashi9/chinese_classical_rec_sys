@@ -74,6 +74,9 @@ class _FakeReviewTracker implements QuizTracker {
   int getDueReviewCount(int textId) => getDueReviews(textId).length;
 
   @override
+  int getTotalReviewCount(int textId) => due.length;
+
+  @override
   List<Question> getQuestionsByIds(List<int> ids) {
     byIdsCalls++;
     return byIdsResult;
@@ -139,6 +142,9 @@ void main() {
     expect(find.text('错题复习'), findsOneWidget);
     expect(find.text('岳阳楼记'), findsOneWidget);
     expect(find.text('2 道错题到期'), findsOneWidget);
+    // F14 信息增强：下次复习时间、连续答对/累计答错
+    expect(find.textContaining('下次复习'), findsOneWidget);
+    expect(find.textContaining('连续答对 1 次 · 累计答错 3 次'), findsOneWidget);
 
     // 点组 → getQuestionsByIds 取题 → 复习答题页
     await tester.tap(find.text('岳阳楼记'));

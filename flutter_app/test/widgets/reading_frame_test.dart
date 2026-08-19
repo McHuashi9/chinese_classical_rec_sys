@@ -7,11 +7,17 @@ import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
 
 void main() {
-  Widget wrap(ReadingViewData data, SettingsController settings) {
+  Widget wrap(ReadingViewData data, SettingsController settings,
+      {VoidCallback? onStartQuiz}) {
     return MaterialApp(
       home: ChangeNotifierProvider<SettingsController>.value(
         value: settings,
-        child: Scaffold(body: ReadingFrame(viewData: data)),
+        child: Scaffold(
+          body: ReadingFrame(
+            viewData: data,
+            onStartQuiz: onStartQuiz,
+          ),
+        ),
       ),
     );
   }
@@ -183,5 +189,68 @@ void main() {
 
     await tester.tap(find.text('370s'));
     expect(completed, isFalse);
+  });
+
+  testWidgets('宽屏底栏显示页码指示', (tester) async {
+    final settings = SettingsController();
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('第 1 / 2 页'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('窄屏底栏两行布局不溢出且显示页码', (tester) async {
+    final settings = SettingsController();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('第 1 / 2 页'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('传入 onStartQuiz 时底部显示做题按钮并可点击', (tester) async {
+    final settings = SettingsController();
+    var tapped = false;
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+      ),
+      settings,
+      onStartQuiz: () => tapped = true,
+    ));
+    await tester.pump();
+
+    expect(find.text('做题'), findsOneWidget);
+    await tester.tap(find.text('做题'));
+    expect(tapped, isTrue);
   });
 }

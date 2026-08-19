@@ -123,7 +123,7 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 
 ## 项目架构
 
-**C++ 核心** — 编译产物 `libchinese_core.so`，通过 38 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
+**C++ 核心** — 编译产物 `libchinese_core.so`，通过 39 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
 - `include/` 头文件（引擎 · 知识追踪）
@@ -148,7 +148,7 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 - `lib/state/` 5 个控制器（coordinator · navigation · reading · settings · user）
 - `lib/service/` history_service
 - `lib/theme/` AppTheme —— 颜色/字体 Token（强调色用户可调：context.accent = ColorScheme.primary）
-- `lib/pages/` read_hub · article_detail · my · settings · quiz · quiz_result · review_list · init_onboarding · init_result
+- `lib/pages/` read_hub · article_detail · my · settings · quiz · quiz_result · review_list · init_onboarding · init_result · reading_preview
 - `lib/widgets/` reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · empty_state · dialogs
 - `assets/` 字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db · icon/app_icon.png
 

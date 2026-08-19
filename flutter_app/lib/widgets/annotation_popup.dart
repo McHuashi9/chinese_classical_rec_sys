@@ -7,7 +7,6 @@ class AnnotationPopup extends StatelessWidget {
   final String text;
   final VoidCallback onDismiss;
   final double fontScale;
-  final bool isDark;
   final Offset markerCenterGlobal;
 
   const AnnotationPopup({
@@ -16,16 +15,14 @@ class AnnotationPopup extends StatelessWidget {
     required this.text,
     required this.onDismiss,
     required this.fontScale,
-    required this.isDark,
     required this.markerCenterGlobal,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark ? AppTheme.darkCard : AppTheme.cardBg;
-    final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
-    final secondaryColor =
-        isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary;
+    final bgColor = context.appColors.cardBg;
+    final textColor = context.appColors.ink;
+    final secondaryColor = context.appColors.inkSecondary;
     final accentColor = context.accent;
     final screenSize =
         AppTheme.screenSizeForWidth(MediaQuery.sizeOf(context).width);
@@ -51,8 +48,8 @@ class AnnotationPopup extends StatelessWidget {
         final bodyFontSize =
             AppTheme.bodyReadingSize(screenSize, fontScale).fontSize ?? 16;
         final lineCount = (text.length / 30).ceil().clamp(1, 200);
-        final estimatedHeight =
-            (lineCount * bodyFontSize * 1.7 + 80).clamp(120.0, screenHeight * 0.6);
+        final estimatedHeight = (lineCount * bodyFontSize * 1.7 + 80)
+            .clamp(120.0, screenHeight * 0.6);
 
         double top = markerCenterGlobal.dy + 4;
         if (top + estimatedHeight + margin > overlayHeight) {
@@ -67,6 +64,7 @@ class AnnotationPopup extends StatelessWidget {
               child: Container(
                   width: overlayWidth,
                   height: overlayHeight,
+                  // 合法例外：透明用于点击外部关闭的遮罩。
                   color: Colors.transparent),
             ),
             Positioned(
@@ -143,9 +141,7 @@ class AnnotationPopup extends StatelessWidget {
                           const SizedBox(height: 14),
                           if (single != null)
                             SelectableText(
-                              single.content.isNotEmpty
-                                  ? single.content
-                                  : text,
+                              single.content.isNotEmpty ? single.content : text,
                               style: TextStyle(
                                 fontFamily: AppTheme.fontBody,
                                 fontSize: bodyFontSize,
@@ -203,7 +199,6 @@ class AnnotationPopup extends StatelessWidget {
     String text, {
     VoidCallback? onDismissed,
     required double fontScale,
-    required bool isDark,
     required Offset markerCenterGlobal,
   }) {
     late final OverlayEntry entry;
@@ -216,7 +211,6 @@ class AnnotationPopup extends StatelessWidget {
           onDismissed?.call();
         },
         fontScale: fontScale,
-        isDark: isDark,
         markerCenterGlobal: markerCenterGlobal,
       ),
     );

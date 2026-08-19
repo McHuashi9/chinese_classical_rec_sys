@@ -112,6 +112,9 @@ final class QuestionData extends Struct {
   @Int32()
   external int id;
 
+  @Int32()
+  external int textId;
+
   @Array(16)
   external Array<Uint8> qType;
 

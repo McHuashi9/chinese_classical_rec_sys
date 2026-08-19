@@ -21,6 +21,7 @@ class ProfileAvatar extends StatelessWidget {
     final background = colors[id % colors.length];
     final firstChar =
         name.isEmpty ? '?' : String.fromCharCode(name.runes.first);
+    // 合法例外：头像文字颜色根据背景亮度动态计算对比前景色。
     final foreground =
         background.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
     return CircleAvatar(

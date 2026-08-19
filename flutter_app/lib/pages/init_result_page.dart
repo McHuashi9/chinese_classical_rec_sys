@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
-import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
@@ -32,10 +31,10 @@ class _InitResultPageState extends State<InitResultPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.select((SettingsController s) => s.darkMode);
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+      backgroundColor: context.appColors.paper,
       appBar: AppBar(
+        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
         backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
@@ -47,7 +46,8 @@ class _InitResultPageState extends State<InitResultPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle, size: 72, color: AppTheme.stoneGreen),
+              Icon(Icons.check_circle,
+                  size: 72, color: context.appColors.success),
               const SizedBox(height: 16),
               Text(
                 '能力画像已建立',
@@ -57,16 +57,14 @@ class _InitResultPageState extends State<InitResultPage> {
               Text(
                 '现在可以开始阅读与随堂练习了。',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: isDark
-                          ? AppTheme.darkInkSecondary
-                          : AppTheme.inkSecondary,
+                      color: context.appColors.inkSecondary,
                     ),
               ),
               const SizedBox(height: 32),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: context.accent,
-                  foregroundColor: AppTheme.cardBg,
+                  foregroundColor: context.appColors.onAccent,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                 ),

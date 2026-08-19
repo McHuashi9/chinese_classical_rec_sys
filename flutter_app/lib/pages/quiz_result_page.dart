@@ -90,17 +90,16 @@ class _QuizResultPageState extends State<QuizResultPage> {
     final correctCount = widget.answers.where((a) => a.correct).length;
     final total = widget.answers.length;
     // 部分失败判定：显式传入了原题数，且已生效题数不足
-    final partial = widget.totalQuestions > 0 &&
-        total < widget.totalQuestions;
+    final partial = widget.totalQuestions > 0 && total < widget.totalQuestions;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkPaper : AppTheme.paper,
+      backgroundColor: context.appColors.paper,
       appBar: AppBar(
+        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back,
-              color: isDark ? AppTheme.darkInk : AppTheme.ink),
+          icon: Icon(Icons.arrow_back, color: context.appColors.ink),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -125,8 +124,8 @@ class _QuizResultPageState extends State<QuizResultPage> {
                       children: [
                         TextSpan(
                           text: '$correctCount',
-                          style: const TextStyle(
-                            color: AppTheme.stoneGreen,
+                          style: TextStyle(
+                            color: context.appColors.success,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -142,9 +141,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                             ? '表现不错，再接再厉'
                             : '答错较多，可以重读相关段落',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isDark
-                              ? AppTheme.darkInkSecondary
-                              : AppTheme.inkSecondary,
+                          color: context.appColors.inkSecondary,
                         ),
                   ),
                   SizedBox(height: context.gapSmall),
@@ -168,7 +165,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                     ),
                   ],
                   SizedBox(height: context.gapLg),
-                  const Divider(color: AppTheme.border, height: 1),
+                  Divider(color: context.appColors.border, height: 1),
                 ],
               ),
             ),
@@ -187,7 +184,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 child: FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: context.accent,
-                    foregroundColor: AppTheme.cardBg,
+                    foregroundColor: context.appColors.onAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
@@ -199,7 +196,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   child: Text(
                     '返回文库',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppTheme.cardBg,
+                          color: context.appColors.onAccent,
                           fontWeight: FontWeight.w700,
                         ),
                   ),
@@ -222,10 +219,11 @@ class _QuizResultPageState extends State<QuizResultPage> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkCard : AppTheme.cardBg,
+          color: context.appColors.cardBg,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: a.correct ? AppTheme.stoneGreen : context.accent,
+            color:
+                a.correct ? context.appColors.success : context.appColors.error,
           ),
         ),
         child: Column(
@@ -237,8 +235,8 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   a.correct ? Icons.check_circle : Icons.cancel,
                   size: 18,
                   color: a.correct
-                      ? AppTheme.stoneGreen
-                      : context.accent,
+                      ? context.appColors.success
+                      : context.appColors.error,
                 ),
                 SizedBox(width: context.gapSmall),
                 Expanded(
@@ -266,9 +264,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 markLen: q.markLen,
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                       height: 1.4,
-                      color: isDark
-                          ? AppTheme.darkInkSecondary
-                          : AppTheme.inkSecondary,
+                      color: context.appColors.inkSecondary,
                     ),
               ),
             ],
@@ -289,7 +285,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
             Text(
               '解析：${q.explanation}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark ? AppTheme.darkInkSecondary : AppTheme.inkSecondary,
+                    color: context.appColors.inkSecondary,
                     height: 1.5,
                   ),
             ),
@@ -320,17 +316,19 @@ class _OptionTile extends StatelessWidget {
     final Color borderColor;
     final Color? bgColor;
     if (isSelected) {
-      borderColor = isCorrect ? AppTheme.stoneGreen : context.accent;
-      bgColor = (isCorrect ? AppTheme.stoneGreen : context.accent)
-          .withAlpha(isDark ? 30 : 15);
+      borderColor =
+          isCorrect ? context.appColors.success : context.appColors.error;
+      bgColor =
+          (isCorrect ? context.appColors.success : context.appColors.error)
+              .withAlpha(isDark ? 30 : 15);
     } else if (isCorrect) {
-      borderColor = AppTheme.stoneGreen;
+      borderColor = context.appColors.success;
       bgColor = null;
     } else {
-      borderColor = isDark ? AppTheme.borderLight : AppTheme.border;
+      borderColor = context.appColors.border;
       bgColor = null;
     }
-    final textColor = isDark ? AppTheme.darkInk : AppTheme.ink;
+    final textColor = context.appColors.ink;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -364,7 +362,8 @@ class _OptionTile extends StatelessWidget {
           ],
           if (isCorrect) ...[
             const SizedBox(width: 4),
-            const Icon(Icons.check_circle, size: 16, color: AppTheme.stoneGreen),
+            Icon(Icons.check_circle,
+                size: 16, color: context.appColors.success),
           ],
         ],
       ),
