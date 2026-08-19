@@ -18,7 +18,7 @@ Future<void> _openDialog(
           child: FilledButton(
             onPressed: () => AnnouncementDialog.show(
               context,
-              announcement: kCurrentAnnouncement,
+              announcement: kFallbackAnnouncement,
               initialMode: initialMode,
               onModeChanged: onModeChanged,
             ),
@@ -34,13 +34,13 @@ Future<void> _openDialog(
 }
 
 void main() {
-  testWidgets('公告弹窗渲染 v1.1.1 文案与弹出模式选项', (tester) async {
+  testWidgets('公告弹窗渲染 Markdown 文案与弹出模式选项', (tester) async {
     await _openDialog(tester);
 
     expect(find.text('作者的话'), findsOneWidget);
     expect(find.text('版本改动'), findsOneWidget);
     expect(find.textContaining('感谢使用文言文推荐系统'), findsOneWidget);
-    expect(find.textContaining('学习数据导出'), findsOneWidget);
+    expect(find.textContaining('初始化答题页新增“回看原文”引导'), findsOneWidget);
     expect(find.text('以后只在更新后弹出'), findsOneWidget);
     final checkbox = tester.widget<CheckboxListTile>(
       find.byType(CheckboxListTile),
@@ -76,5 +76,38 @@ void main() {
       find.byType(CheckboxListTile),
     );
     expect(checkbox.value, isTrue);
+  });
+
+  testWidgets('Markdown 行内加粗与代码正常渲染', (tester) async {
+    const announcement = Announcement(
+      id: 'test',
+      markdown: '## 版本改动\n\n- **加粗** 与 `logs/`',
+    );
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
+          accentColor: AppTheme.vermilion),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => AnnouncementDialog.show(
+                context,
+                announcement: announcement,
+              ),
+              child: const Text('打开公告'),
+            ),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('打开公告'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('版本改动'), findsOneWidget);
+    expect(find.textContaining('加粗'), findsOneWidget);
+    expect(find.textContaining('logs/'), findsOneWidget);
+    expect(find.textContaining('**'), findsNothing);
+    expect(find.textContaining('`'), findsNothing);
   });
 }

@@ -77,3 +77,4 @@ flutter:
   assets:
     - assets/data/classical.db
     - assets/data/db_version.txt
+    - assets/data/announcement.md

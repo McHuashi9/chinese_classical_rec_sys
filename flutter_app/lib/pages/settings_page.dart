@@ -492,11 +492,12 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: context.gapSmall),
             InkWell(
               onTap: () async {
+                final announcement = await loadCurrentAnnouncement();
                 final prefs = await SharedPreferences.getInstance();
                 if (!mounted) return;
                 await AnnouncementDialog.show(
                   context,
-                  announcement: kCurrentAnnouncement,
+                  announcement: announcement,
                   initialMode: loadAnnouncementMode(prefs),
                   onModeChanged: (m) async {
                     await saveAnnouncementMode(prefs, m);

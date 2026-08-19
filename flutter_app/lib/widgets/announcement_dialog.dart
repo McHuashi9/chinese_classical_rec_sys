@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/engine/announcement.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/simple_markdown.dart';
 
 /// 公告 / 作者的话弹窗：上半作者的话，下半版本改动，可设置弹出模式。
 class AnnouncementDialog extends StatefulWidget {
@@ -47,7 +48,6 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final secondaryColor = context.appColors.inkSecondary;
     return AlertDialog(
       title: const Text('作者的话'),
       content: SingleChildScrollView(
@@ -55,29 +55,9 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              widget.announcement.authorMessage,
-              style:
-                  Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-            ),
-            const SizedBox(height: 16),
-            Divider(color: context.appColors.border, height: 1),
-            const SizedBox(height: 16),
-            Text(
-              '版本改动',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(color: context.accent),
-            ),
+            SimpleMarkdown(data: widget.announcement.markdown),
             const SizedBox(height: 8),
-            Text(
-              widget.announcement.changes,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: secondaryColor, height: 1.5),
-            ),
+            Divider(color: context.appColors.border, height: 1),
             const SizedBox(height: 8),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
