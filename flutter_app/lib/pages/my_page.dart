@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chinese_classical_rec_sys/engine/chinese_festivals.dart';
 import 'package:chinese_classical_rec_sys/pages/review_list_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
@@ -10,14 +9,10 @@ import 'package:chinese_classical_rec_sys/widgets/stats_card.dart';
 import 'package:chinese_classical_rec_sys/widgets/recent_reading_list.dart';
 import 'package:chinese_classical_rec_sys/widgets/empty_state.dart';
 import 'package:chinese_classical_rec_sys/widgets/profile_avatar.dart';
-import 'package:chinese_classical_rec_sys/widgets/qixi_festival_card.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 
 class MyPage extends StatelessWidget {
-  /// 可注入当前时间便于测试；为空时使用 [DateTime.now]。
-  final DateTime? now;
-
-  const MyPage({super.key, this.now});
+  const MyPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +31,6 @@ class MyPage extends StatelessWidget {
             totalReviewCount: totalReviewCount,
             profileName: profileName,
             activeUserId: activeUserId,
-            now: now,
           )
         : const Center(child: CircularProgressIndicator());
   }
@@ -48,7 +42,6 @@ class _MyContent extends StatelessWidget {
   final int totalReviewCount;
   final String? profileName;
   final int? activeUserId;
-  final DateTime? now;
 
   const _MyContent({
     required this.user,
@@ -56,7 +49,6 @@ class _MyContent extends StatelessWidget {
     required this.totalReviewCount,
     required this.profileName,
     required this.activeUserId,
-    this.now,
   });
 
   double get _average {
@@ -74,13 +66,10 @@ class _MyContent extends StatelessWidget {
     if (_average <= 0.001 && coord.getTotalReadCount() == 0) {
       return SingleChildScrollView(
         padding: EdgeInsets.all(context.pagePadding),
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            QixiFestivalCard(now: now),
-            if (isQixiToday(now ?? DateTime.now()))
-              SizedBox(height: context.gapLg),
-            const EmptyState(
+            EmptyState(
               title: '去读一篇文章开始吧',
               subtitle: '阅读达到本文最低阅读时间后，这里会展示你的能力画像与阅读统计',
             ),
@@ -94,10 +83,6 @@ class _MyContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 节日彩蛋（仅节日当天显示；非节日时组件自身不渲染）
-          QixiFestivalCard(now: now),
-          if (isQixiToday(now ?? DateTime.now()))
-            SizedBox(height: context.gapLg),
           // header
           _buildHeader(context),
           SizedBox(height: context.gapLg),

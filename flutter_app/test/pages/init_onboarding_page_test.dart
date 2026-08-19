@@ -20,6 +20,7 @@ import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
 
 class _FakeCoordinator extends AppCoordinator {
   _FakeCoordinator({
@@ -228,6 +229,7 @@ void main() {
     userCtrl.initUserInitRepository(repo);
     userCtrl.setUser(User.allocate(calloc));
 
+    SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
     await tester.pumpWidget(wrap(const InitOnboardingPage()));
     await tester.pumpAndSettle();
 
@@ -339,6 +341,11 @@ void main() {
       await tester.tap(find.text('做题'));
       await tester.pumpAndSettle();
       expect(find.textContaining('初始化答题'), findsOneWidget);
+      // 从教程第 4 步进入时，答题页继续展示第 5 步“回看原文”引导。
+      expect(find.text('第 5 步'), findsOneWidget);
+      expect(find.text('可回看原文对照'), findsOneWidget);
+      await tester.tap(find.text('跳过引导'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
 
@@ -346,6 +353,7 @@ void main() {
       expect(find.text('阅读时可随时点击“做题”进入本篇初始化题'), findsNothing);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool(kInitTutorialSeenKey), isTrue);
+      expect(prefs.getBool(kInitQuizGuideSeenKey), isTrue);
     });
 
     testWidgets('跳过引导写入 seen', (tester) async {

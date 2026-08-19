@@ -23,6 +23,7 @@ import 'engine/github_config.dart';
 import 'engine/db_version.dart';
 import 'engine/app_logger.dart';
 import 'engine/announcement.dart';
+import 'engine/chinese_festivals.dart';
 import 'theme/theme.dart';
 import 'pages/read_hub_page.dart';
 import 'pages/my_page.dart';
@@ -31,6 +32,7 @@ import 'pages/init_onboarding_page.dart';
 import 'pages/welcome_page.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/announcement_dialog.dart';
+import 'widgets/festival_dialog.dart';
 import 'widgets/profile_dialogs.dart';
 
 void main() {
@@ -194,6 +196,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     if (!mounted) return;
     await _maybeShowAnnouncement(coord, prefs);
     if (!mounted) return;
+    await _maybeShowFestival();
+    if (!mounted) return;
     if (shouldShowWelcome) {
       final completed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => const WelcomePage()),
@@ -228,22 +232,29 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   Future<void> _maybeShowAnnouncement(
       AppCoordinator coord, SharedPreferences prefs) async {
+    final announcement = await loadCurrentAnnouncement();
     final mode = loadAnnouncementMode(prefs);
     final seen = prefs.getString(kAnnouncementSeenIdKey);
     if (mode == AnnouncementMode.onUpdate &&
-        seen == kCurrentAnnouncement.id) {
+        seen == announcement.id) {
       return;
     }
     if (!mounted) return;
     await AnnouncementDialog.show(
       context,
-      announcement: kCurrentAnnouncement,
+      announcement: announcement,
       initialMode: mode,
       onModeChanged: (m) async {
         await saveAnnouncementMode(prefs, m);
       },
     );
-    await prefs.setString(kAnnouncementSeenIdKey, kCurrentAnnouncement.id);
+    await prefs.setString(kAnnouncementSeenIdKey, announcement.id);
+  }
+
+  Future<void> _maybeShowFestival() async {
+    final festival = festivalForToday(DateTime.now());
+    if (festival == null || !mounted) return;
+    await FestivalDialog.show(context, festival: festival);
   }
 
   Future<void> _showInitGuide(AppCoordinator coord) async {
@@ -601,10 +612,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       confirmLabel: '放弃',
     );
     if (discard) {
-      coord.finishReadingSession();
+      coord.settleReadingAfterDiscardChoice(discard: true);
       coord.navCtrl.switchPage(targetIndex);
     } else {
-      coord.readingCtrl.resumeTimer();
+      coord.settleReadingAfterDiscardChoice(discard: false);
     }
   }
 
@@ -624,11 +635,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         content: '当前文章未达到本文最低阅读时间，未完成追踪。确定要放弃当前阅读记录并退出吗？',
         confirmLabel: '放弃并退出');
     if (!context.mounted) return AppExitResponse.exit;
-    if (discard) {
-      coord.readingCtrl.discardReading();
-    } else {
-      coord.readingCtrl.resumeTimer();
-    }
+    coord.settleReadingAfterDiscardChoice(discard: discard);
     return discard ? AppExitResponse.exit : AppExitResponse.cancel;
   }
 
@@ -669,7 +676,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       if (exit && context.mounted) {
         SystemNavigator.pop();
       } else {
-        coord.readingCtrl.resumeTimer();
+        coord.settleReadingAfterDiscardChoice(discard: false);
       }
       return;
     }
@@ -681,11 +688,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       confirmLabel: '放弃并退出',
     );
     if (!context.mounted) return;
-    if (discard) {
-      coord.readingCtrl.discardReading();
+    coord.settleReadingAfterDiscardChoice(discard: discard);
+    if (discard && context.mounted) {
       SystemNavigator.pop();
-    } else {
-      coord.readingCtrl.resumeTimer();
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 公告弹出模式。
@@ -28,34 +29,71 @@ Future<void> saveAnnouncementMode(
   );
 }
 
-/// 本地公告模板：作者的话 + 版本改动。
-/// 发版时更新 [Announcement.id] 与文案；设置页「公告 / 作者的话」回看同一份数据。
+/// 本地公告：以 Markdown 文本承载“作者的话 + 版本改动”。
+///
+/// 维护入口为 `assets/data/announcement.md`；`id` 放在 YAML front matter 中，
+/// 用于“仅更新后弹出”的版本识别。
 class Announcement {
   final String id;
-  final String authorMessage;
-  final String changes;
+  final String markdown;
 
   const Announcement({
     required this.id,
-    required this.authorMessage,
-    required this.changes,
+    required this.markdown,
   });
 }
 
-/// v1.1.1 维护版公告。
-const Announcement kCurrentAnnouncement = Announcement(
-  id: 'v1.1.1-1',
-  authorMessage: '感谢使用文言文推荐系统。\n\n'
-      '这个版本是维护版，重点修复了初始化流程、数据库错误提示等体验问题，'
-      '并新增了七夕小彩蛋与学习数据导出，方便你把学习数据交给开发者做后续参数校准。',
-  changes: '· 修复损坏用户库误报版本不兼容\n'
-      '· 初始化阅读页与正常阅读页保持一致\n'
-      '· 新建未初始化档案后强制进入初始化流程\n'
-      '· 答题结果页展示全部选项与正误标记\n'
-      '· 随堂练习仅对已读文章展示\n'
-      '· 设置页可打开日志所在位置\n'
-      '· 新增七夕节日卡片\n'
-      '· 公告默认每次启动弹出，可改为仅更新后弹出\n'
-      '· 设置页可导出学习数据\n'
-      '· 阅读效应阈值按文章动态计算',
+/// 公告 asset 路径。
+const String kAnnouncementAssetPath = 'assets/data/announcement.md';
+
+/// asset 缺失/解析失败时的兜底公告。
+const Announcement kFallbackAnnouncement = Announcement(
+  id: 'v1.2.1-1',
+  markdown: '感谢使用文言文推荐系统。\n\n'
+      '这个版本是维护版，重点完善了初始化答题引导、节日弹窗与设置页日志目录体验。\n\n'
+      '## 版本改动\n\n'
+      '- 初始化答题页新增“回看原文”引导\n'
+      '- 七夕节日入口改为冷启动弹窗\n'
+      '- 设置页日志按钮改为打开日志目录',
 );
+
+/// 从 asset 加载当前公告；失败时返回 [kFallbackAnnouncement]。
+Future<Announcement> loadCurrentAnnouncement() async {
+  try {
+    final raw = await rootBundle.loadString(kAnnouncementAssetPath);
+    final parsed = parseAnnouncement(raw);
+    return parsed.id.isEmpty ? kFallbackAnnouncement : parsed;
+  } catch (_) {
+    return kFallbackAnnouncement;
+  }
+}
+
+/// 解析 `assets/data/announcement.md`：
+/// 支持以 `---` 包裹的极简 YAML front matter（目前只使用 `id`），
+/// 其余内容作为 Markdown 正文。
+Announcement parseAnnouncement(String raw) {
+  var body = raw;
+  var id = '';
+
+  if (raw.startsWith('---')) {
+    final end = raw.indexOf('\n---', 3);
+    if (end != -1) {
+      final frontMatter = raw.substring(3, end).trim();
+      for (final line in frontMatter.split('\n')) {
+        final colon = line.indexOf(':');
+        if (colon <= 0) continue;
+        final key = line.substring(0, colon).trim();
+        if (key == 'id') {
+          id = line
+              .substring(colon + 1)
+              .trim()
+              .replaceAll('"', '')
+              .replaceAll("'", '');
+        }
+      }
+      body = raw.substring(end + 4).trim();
+    }
+  }
+
+  return Announcement(id: id, markdown: body);
+}

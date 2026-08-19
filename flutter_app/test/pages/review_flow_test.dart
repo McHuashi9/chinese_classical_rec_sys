@@ -190,4 +190,24 @@ void main() {
 
     expect(find.text('暂无到期错题'), findsOneWidget);
   });
+
+  group('formatNextReviewTime', () {
+    test('使用注入 now 判断今天/明天/更远日期', () {
+      final now = DateTime(2026, 8, 19, 23, 30);
+      final todayTs = DateTime(2026, 8, 19, 8, 5).millisecondsSinceEpoch ~/ 1000;
+      final tomorrowTs =
+          DateTime(2026, 8, 20, 9, 10).millisecondsSinceEpoch ~/ 1000;
+      final laterTs = DateTime(2026, 8, 30, 12, 0).millisecondsSinceEpoch ~/ 1000;
+
+      expect(formatNextReviewTime(todayTs, now), '今天 08:05');
+      expect(formatNextReviewTime(tomorrowTs, now), '明天 09:10');
+      expect(formatNextReviewTime(laterTs, now), '8月30日 12:00');
+    });
+
+    test('跨午夜后仍按注入 now 判断，不依赖调用时刻', () {
+      final ts = DateTime(2026, 8, 19, 23, 59).millisecondsSinceEpoch ~/ 1000;
+      expect(formatNextReviewTime(ts, DateTime(2026, 8, 19, 0, 1)), '今天 23:59');
+      expect(formatNextReviewTime(ts, DateTime(2026, 8, 20, 0, 1)), '8月19日 23:59');
+    });
+  });
 }

@@ -84,6 +84,20 @@ bash scripts/project/publish_data.sh
 
 - 版本号唯一源：`flutter_app/pubspec.yaml`。
 - 格式 `major.minor.patch`，Git tag 加 `v` 前缀。
-- 发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号与 CHANGELOG）。
+- 发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号、CHANGELOG 与 `flutter_app/assets/data/announcement.md` 的 id/版本改动）。
+- 公告作者的话维护在 `flutter_app/assets/data/announcement.md`；发版脚本只自动同步“版本改动”段，作者的话需维护者手动更新。若整理 CHANGELOG 后需要重新同步，可执行 `bash scripts/project/sync_announcement.sh X.Y.Z`。
 - 数据独立发布用 `publish_data.sh`（tag `data-*` 预发布 + gz），**先于 App 发布**。
 - 每次功能变更同时更新 `CHANGELOG.md`。
+
+### App 发版步骤
+
+1. 开发期间持续更新 `CHANGELOG.md`（只写用户可感知变化）。
+2. 执行 `bash scripts/project/bump_version.sh X.Y.Z`：
+   - 自动更新 `flutter_app/pubspec.yaml`、`flutter_app/lib/state/coordinator.dart`、`packaging/nsis/installer.nsi`
+   - 在 CHANGELOG 生成 `[X.Y.Z]` 头部和版本链接
+   - 自动把最新 CHANGELOG 的 Added / Changed / Fixed 同步到 `flutter_app/assets/data/announcement.md` 的“版本改动”，并更新 front matter `id`
+3. 人工检查/整理 CHANGELOG 的发布描述；若改动过 CHANGELOG 文案，重跑 `bash scripts/project/sync_announcement.sh X.Y.Z`。
+4. 人工编辑 `flutter_app/assets/data/announcement.md` 的作者的话（脚本不会覆盖该部分）。
+5. 提交并推送 `dev`（提交信息可参考 `CONTRIBUTING.md`，例如 `release: vX.Y.Z`）。
+6. 合并到 `main` 并打 tag `vX.Y.Z`，推送 tag。
+7. 等待 CI 构建/发布；如使用 `gh` 可关注 release 状态。

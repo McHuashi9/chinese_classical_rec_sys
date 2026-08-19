@@ -232,7 +232,7 @@ void main() {
       expect(find.text('核心引擎未就绪，无法导出'), findsOneWidget);
     });
 
-    testWidgets('桌面平台显示打开日志位置按钮', (tester) async {
+    testWidgets('桌面平台显示打开日志目录按钮', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.linux;
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -244,7 +244,7 @@ void main() {
         await tester.pumpWidget(_wrap(const SettingsPage()));
         await tester.pumpAndSettle();
 
-        expect(find.text('打开日志所在位置'), findsOneWidget);
+        expect(find.text('打开日志目录'), findsOneWidget);
         expect(find.text('移动端日志已包含在反馈中'), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -263,7 +263,7 @@ void main() {
         await tester.pumpWidget(_wrap(const SettingsPage()));
         await tester.pumpAndSettle();
 
-        expect(find.text('打开日志所在位置'), findsNothing);
+        expect(find.text('打开日志目录'), findsNothing);
         expect(find.text('移动端日志已包含在反馈中'), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -474,50 +474,6 @@ void main() {
 
       expect(find.text('去读一篇文章开始吧'), findsOneWidget);
       expect(find.text('阅读达到本文最低阅读时间后，这里会展示你的能力画像与阅读统计'), findsOneWidget);
-    });
-
-    testWidgets('七夕当天我的页顶部显示节日卡片', (tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      final navCtrl = NavigationController();
-      final settingsCtrl = SettingsController();
-      final readTracker = ReadTracker();
-      final readingCtrl = ReadingController(readTracker);
-      final userCtrl = UserController()..setUser(User.allocate(calloc));
-      final coord = _EmptyHistoryCoordinator(
-        navCtrl: navCtrl,
-        settingsCtrl: settingsCtrl,
-        readingCtrl: readingCtrl,
-        userCtrl: userCtrl,
-        readTracker: readTracker,
-      );
-      addTearDown(() {
-        readingCtrl.dispose();
-        userCtrl.dispose();
-      });
-
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: navCtrl),
-            ChangeNotifierProvider.value(value: settingsCtrl),
-            ChangeNotifierProvider.value(value: readingCtrl),
-            ChangeNotifierProvider.value(value: userCtrl),
-            Provider<AppCoordinator>.value(value: coord),
-          ],
-          child: MaterialApp(
-            home: Scaffold(body: MyPage(now: DateTime(2024, 8, 10))),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('七夕快乐'), findsOneWidget);
-      expect(find.text('去读一篇文章开始吧'), findsOneWidget);
     });
 
     testWidgets('错题卡片显示错题总数与到期数', (tester) async {

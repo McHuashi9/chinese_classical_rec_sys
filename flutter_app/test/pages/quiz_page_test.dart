@@ -5,6 +5,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
@@ -19,6 +20,7 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
 
 Widget _wrap(Widget child,
     {AppCoordinator? coord,
@@ -586,6 +588,7 @@ void main() {
     final userCtrl = UserController()..setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
 
+    SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
     await tester.pumpWidget(_wrap(
       Builder(
         builder: (context) => Scaffold(
@@ -630,6 +633,103 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('打开答题'), findsOneWidget);
     expect(userCtrl.isInitialized, isFalse);
+  });
+
+  testWidgets('初始化答题页首次进入展示兜底提示，可跳过并写 seen', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '严先生祠堂记',
+        questions: questions,
+        isInitPart: true,
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提示'), findsOneWidget);
+    expect(find.text('可回看原文对照'), findsOneWidget);
+    expect(find.text('返回后答题进度保留'), findsOneWidget);
+
+    await tester.tap(find.text('跳过引导'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('可回看原文对照'), findsNothing);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(kInitQuizGuideSeenKey), isTrue);
+  });
+
+  testWidgets('初始化答题页已读引导后不再展示', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '严先生祠堂记',
+        questions: questions,
+        isInitPart: true,
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提示'), findsNothing);
+    expect(find.text('可回看原文对照'), findsNothing);
+  });
+
+  testWidgets('showQuizGuide 为 true 时展示第 5 步并写入 seen', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final questions = _fakeQuestions(1);
+    addTearDown(() => calloc.free(questions.first.owner));
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    addTearDown(userCtrl.dispose);
+
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(_wrap(
+      QuizPage(
+        articleTitle: '严先生祠堂记',
+        questions: questions,
+        isInitPart: true,
+        showQuizGuide: true,
+      ),
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第 5 步'), findsOneWidget);
+    expect(find.text('可回看原文对照'), findsOneWidget);
+
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第 5 步'), findsNothing);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(kInitQuizGuideSeenKey), isTrue);
   });
 
   testWidgets('正式测验答错：结果页提示错题已入复习队列', (tester) async {

@@ -28,4 +28,38 @@ void main() {
       expect(loadAnnouncementMode(prefs), AnnouncementMode.always);
     });
   });
+
+  group('公告 Markdown 解析', () {
+    test('解析 front matter id 与正文', () {
+      const raw = '''
+---
+id: v1.2.1-1
+---
+
+感谢使用。
+
+## 版本改动
+
+- 新增功能
+''';
+      final announcement = parseAnnouncement(raw);
+      expect(announcement.id, 'v1.2.1-1');
+      expect(announcement.markdown, contains('感谢使用'));
+      expect(announcement.markdown, contains('## 版本改动'));
+      expect(announcement.markdown, contains('- 新增功能'));
+    });
+
+    test('没有 front matter 时 id 为空、正文原样保留', () {
+      const raw = '感谢使用。\n\n## 版本改动\n\n- 新增功能';
+      final announcement = parseAnnouncement(raw);
+      expect(announcement.id, isEmpty);
+      expect(announcement.markdown, raw.trim());
+    });
+
+    test('loadCurrentAnnouncement 能从 asset 加载公告', () async {
+      final announcement = await loadCurrentAnnouncement();
+      expect(announcement.id, isNotEmpty);
+      expect(announcement.markdown, contains('版本改动'));
+    });
+  });
 }

@@ -487,6 +487,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
 
   Future<void> _startQuiz() async {
     if (widget.articleQuestions.isEmpty) return;
+    final fromTutorialStep4 = _tutorialOverlay != null && _tutorialStep == 3;
     // 从教程进入答题时先结束引导，避免浮层盖在答题页上；同时视为已完成“做题”步。
     if (_tutorialOverlay != null) {
       await _finishTutorial();
@@ -498,6 +499,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
           articleTitle: widget.text.title,
           questions: widget.articleQuestions,
           isInitPart: true,
+          showQuizGuide: fromTutorialStep4,
           initAnswers: widget.initAnswers,
           readingController: _readingCtrl,
         ),
