@@ -181,7 +181,8 @@ class UserController extends ChangeNotifier {
 
   /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
   /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）
-  /// 懒加载可能发生在 build 期，只缓存不通知；置脏与通知走 _afterQuizSubmit
+  /// 懒加载可能发生在 build 期，只缓存不通知；置脏与通知走 _afterQuizSubmit。
+  /// 这是有意设计：避免每次 build 都触发 FFI，同时保证提交/数据变更后能刷新。
   int get reviewCount {
     if (_tracker == null) return 0;
     if (_reviewCount < 0) _reviewCount = _tracker!.getDueReviewCount(0);
@@ -189,7 +190,9 @@ class UserController extends ChangeNotifier {
   }
 
   /// 错题总数（懒查 quiz_get_review_count 计数，MyPage 等通过 watch/select 消费）
-  /// 含未到期条目，COUNT 聚合通道无 500 上限；置脏与通知走 _afterQuizSubmit
+  /// 含未到期条目，COUNT 聚合通道无 500 上限；置脏与通知走 _afterQuizSubmit。
+  /// 这也是有意设计：getter 内只做一次性懒查并缓存，不在 build 期反复调用 FFI；
+  /// 提交/复习/数据变更后由 [_afterQuizSubmit] 或 [invalidateQuizData] 置脏并通知。
   int get totalReviewCount {
     if (_tracker == null) return 0;
     if (_totalReviewCount < 0) {

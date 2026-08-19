@@ -156,7 +156,7 @@ class _ReviewListPageState extends State<ReviewListPage> {
                       ),
                       SizedBox(height: context.gapTiny),
                       Text(
-                        '下次复习 ${_formatNextReviewTime(earliest)} · '
+                        '下次复习 ${formatNextReviewTime(earliest, DateTime.now())} · '
                         '连续答对 $maxStreak 次 · 累计答错 $totalWrong 次',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: context.appColors.inkSecondary,
@@ -174,16 +174,16 @@ class _ReviewListPageState extends State<ReviewListPage> {
       ),
     );
   }
+}
 
-  String _formatNextReviewTime(int ts) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(dt.year, dt.month, dt.day);
-    final hm = '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}';
-    if (day == today) return '今天 $hm';
-    if (day == today.add(const Duration(days: 1))) return '明天 $hm';
-    return '${dt.month}月${dt.day}日 $hm';
-  }
+/// 格式化下次复习时间；[now] 由调用方注入，便于跨午夜场景测试。
+String formatNextReviewTime(int ts, DateTime now) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(dt.year, dt.month, dt.day);
+  final hm = '${dt.hour.toString().padLeft(2, '0')}:'
+      '${dt.minute.toString().padLeft(2, '0')}';
+  if (day == today) return '今天 $hm';
+  if (day == today.add(const Duration(days: 1))) return '明天 $hm';
+  return '${dt.month}月${dt.day}日 $hm';
 }
