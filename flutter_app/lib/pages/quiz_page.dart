@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
-import 'package:chinese_classical_rec_sys/pages/init_result_page.dart';
 import 'package:chinese_classical_rec_sys/pages/reading_preview_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
+import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
 /// [isReview] 错题复习模式：标题区分，提交走复习通道（不产生答题效应）
@@ -19,11 +20,13 @@ class QuizPage extends StatefulWidget {
   final String articleTitle;
   final List<Question> questions;
   final bool isReview;
-  final bool isInit;
   final bool isInitPart;
 
+  /// 从阅读教程第 4 步进入时置为 true，答题页继续展示“第 5 步”回看原文引导。
+  final bool showQuizGuide;
+
   /// 初始化按篇模式共享的答案表（questionId -> choice），选择时直接写入；
-  /// 传 null 时使用页内私有状态（普通/复习/整组初始化）。
+  /// 传 null 时使用页内私有状态（普通/复习答题）。
   final Map<int, int?>? initAnswers;
 
   /// 活动阅读会话（普通阅读为全局 ReadingController，初始化阅读为页内局部
@@ -35,8 +38,8 @@ class QuizPage extends StatefulWidget {
     required this.articleTitle,
     required this.questions,
     this.isReview = false,
-    this.isInit = false,
     this.isInitPart = false,
+    this.showQuizGuide = false,
     this.initAnswers,
     this.readingController,
   });
@@ -54,6 +57,10 @@ class _QuizPageState extends State<QuizPage> {
   /// 提交成功转移给结果页后置位，本页不再释放（结果页销毁时统一释放）
   bool _ownershipTransferred = false;
 
+  /// 初始化答题页“回看原文”引导浮层。
+  final GlobalKey _originalButtonKey = GlobalKey();
+  OverlayEntry? _quizGuideOverlay;
+
   UserController? _userCtrl;
 
   @override
@@ -65,6 +72,7 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   void dispose() {
+    _hideQuizGuide();
     // 初始化按篇模式使用共享答案表和共享题组内存，不由本页释放。
     if (!widget.isInitPart && !_ownershipTransferred) {
       _userCtrl?.disposeQuizQuestions(widget.questions);
@@ -82,10 +90,56 @@ class _QuizPageState extends State<QuizPage> {
         _choices[i] = widget.initAnswers![widget.questions[i].id];
       }
     }
+    if (widget.isInitPart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowQuizGuide());
+    }
+  }
+
+  Future<void> _maybeShowQuizGuide() async {
+    if (!mounted || !widget.isInitPart) return;
+    if (widget.showQuizGuide) {
+      _showQuizGuide(isStep5: true);
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    if (prefs.getBool(kInitQuizGuideSeenKey) ?? false) return;
+    _showQuizGuide(isStep5: false);
+  }
+
+  void _showQuizGuide({required bool isStep5}) {
+    _quizGuideOverlay?.remove();
+    _quizGuideOverlay = OverlayEntry(
+      builder: (_) => InitQuizGuideOverlay(
+        targetRect: _rectOf(_originalButtonKey),
+        isStep5: isStep5,
+        onSkip: _finishQuizGuide,
+      ),
+    );
+    Overlay.of(context).insert(_quizGuideOverlay!);
+  }
+
+  Rect? _rectOf(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject();
+    if (box is! RenderBox) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  Future<void> _finishQuizGuide() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(kInitQuizGuideSeenKey, true);
+    if (!mounted) return;
+    _hideQuizGuide();
+  }
+
+  void _hideQuizGuide() {
+    _quizGuideOverlay?.remove();
+    _quizGuideOverlay = null;
   }
 
   bool get _isLast => _index == widget.questions.length - 1;
-
   bool get _allowSubmit => _isLast && _choices.every((c) => c != null);
 
   int get _unansweredCount =>
@@ -125,26 +179,6 @@ class _QuizPageState extends State<QuizPage> {
     }
     final userCtrl = context.read<UserController>();
     final choices = List.generate(widget.questions.length, (i) => _choices[i]!);
-    if (widget.isInit) {
-      final ok = userCtrl.applyInit(
-        [for (final q in widget.questions) q.id],
-        choices,
-      );
-      if (!mounted) return;
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('初始化提交失败，请重试')),
-        );
-        return;
-      }
-      _ownershipTransferred = true;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => InitResultPage(questions: widget.questions),
-        ),
-      );
-      return;
-    }
 
     // 从活动阅读进入的普通答题：提交时统一结算阅读效应并丢弃阅读状态。
     _settleActiveReadingIfNeeded();
@@ -204,6 +238,11 @@ class _QuizPageState extends State<QuizPage> {
       );
       return;
     }
+    // 用户点击被引导高亮的“原文”按钮即视为已了解该入口，结束引导。
+    if (_quizGuideOverlay != null) {
+      await _finishQuizGuide();
+      if (!mounted) return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => ReadingPreviewPage(
@@ -232,11 +271,9 @@ class _QuizPageState extends State<QuizPage> {
         title: Text(
           widget.isInitPart
               ? '初始化答题 · ${widget.articleTitle}'
-              : widget.isInit
-                  ? '初始化测验 · ${widget.articleTitle}'
-                  : widget.isReview
-                      ? '错题复习 · ${widget.articleTitle}'
-                      : '随堂练习 · ${widget.articleTitle}',
+              : widget.isReview
+                  ? '错题复习 · ${widget.articleTitle}'
+                  : '随堂练习 · ${widget.articleTitle}',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontFamily: AppTheme.fontTitle,
               ),
@@ -244,6 +281,7 @@ class _QuizPageState extends State<QuizPage> {
         ),
         actions: [
           IconButton(
+            key: _originalButtonKey,
             tooltip: '原文',
             icon: Icon(Icons.menu_book, color: context.appColors.ink),
             onPressed: _openOriginal,

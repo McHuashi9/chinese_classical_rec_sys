@@ -43,11 +43,6 @@ class _WelcomePageState extends State<WelcomePage> {
       _showSnack('名称过长，请缩短');
       return;
     }
-    if (coord.userCtrl.isProfileNameTaken(normalized,
-        excludeId: defaultProfile.id)) {
-      _showSnack('该名称已被其他档案使用');
-      return;
-    }
 
     setState(() => _submitting = true);
     final ok = normalized == defaultProfile.name ||
