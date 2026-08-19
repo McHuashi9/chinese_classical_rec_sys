@@ -405,7 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: TextButton.icon(
                   onPressed: _openLogLocation,
                   icon: const Icon(Icons.folder_open),
-                  label: const Text('打开日志所在位置'),
+                  label: const Text('打开日志目录'),
                 ),
               ),
             ] else ...[
@@ -646,19 +646,20 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final supportDir = await getApplicationSupportDirectory();
       final logDir = Directory('${supportDir.path}/logs');
-      final logFile = File('${logDir.path}/app.log');
-      final uri =
-          logFile.existsSync() ? Uri.file(logFile.path) : Uri.file(logDir.path);
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!await logDir.exists()) {
+        await logDir.create(recursive: true);
+      }
+      final ok = await launchUrl(Uri.file(logDir.path),
+          mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法打开日志位置')),
+          const SnackBar(content: Text('无法打开日志目录')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('无法打开日志位置：$e')),
+          SnackBar(content: Text('无法打开日志目录：$e')),
         );
       }
     }
