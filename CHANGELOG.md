@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-08-20
+
+### Fixed
+
+- **修复 Windows 安装包缺失 VCRUNTIME140_1.dll**：CI 打包时 VC++ 运行库目录选择逻辑误把 `v143` 当作版本目录，导致 `vcruntime140_1.dll` 等运行库未复制进安装包；已改为只选数字版本目录，并在 CI 中校验运行库已随包复制。
+
 ## [1.2.1] - 2026-08-19
 
 ### Added
@@ -530,3 +536,4 @@ C++ CLI 原型。
 [1.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.0
 [1.1.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.1
 [1.2.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.0
+[1.2.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.2

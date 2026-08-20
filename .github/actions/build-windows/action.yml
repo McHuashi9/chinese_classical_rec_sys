@@ -31,14 +31,30 @@ runs:
         if (-not $vsPath) { Write-Warning "vswhere not found — skipping VC++ runtime DLL copy"; return }
         $redistBase = Join-Path $vsPath "VC\Redist\MSVC"
         if (-not (Test-Path $redistBase)) { Write-Warning "Redist dir not found"; return }
-        $latest = Get-ChildItem $redistBase -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        # Redist\MSVC 下同时存在 v143 与 14.x.y 版本目录；必须排除 v143，
+        # 否则 Sort-Object Name 会把 v143 排到数字版本前面，导致找不到 CRT。
+        $latest = Get-ChildItem $redistBase -Directory |
+          Where-Object { $_.Name -match '^\d+\.' } |
+          Sort-Object { [version]$_.Name } -Descending |
+          Select-Object -First 1
+        if (-not $latest) { Write-Warning "No numeric VC++ Redist version dir found under $redistBase"; return }
         $crtDir = Join-Path $latest.FullName "x64\Microsoft.VC143.CRT"
-        if (Test-Path $crtDir) {
-          Copy-Item "$crtDir\*" "flutter_app\build\windows\x64\runner\Release\" -Force
-          Write-Host "Copied VC++ runtime DLLs from $crtDir"
-        } else {
+        if (-not (Test-Path $crtDir)) {
           Write-Warning "CRT dir not found at $crtDir"
+          return
         }
+        Copy-Item "$crtDir\*" "flutter_app\build\windows\x64\runner\Release\" -Force
+        Write-Host "Copied VC++ runtime DLLs from $crtDir"
+        # 防止再次静默漏拷：校验 CRT 目录里的每个 DLL 都已进入 Release，
+        # 避免只查 VCRUNTIME140_1.dll 而漏掉 msvcp140_1.dll/concrt140.dll 等。
+        $sourceDlls = Get-ChildItem "$crtDir\*.dll" -File
+        foreach ($src in $sourceDlls) {
+          $dest = Join-Path "flutter_app\build\windows\x64\runner\Release" $src.Name
+          if (-not (Test-Path $dest)) {
+            throw "$($src.Name) 未复制到 Release 目录，请检查 VC++ Redist 路径"
+          }
+        }
+        Write-Host "Verified $($sourceDlls.Count) VC++ runtime DLLs in Release"
 
     - name: Install NSIS
       shell: bash
