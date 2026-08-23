@@ -20,6 +20,13 @@ import re
 import sys
 from pathlib import Path
 
+# 脚本含中文输出；Windows 默认控制台编码可能是 cp1252，强制 UTF-8 避免
+# UnicodeEncodeError（CI 上已实际踩到）。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     import pefile
 except ImportError:  # pragma: no cover - CI 会先 pip install

@@ -54,6 +54,9 @@ runs:
 
     - name: Verify Windows DLL manifest and dependencies
       shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: "1"
       run: |
         set -euo pipefail
         python -c "import pefile" >/dev/null 2>&1 || python -m pip install --user pefile
