@@ -20,10 +20,6 @@ runs:
         flutter build windows --release
       working-directory: flutter_app
 
-    - name: Copy chinese_core.dll to Release
-      shell: cmd
-      run: copy build\Release\chinese_core.dll flutter_app\build\windows\x64\runner\Release\
-
     - name: Copy VC++ runtime DLLs
       shell: pwsh
       run: |
@@ -55,6 +51,14 @@ runs:
           }
         }
         Write-Host "Verified $($sourceDlls.Count) VC++ runtime DLLs in Release"
+
+    - name: Verify Windows DLL manifest and dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -c "import pefile" >/dev/null 2>&1 || python -m pip install --user pefile
+        python scripts/check_windows_dlls.py \
+          "flutter_app/build/windows/x64/runner/Release"
 
     - name: Install NSIS
       shell: bash

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Windows 安装包打包加固**：`chinese_core.dll` 不再重复打包到 `lib/`；移除未使用的 `dartjni.dll`；CI 打包前新增关键 DLL 清单与 PE 依赖校验。
+
 ## [1.2.2] - 2026-08-20
 
 ### Fixed

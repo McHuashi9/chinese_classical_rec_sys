@@ -57,6 +57,14 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# jni is pulled in transitively by path_provider_android but is only used on Android.
+# On Windows it would build/bundle dartjni.dll, whose import table contains jvm.dll
+# (a Java runtime dependency). The Windows app has no JNI code path, so do not ship it.
+# The generated list stores FFI plugin libraries as $<TARGET_FILE:...> generator
+# expressions, so filter by the target name as well as by the resolved DLL name.
+list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "TARGET_FILE:jni>")
+list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "dartjni[.]dll$")
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
@@ -95,10 +103,12 @@ if(EXISTS "${NATIVE_ASSETS_DIR}")
      COMPONENT Runtime)
 endif()
 
-# Install custom FFI library (chinese_core.dll) alongside Flutter's bundled libs
+# Install custom FFI library (chinese_core.dll) next to the executable; Dart loads it
+# from the exe directory. Previously this went under lib/ while CI copied a second copy
+# into the root; installing directly to the root keeps the bundle to one copy.
 set(CHINESE_CORE_DLL "${CMAKE_SOURCE_DIR}/../../build/Release/chinese_core.dll")
 if(EXISTS "${CHINESE_CORE_DLL}")
-  install(FILES "${CHINESE_CORE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/lib" COMPONENT Runtime)
+  install(FILES "${CHINESE_CORE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 else()
   message(WARNING "chinese_core.dll 未找到 (${CHINESE_CORE_DLL})，请在项目根先执行 cmake --build build --target chinese_core")
 endif()
