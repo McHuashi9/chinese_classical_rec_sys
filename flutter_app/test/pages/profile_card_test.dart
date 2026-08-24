@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/screenshot_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 class _FakeProfileRepository implements ProfileRepository {
@@ -29,16 +30,16 @@ class _FakeProfileRepository implements ProfileRepository {
   @override
   int? createProfile(String name) {
     final id = nextId++;
-    profiles.add(UserProfile(
-        id: id, name: name, createdAt: id, lastUsedAt: id + 10));
+    profiles.add(
+        UserProfile(id: id, name: name, createdAt: id, lastUsedAt: id + 10));
     return id;
   }
 
   @override
   int? createProfileInherit(String name, int sourceId) {
     final id = nextId++;
-    profiles.add(UserProfile(
-        id: id, name: name, createdAt: id, lastUsedAt: id + 10));
+    profiles.add(
+        UserProfile(id: id, name: name, createdAt: id, lastUsedAt: id + 10));
     return id;
   }
 
@@ -75,12 +76,14 @@ Widget _wrap(UserController userCtrl, AppCoordinator coord,
   final navCtrl = NavigationController();
   final readTracker = ReadTracker();
   final readingCtrl = ReadingController(readTracker);
+  final screenshotCtrl = ScreenshotController();
   return MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: navCtrl),
       ChangeNotifierProvider.value(value: settingsCtrl),
       ChangeNotifierProvider.value(value: readingCtrl),
       ChangeNotifierProvider.value(value: userCtrl),
+      ChangeNotifierProvider.value(value: screenshotCtrl),
       Provider.value(value: coord),
     ],
     child: MaterialApp(

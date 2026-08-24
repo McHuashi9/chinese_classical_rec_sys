@@ -51,6 +51,7 @@
 | 亮/暗主题 | 全局一键切换 |
 | 数据自动同步 | 启动时自动检查并下载最新文言文库数据包（预发布包，prerelease），无需等待 App 更新 |
 | 版本更新 | GitHub Release 检查，一键跳转下载 |
+| 软件内截图 | 设置页进入截图模式，可截取任意界面并保存/分享/附带反馈 |
 | 学习统计 | 阅读时长、篇数、日均统计、连续天数 |
 
 ---
@@ -145,11 +146,11 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 - `lib/bridge/` dart:ffi 绑定（ffi_bindings · c_types）
 - `lib/engine/` 跨语言函数接口（FFI）封装（tracker · recommendation · read_tracker · profile_repository · user_init_repository · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · algorithm_constants · github_config · announcement · feedback_mailto · feedback_submit）
 - `lib/models/` user · user_profile · text · question · version · reading_view_data
-- `lib/state/` 5 个控制器（coordinator · navigation · reading · settings · user）
-- `lib/service/` history_service
+- `lib/state/` 6 个控制器（coordinator · navigation · reading · settings · user · screenshot）
+- `lib/service/` history_service · app_screenshot
 - `lib/theme/` AppTheme —— 颜色/字体 Token（强调色用户可调：context.accent = ColorScheme.primary）
 - `lib/pages/` read_hub · article_detail · my · settings · quiz · quiz_result · review_list · init_onboarding · init_result · reading_preview
-- `lib/widgets/` reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · empty_state · dialogs · announcement_dialog · simple_markdown
+- `lib/widgets/` reading_frame · radar_chart · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · empty_state · dialogs · announcement_dialog · simple_markdown · screenshot_overlay
 - `assets/` 字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db · icon/app_icon.png · data/announcement.md
 
 **Cloudflare Worker 骨架（预研）** — `worker/`（`wrangler.toml` + `src/index.js`）：当前仅用于本地验证反馈接收链路，后续按遥测（telemetry）待办扩展限流 / Cloudflare R2 对象存储 / 服务端转发。

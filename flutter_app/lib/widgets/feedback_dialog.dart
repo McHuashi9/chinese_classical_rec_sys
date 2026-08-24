@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,6 +20,7 @@ Future<void> showFeedbackDialog(
   Future<String> Function()? logTailLoader,
   Future<bool> Function(Uri uri)? mailtoLauncher,
   Future<FeedbackSubmitResult> Function(FeedbackDraft draft)? submitFeedback,
+  String? initialScreenshotPath,
 }) {
   final loadLogTail = logTailLoader ?? readLogTail;
   return showDialog<void>(
@@ -27,6 +30,7 @@ Future<void> showFeedbackDialog(
       platformName: platform,
       contentDataVersion: contentDataVersion,
       schemaVersions: schemaVersions,
+      initialScreenshotPath: initialScreenshotPath,
       diagnosticsLoader: diagnosticsLoader ??
           () async {
             final logTail = await loadLogTail();
@@ -61,12 +65,14 @@ class FeedbackDialog extends StatefulWidget {
     required this.logTailLoader,
     required this.mailtoLauncher,
     required this.submitFeedback,
+    this.initialScreenshotPath,
   });
 
   final String appVersion;
   final String platformName;
   final String contentDataVersion;
   final String schemaVersions;
+  final String? initialScreenshotPath;
   final Future<String> Function() diagnosticsLoader;
   final Future<String> Function() logTailLoader;
   final Future<bool> Function(Uri uri) mailtoLauncher;
@@ -84,12 +90,14 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
   late Future<String> _diagnosticsFuture;
   late Future<String> _logTailFuture;
   String _type = 'Bug';
+  String? _screenshotPath;
   bool _diagnosticsExpanded = false;
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
+    _screenshotPath = widget.initialScreenshotPath;
     _diagnosticsFuture = widget.diagnosticsLoader();
     _logTailFuture = widget.logTailLoader();
   }
@@ -107,6 +115,32 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
     return ok;
   }
 
+  String _screenshotFileName(String path) {
+    final parts = path.split(RegExp(r'[/\\]'));
+    return parts.isEmpty ? path : parts.last;
+  }
+
+  Widget _buildScreenshotThumbnail(ThemeData theme) {
+    Widget fallback() => Container(
+          width: 72,
+          height: 48,
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: const Icon(Icons.broken_image_outlined, size: 24),
+        );
+    try {
+      final bytes = File(_screenshotPath!).readAsBytesSync();
+      return Image.memory(
+        bytes,
+        width: 72,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => fallback(),
+      );
+    } catch (_) {
+      return fallback();
+    }
+  }
+
   Future<String> _diagnostics() => _diagnosticsFuture;
 
   Future<FeedbackDraft> _draft() async {
@@ -122,6 +156,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
       contentDataVersion: widget.contentDataVersion,
       schemaVersions: widget.schemaVersions,
       logTail: logTail,
+      screenshotPath: _screenshotPath,
     );
   }
 
@@ -255,6 +290,50 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                                 ? '请填写描述'
                                 : null,
                       ),
+                      if (_screenshotPath != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: _buildScreenshotThumbnail(theme),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _screenshotFileName(_screenshotPath!),
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _screenshotPath!,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: secondaryColor),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => _screenshotPath = null),
+                                child: const Text('移除截图'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       InkWell(
                         onTap: () => setState(

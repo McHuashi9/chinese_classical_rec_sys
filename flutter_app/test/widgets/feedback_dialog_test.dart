@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +13,7 @@ Future<void> _openDialog(
   Future<String> Function()? loader,
   Future<bool> Function(Uri uri)? launcher,
   Future<FeedbackSubmitResult> Function(FeedbackDraft draft)? submitFeedback,
+  String? initialScreenshotPath,
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -27,8 +31,8 @@ Future<void> _openDialog(
               platform: 'Linux',
               contentDataVersion: 'data-20260816-213645',
               schemaVersions: '用户 1 · 内容 1',
-              diagnosticsLoader:
-                  loader ?? () async => '【环境信息】\nApp 版本：1.0.2',
+              initialScreenshotPath: initialScreenshotPath,
+              diagnosticsLoader: loader ?? () async => '【环境信息】\nApp 版本：1.0.2',
               logTailLoader: () async => 'line1',
               mailtoLauncher: launcher ?? (_) async => true,
               submitFeedback: submitFeedback,
@@ -57,6 +61,72 @@ void main() {
     expect(find.text('复制完整反馈内容'), findsOneWidget);
     expect(find.text('复制诊断信息'), findsOneWidget);
     expect(find.text('复制邮箱地址'), findsOneWidget);
+    expect(find.text('移除截图'), findsNothing);
+  });
+
+  testWidgets('初始带截图时显示并可移除', (tester) async {
+    final tempDir =
+        Directory.systemTemp.createTempSync('feedback_dialog_screenshot');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final file = File('${tempDir.path}/shot.png')
+      ..writeAsBytesSync(base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+
+    await _openDialog(tester, initialScreenshotPath: file.path);
+
+    expect(find.text('移除截图'), findsOneWidget);
+    expect(find.text('shot.png'), findsOneWidget);
+
+    await tester.tap(find.text('移除截图'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除截图'), findsNothing);
+  });
+
+  testWidgets('带截图时复制完整反馈包含路径，移除后不含', (tester) async {
+    final tempDir =
+        Directory.systemTemp.createTempSync('feedback_dialog_screenshot');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final file = File('${tempDir.path}/shot.png')
+      ..writeAsBytesSync(base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        log.add(call);
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _openDialog(tester, initialScreenshotPath: file.path);
+
+    await tester.enterText(find.byType(TextFormField).at(0), '标题');
+    await tester.enterText(find.byType(TextFormField).at(1), '描述');
+    await tester.ensureVisible(find.text('复制完整反馈内容'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制完整反馈内容'));
+    await tester.pumpAndSettle();
+
+    String clipboardText() {
+      final calls = log.where((c) => c.method == 'Clipboard.setData').toList();
+      final call = calls.last;
+      return (call.arguments as Map)['text'] as String;
+    }
+
+    expect(clipboardText(), contains('截图：${file.path}'));
+
+    await tester.tap(find.text('移除截图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制完整反馈内容'));
+    await tester.pumpAndSettle();
+
+    expect(clipboardText(), isNot(contains('截图：')));
   });
 
   testWidgets('标题和描述为空时校验拦截', (tester) async {
@@ -94,9 +164,8 @@ void main() {
       log.where((c) => c.method == 'Clipboard.setData'),
       hasLength(1),
     );
-    final arguments = log
-        .firstWhere((c) => c.method == 'Clipboard.setData')
-        .arguments as Map;
+    final arguments =
+        log.firstWhere((c) => c.method == 'Clipboard.setData').arguments as Map;
     expect(arguments['text'], contains('收件人：mc_huashi9@163.com'));
     expect(arguments['text'], contains('主题：【Bug反馈】初始化后无法进入阅读'));
     expect(arguments['text'], contains('点击文章后一直转圈'));
@@ -126,9 +195,8 @@ void main() {
     await tester.tap(find.text('复制诊断信息'));
     await tester.pumpAndSettle();
 
-    final arguments = log
-        .firstWhere((c) => c.method == 'Clipboard.setData')
-        .arguments as Map;
+    final arguments =
+        log.firstWhere((c) => c.method == 'Clipboard.setData').arguments as Map;
     expect(arguments['text'], contains('【环境信息】'));
   });
 
@@ -150,7 +218,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(launched, isNotNull);
-    expect(launched!.toString(), startsWith('mailto:mc_huashi9@163.com?subject='));
+    expect(
+        launched!.toString(), startsWith('mailto:mc_huashi9@163.com?subject='));
   });
 
   testWidgets('打开邮件客户端失败时提示复制兜底', (tester) async {

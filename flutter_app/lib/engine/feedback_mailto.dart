@@ -20,6 +20,7 @@ class FeedbackDraft {
     this.contentDataVersion,
     this.schemaVersions,
     this.logTail,
+    this.screenshotPath,
   });
 
   /// 反馈类型，例如 `Bug` / `建议`。
@@ -40,6 +41,9 @@ class FeedbackDraft {
   final String? contentDataVersion;
   final String? schemaVersions;
   final String? logTail;
+
+  /// 随反馈附带的本地截图完整路径（仅用于邮件/复制正文，不上传）。
+  final String? screenshotPath;
 
   String get subject {
     final label = type == 'Bug' ? 'Bug反馈' : '建议';
@@ -67,7 +71,9 @@ String buildFullFeedbackText({
   required String recipient,
   required FeedbackDraft draft,
 }) {
-  return '收件人：$recipient\n主题：${draft.subject}\n\n${draft.body}';
+  final screenshot =
+      draft.screenshotPath == null ? '' : '\n\n截图：${draft.screenshotPath}';
+  return '收件人：$recipient\n主题：${draft.subject}\n\n${draft.body}$screenshot';
 }
 
 /// 组装环境信息 + 日志尾部。
@@ -98,7 +104,8 @@ Future<String> readLogTail({
   int maxChars = 8 * 1024,
 }) async {
   try {
-    final dirPath = logDirectory ?? (await getApplicationSupportDirectory()).path;
+    final dirPath =
+        logDirectory ?? (await getApplicationSupportDirectory()).path;
     final file = File('$dirPath/logs/app.log');
     if (!await file.exists()) return '（暂无日志文件）';
     final lines = await file.readAsLines();

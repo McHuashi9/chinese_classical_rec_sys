@@ -15,6 +15,7 @@ import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/screenshot_controller.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/pages/settings_page.dart';
@@ -23,12 +24,13 @@ import 'package:chinese_classical_rec_sys/pages/read_hub_page.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {ScreenshotController? screenshotController}) {
   final navCtrl = NavigationController();
   final settingsCtrl = SettingsController();
   final readTracker = ReadTracker();
   final readingCtrl = ReadingController(readTracker);
   final userCtrl = UserController();
+  final screenshotCtrl = screenshotController ?? ScreenshotController();
   final coord = AppCoordinator(
     navCtrl: navCtrl,
     settingsCtrl: settingsCtrl,
@@ -42,6 +44,7 @@ Widget _wrap(Widget child) {
       ChangeNotifierProvider.value(value: settingsCtrl),
       ChangeNotifierProvider.value(value: readingCtrl),
       ChangeNotifierProvider.value(value: userCtrl),
+      ChangeNotifierProvider.value(value: screenshotCtrl),
       Provider.value(value: coord),
     ],
     child: MaterialApp(home: Scaffold(body: child)),
@@ -212,6 +215,29 @@ void main() {
       expect(find.text('公告 / 作者的话'), findsOneWidget);
       expect(find.text('反馈 Bug / 意见'), findsOneWidget);
       expect(find.text('导出学习数据'), findsOneWidget);
+      expect(find.text('软件内截图'), findsOneWidget);
+    });
+
+    testWidgets('软件内截图入口可进入截图模式', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final screenshotCtrl = ScreenshotController();
+      await tester.pumpWidget(
+        _wrap(const SettingsPage(), screenshotController: screenshotCtrl),
+      );
+      await tester.pumpAndSettle();
+
+      expect(screenshotCtrl.armed, isFalse);
+      await tester.ensureVisible(find.text('软件内截图'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('软件内截图'));
+      await tester.pump();
+
+      expect(screenshotCtrl.armed, isTrue);
     });
 
     testWidgets('点击导出学习数据且引擎未就绪时提示', (tester) async {
@@ -245,6 +271,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('打开日志目录'), findsOneWidget);
+        expect(find.text('打开截图目录'), findsOneWidget);
         expect(find.text('移动端日志已包含在反馈中'), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -264,7 +291,30 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('打开日志目录'), findsNothing);
+        expect(find.text('打开截图目录'), findsNothing);
         expect(find.text('移动端日志已包含在反馈中'), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('移动端有最近截图时显示分享入口', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      try {
+        final screenshotCtrl = ScreenshotController()
+          ..complete('/tmp/shot.png');
+        await tester.pumpWidget(
+          _wrap(const SettingsPage(), screenshotController: screenshotCtrl),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('分享最近截图'), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -282,6 +332,7 @@ void main() {
       final readTracker = ReadTracker();
       final readingCtrl = ReadingController(readTracker);
       final userCtrl = UserController();
+      final screenshotCtrl = ScreenshotController();
       final coord = AppCoordinator(
         navCtrl: navCtrl,
         settingsCtrl: settingsCtrl,
@@ -298,6 +349,7 @@ void main() {
               ChangeNotifierProvider.value(value: settingsCtrl),
               ChangeNotifierProvider.value(value: readingCtrl),
               ChangeNotifierProvider.value(value: userCtrl),
+              ChangeNotifierProvider.value(value: screenshotCtrl),
               Provider.value(value: coord),
             ],
             child: MaterialApp(
@@ -396,8 +448,7 @@ void main() {
                 accentColor: AppTheme.vermilion),
             darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
                 accentColor: AppTheme.vermilion),
-            themeMode:
-                settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+            themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
             home: const Scaffold(body: ReadHubPage()),
           ),
         ),

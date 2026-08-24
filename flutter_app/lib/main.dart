@@ -4,6 +4,7 @@ import 'dart:ffi';
 import 'dart:io' show File, Platform;
 import 'dart:ui' show AppExitResponse, Color;
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator, rootBundle;
 import 'package:http/http.dart' as http;
@@ -18,12 +19,14 @@ import 'state/navigation_controller.dart';
 import 'state/settings_controller.dart';
 import 'state/reading_controller.dart';
 import 'state/user_controller.dart';
+import 'state/screenshot_controller.dart';
 import 'engine/read_tracker.dart';
 import 'engine/github_config.dart';
 import 'engine/db_version.dart';
 import 'engine/app_logger.dart';
 import 'engine/announcement.dart';
 import 'engine/chinese_festivals.dart';
+import 'service/app_screenshot.dart';
 import 'theme/theme.dart';
 import 'pages/read_hub_page.dart';
 import 'pages/my_page.dart';
@@ -34,6 +37,8 @@ import 'widgets/dialogs.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/festival_dialog.dart';
 import 'widgets/profile_dialogs.dart';
+import 'widgets/feedback_dialog.dart';
+import 'widgets/screenshot_overlay.dart';
 
 void main() {
   final readTracker = ReadTracker();
@@ -41,6 +46,7 @@ void main() {
   final settingsCtrl = SettingsController();
   final readingCtrl = ReadingController(readTracker);
   final userCtrl = UserController();
+  final screenshotCtrl = ScreenshotController();
   final coordinator = AppCoordinator(
     navCtrl: navCtrl,
     settingsCtrl: settingsCtrl,
@@ -56,6 +62,7 @@ void main() {
         ChangeNotifierProvider.value(value: settingsCtrl),
         ChangeNotifierProvider.value(value: readingCtrl),
         ChangeNotifierProvider.value(value: userCtrl),
+        ChangeNotifierProvider.value(value: screenshotCtrl),
         Provider.value(value: coordinator),
       ],
       child: const ChineseClassicalRecSysApp(),
@@ -63,11 +70,43 @@ void main() {
   );
 }
 
-class ChineseClassicalRecSysApp extends StatelessWidget {
-  const ChineseClassicalRecSysApp({super.key});
+class ChineseClassicalRecSysApp extends StatefulWidget {
+  const ChineseClassicalRecSysApp({super.key, this.screenshotCapture});
+
+  /// 可注入的截图捕获函数，仅用于测试；生产为 null 使用默认实现。
+  final ScreenshotCapture? screenshotCapture;
+
+  @override
+  State<ChineseClassicalRecSysApp> createState() =>
+      _ChineseClassicalRecSysAppState();
+}
+
+class _ChineseClassicalRecSysAppState extends State<ChineseClassicalRecSysApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+  final GlobalKey _screenshotBoundaryKey = GlobalKey();
+
+  Future<void> _openFeedbackWithScreenshot(String path) async {
+    final context = _navigatorKey.currentContext;
+    if (context == null) return;
+    final coord = context.read<AppCoordinator>();
+    final schema = coord.schemaVersions;
+    final schemaText =
+        schema == null ? '不可用' : '用户 ${schema.$1} · 内容 ${schema.$2}';
+    await showFeedbackDialog(
+      context,
+      appVersion: AppCoordinator.currentVersion,
+      platform: defaultTargetPlatform.name,
+      contentDataVersion: coord.contentDataVersion,
+      schemaVersions: schemaText,
+      initialScreenshotPath: path,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screenshotCtrl = context.watch<ScreenshotController>();
     return LayoutBuilder(builder: (context, constraints) {
       final screenSize = AppTheme.screenSizeForWidth(constraints.maxWidth);
       final isDark = context.select((SettingsController s) => s.darkMode);
@@ -78,11 +117,32 @@ class ChineseClassicalRecSysApp extends StatelessWidget {
       return MaterialApp(
         title: '文言文推荐系统',
         debugShowCheckedModeBanner: false,
+        navigatorKey: _navigatorKey,
+        scaffoldMessengerKey: _messengerKey,
         theme: AppTheme.lightTheme(screenSize, fontScale, accentColor: accent),
         darkTheme:
             AppTheme.darkTheme(screenSize, fontScale, accentColor: accent),
         themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
         home: const MainShell(),
+        builder: (context, child) {
+          return Stack(
+            children: [
+              RepaintBoundary(
+                key: _screenshotBoundaryKey,
+                child: child ?? const SizedBox.shrink(),
+              ),
+              if (screenshotCtrl.armed)
+                ScreenshotConfirmOverlay(
+                  controller: screenshotCtrl,
+                  boundaryKey: _screenshotBoundaryKey,
+                  navigatorKey: _navigatorKey,
+                  messengerKey: _messengerKey,
+                  capture: widget.screenshotCapture,
+                  onOpenFeedback: _openFeedbackWithScreenshot,
+                ),
+            ],
+          );
+        },
       );
     });
   }
@@ -235,8 +295,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final announcement = await loadCurrentAnnouncement();
     final mode = loadAnnouncementMode(prefs);
     final seen = prefs.getString(kAnnouncementSeenIdKey);
-    if (mode == AnnouncementMode.onUpdate &&
-        seen == announcement.id) {
+    if (mode == AnnouncementMode.onUpdate && seen == announcement.id) {
       return;
     }
     if (!mounted) return;

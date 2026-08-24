@@ -11,6 +11,7 @@ import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/screenshot_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
 class _FakeProfileRepository implements ProfileRepository {
@@ -113,6 +114,7 @@ Widget _wrap(AppCoordinator coord) {
       ChangeNotifierProvider.value(value: coord.settingsCtrl),
       ChangeNotifierProvider.value(value: coord.readingCtrl),
       ChangeNotifierProvider.value(value: coord.userCtrl),
+      ChangeNotifierProvider.value(value: ScreenshotController()),
       Provider.value(value: coord),
     ],
     child: MaterialApp(

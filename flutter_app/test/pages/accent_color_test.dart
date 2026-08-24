@@ -6,6 +6,7 @@ import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/state/screenshot_controller.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
@@ -30,6 +31,7 @@ Widget _wrap(SettingsController ctrl) {
         ChangeNotifierProvider.value(value: navCtrl),
         ChangeNotifierProvider.value(value: readingCtrl),
         ChangeNotifierProvider.value(value: userCtrl),
+        ChangeNotifierProvider.value(value: ScreenshotController()),
         Provider.value(value: coord),
       ],
       child: MaterialApp(
@@ -93,7 +95,8 @@ void main() {
     await tester.pumpAndSettle();
 
     const target = Color(0xFF3A6B8C);
-    await tester.tap(find.byKey(ValueKey('accent-preset-${target.toARGB32()}')));
+    await tester
+        .tap(find.byKey(ValueKey('accent-preset-${target.toARGB32()}')));
     await tester.pumpAndSettle();
 
     expect(ctrl.accentColorValue, target.toARGB32());

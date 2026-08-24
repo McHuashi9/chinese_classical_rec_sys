@@ -78,6 +78,23 @@ void main() {
       expect(text, contains('主题：【Bug反馈】标题'));
       expect(text, contains('诊断'));
       expect(text, contains('描述'));
+      expect(text, isNot(contains('截图：')));
+    });
+
+    test('包含截图完整路径', () {
+      const draft = FeedbackDraft(
+        type: 'Bug',
+        title: '标题',
+        description: '描述',
+        diagnostics: '诊断',
+        screenshotPath: '/home/user/screenshots/screenshot_1.png',
+      );
+      final text = buildFullFeedbackText(
+        recipient: 'mc_huashi9@163.com',
+        draft: draft,
+      );
+
+      expect(text, contains('截图：/home/user/screenshots/screenshot_1.png'));
     });
   });
 
@@ -116,7 +133,8 @@ void main() {
     });
 
     test('读取最后 maxLines 行', () async {
-      final logDir = Directory('${tempDir.path}/logs')..createSync(recursive: true);
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
       final file = File('${logDir.path}/app.log');
       file.writeAsStringSync(List.generate(120, (i) => 'line$i').join('\n'));
 
@@ -131,7 +149,8 @@ void main() {
     });
 
     test('超过 maxChars 时保留末尾', () async {
-      final logDir = Directory('${tempDir.path}/logs')..createSync(recursive: true);
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
       final file = File('${logDir.path}/app.log');
       file.writeAsStringSync('a' * 2000);
 
@@ -147,7 +166,8 @@ void main() {
 
     test('读取失败时返回错误提示', () async {
       // 写入非法 UTF-8，readAsLines 解码失败会抛错，从而走失败分支。
-      final logDir = Directory('${tempDir.path}/logs')..createSync(recursive: true);
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
       File('${logDir.path}/app.log').writeAsBytesSync([0xFF, 0xFE, 0x00]);
 
       final result = await readLogTail(logDirectory: tempDir.path);

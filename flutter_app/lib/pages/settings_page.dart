@@ -15,6 +15,7 @@ import 'package:chinese_classical_rec_sys/widgets/feedback_dialog.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
+import 'package:chinese_classical_rec_sys/state/screenshot_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/models/version.dart';
 import 'package:chinese_classical_rec_sys/models/user_profile.dart';
@@ -615,6 +616,50 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: context.gapSmall),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.photo_camera_outlined,
+                  size: 20 * fontScale, color: secondaryColor),
+              title: Text('软件内截图',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: secondaryColor)),
+              subtitle: const Text('截取当前界面，可附带反馈'),
+              trailing: Icon(Icons.chevron_right,
+                  size: 20 * fontScale, color: secondaryColor),
+              onTap: _openScreenshotMode,
+            ),
+            if (_isDesktop)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _openScreenshotDirectory,
+                    icon: Icon(Icons.folder_open_outlined,
+                        size: 16 * fontScale, color: secondaryColor),
+                    label: Text('打开截图目录',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: secondaryColor)),
+                  ),
+                ),
+              )
+            else if (context
+                    .select<ScreenshotController, String?>((c) => c.lastPath) !=
+                null)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _shareLastScreenshot,
+                    icon: Icon(Icons.share_outlined,
+                        size: 16 * fontScale, color: secondaryColor),
+                    label: Text('分享最近截图',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: secondaryColor)),
+                  ),
+                ),
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.feedback_outlined,
                   size: 20 * fontScale, color: secondaryColor),
               title: Text('反馈 Bug / 意见',
@@ -641,6 +686,59 @@ class _SettingsPageState extends State<SettingsPage> {
       contentDataVersion: coord.contentDataVersion,
       schemaVersions: schemaText,
     );
+  }
+
+  void _openScreenshotMode() {
+    final screenshotCtrl = context.read<ScreenshotController>();
+    if (screenshotCtrl.armed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('截图模式已开启，请切换到目标界面后确认')),
+      );
+      return;
+    }
+    screenshotCtrl.arm();
+  }
+
+  Future<void> _openScreenshotDirectory() async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      final dir = Directory('${supportDir.path}/screenshots');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final ok = await launchUrl(Uri.file(dir.path),
+          mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开截图目录')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法打开截图目录：$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareLastScreenshot() async {
+    final path = context.read<ScreenshotController>().lastPath;
+    if (path == null) return;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(path)],
+          title: '文言文推荐系统截图',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('分享截图失败：$e')),
+        );
+      }
+    }
   }
 
   Future<void> _openLogLocation() async {
