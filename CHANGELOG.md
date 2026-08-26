@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-08-27
+
 ### Added
 
 - **软件内截图**：设置页「数据与反馈」新增「软件内截图」，可切换到任意界面后截取当前画面并保存到应用数据目录；默认只保存，SnackBar 提供打开截图目录 / 分享截图 / 附带反馈；反馈弹窗可显示截图缩略图并可移除，复制/邮件正文会附带截图路径。
@@ -546,3 +548,4 @@ C++ CLI 原型。
 [1.1.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.1
 [1.2.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.0
 [1.2.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.2
+[1.2.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.3
