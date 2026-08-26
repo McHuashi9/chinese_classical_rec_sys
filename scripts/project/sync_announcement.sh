@@ -21,6 +21,7 @@ if [ ! -f "$ANNOUNCEMENT" ]; then
 fi
 
 python3 - "$VERSION" "$CHANGELOG" "$ANNOUNCEMENT" <<'PY'
+import os
 import re
 import sys
 
@@ -35,8 +36,8 @@ section_pattern = re.compile(
 )
 match = section_pattern.search(changelog)
 if not match:
-    print('[sync_announcement] warning: CHANGELOG section not found, skip changes sync')
-    sys.exit(0)
+    print(f'[sync_announcement] error: CHANGELOG section [{version}] not found', file=sys.stderr)
+    sys.exit(1)
 
 section = match.group(0)
 subsections = re.findall(
@@ -51,6 +52,10 @@ for body in subsections:
         if line.startswith('- '):
             bullets.append(line[2:].strip())
 
+if not bullets:
+    print(f'[sync_announcement] error: no Added/Changed/Fixed bullets found for [{version}]', file=sys.stderr)
+    sys.exit(1)
+
 with open(announcement_path, encoding='utf-8') as f:
     announcement = f.read()
 
@@ -63,19 +68,40 @@ announcement = re.sub(
     flags=re.M,
 )
 
-if bullets:
-    marker = '## 版本改动'
-    changes_body = '\n'.join(f'- {b}' for b in bullets) + '\n'
-    if marker in announcement:
-        head = announcement.split(marker, 1)[0].rstrip()
-        announcement = f'{head}\n\n{marker}\n\n{changes_body}'
-    else:
-        announcement = announcement.rstrip() + f'\n\n{marker}\n\n{changes_body}'
+marker = '## 版本改动'
+changes_body = '\n'.join(f'- {b}' for b in bullets) + '\n'
+if marker in announcement:
+    head = announcement.split(marker, 1)[0].rstrip()
+    announcement = f'{head}\n\n{marker}\n\n{changes_body}'
 else:
-    print('[sync_announcement] warning: no Added/Changed/Fixed bullets found, changes not synced')
+    announcement = announcement.rstrip() + f'\n\n{marker}\n\n{changes_body}'
 
-with open(announcement_path, 'w', encoding='utf-8') as f:
+# 原子写：先写临时文件，校验通过后替换，失败不污染正式公告。
+tmp_path = announcement_path + '.tmp'
+with open(tmp_path, 'w', encoding='utf-8') as f:
     f.write(announcement)
+
+with open(tmp_path, encoding='utf-8') as f:
+    final = f.read()
+
+id_pattern = re.compile(rf'^id:\s*v{re.escape(version)}-1\s*$', re.M)
+if not id_pattern.search(final):
+    os.remove(tmp_path)
+    print(f'[sync_announcement] error: written announcement missing id v{version}-1', file=sys.stderr)
+    sys.exit(1)
+if marker not in final:
+    os.remove(tmp_path)
+    print(f'[sync_announcement] error: written announcement missing {marker}', file=sys.stderr)
+    sys.exit(1)
+
+actual_changes = final.split(marker, 1)[1].strip()
+if actual_changes != changes_body.strip():
+    os.remove(tmp_path)
+    print('[sync_announcement] error: written announcement 版本改动 differs from CHANGELOG', file=sys.stderr)
+    sys.exit(1)
+
+os.replace(tmp_path, announcement_path)
+print(f'[sync_announcement] flutter_app/assets/data/announcement.md updated for v{version}')
 PY
 
 echo "[sync_announcement] flutter_app/assets/data/announcement.md -> id + 版本改动"
