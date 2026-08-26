@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-/// 划线原句展示：目标词以 vermilion 实线下划线（与题干"划线词"措辞一致）。
+/// 划线原句展示：目标词以 `context.accent`（用户可调强调色）实线下划线，
+/// 与题干"划线词"措辞一致。
 /// [text] 为空时整体不渲染；mark 区间非法时降级为纯文本。
 /// 注意：markStart/markLen 为码点语义（C++ 侧/生成器产出），Dart 直接下标切片
 /// 依赖 UTF-16 单元 == 码点；当前语料全 BMP 成立，若未来引入扩展区字符需改 runes 重算。

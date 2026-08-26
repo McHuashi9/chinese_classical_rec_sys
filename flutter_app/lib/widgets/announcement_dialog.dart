@@ -3,7 +3,8 @@ import 'package:chinese_classical_rec_sys/engine/announcement.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/simple_markdown.dart';
 
-/// 公告 / 作者的话弹窗：上半作者的话，下半版本改动，可设置弹出模式。
+/// 公告 / 作者的话弹窗：内容由 `assets/data/announcement.md` 的 Markdown 数据驱动，
+/// 包含作者的话与版本改动，可设置弹出模式。
 class AnnouncementDialog extends StatefulWidget {
   final Announcement announcement;
   final AnnouncementMode initialMode;
