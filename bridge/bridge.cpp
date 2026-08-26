@@ -1,4 +1,5 @@
 #include "c_types.h"
+#include "bridge_guard.h"
 #include "export.h"
 #include "user_tables.h"
 #include "database/DatabaseManager.h"
@@ -135,6 +136,37 @@ static int requireInitialized()
     }
     return BRIDGE_OK;
 }
+
+// 事务 RAII：确保异常/提前退出时不会把事务悬空在 sqlite 连接上。
+// 正常提交后析构不再回滚；未提交析构自动 ROLLBACK。
+class SqlTransaction {
+public:
+    SqlTransaction(sqlite3* db, const char* beginSql)
+        : db_(db), active_(execRawSql(db_, beginSql))
+    {
+    }
+
+    ~SqlTransaction()
+    {
+        if (active_) execRawSql(db_, "ROLLBACK");
+    }
+
+    bool ok() const { return active_; }
+
+    bool commit()
+    {
+        if (!active_) return false;
+        if (execRawSql(db_, "COMMIT")) {
+            active_ = false;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    sqlite3* db_;
+    bool active_;
+};
 
 // ─── lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -357,25 +389,27 @@ static int openDatabase(const char* content_path, const char* user_path)
 
 extern "C" CHINESE_CORE_EXPORT int db_open(const char* content_path, const char* user_path)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     // 日志目录跟随用户库所在目录（App 数据目录），避免随 cwd 漂移
     const std::filesystem::path dbDir = std::filesystem::path(user_path).parent_path();
     Logger::getInstance().init((dbDir / "logs").string());
     LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
 
     return openDatabase(content_path, user_path);
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT void db_close()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    bridge_guard_void(g_mtx, [&] {
     g_state = {};
     LOG_INFO("bridge: db_close 完成");
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized || !g_state.db) return BRIDGE_ERR_NOT_INIT;
     if (!dest_path || !*dest_path) return BRIDGE_ERR_GENERIC;
 
@@ -404,6 +438,7 @@ extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
     sqlite3_backup_finish(backup);
     sqlite3_close(dest);
     return ok ? BRIDGE_OK : BRIDGE_ERR_GENERIC;
+    });
 }
 
 // ─── db_replace（纯内容库替换，user.db 永不替换） ────────────────────────────────
@@ -417,7 +452,7 @@ extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
 // 引擎未打开（启动前替换）时只做文件层替换，由调用方稍后 db_open 校验。
 extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const char* cur_db_path)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!new_db_path || !cur_db_path) return BRIDGE_ERR_GENERIC;
     const std::filesystem::path dbDir = std::filesystem::path(cur_db_path).parent_path();
     Logger::getInstance().init((dbDir / "logs").string());
@@ -494,6 +529,7 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
     // 5. 成功后清理 .bak
     std::filesystem::remove(bakStr, ec);
     return BRIDGE_OK;
+    });
 }
 
 // ─── schema 版本查询（设置页数据状态展示） ─────────────────────────────────────
@@ -501,7 +537,7 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
 extern "C" CHINESE_CORE_EXPORT int db_get_schema_versions(int* user_version,
                                                           int* content_version)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized || !g_state.db || !g_state.db->getConnection()) {
         return BRIDGE_ERR_NOT_INIT;
     }
@@ -510,39 +546,45 @@ extern "C" CHINESE_CORE_EXPORT int db_get_schema_versions(int* user_version,
     *content_version = pragmaUserVersion(g_state.db->getConnection(), "content");
     if (*content_version < 0) return BRIDGE_ERR_DB_CONTENT;
     return BRIDGE_OK;
+    });
 }
 
 // ─── user ──────────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out) return BRIDGE_ERR_GENERIC;
     user_to_c(*g_state.user, out);
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!in) return BRIDGE_ERR_GENERIC;
     c_to_user(in, *g_state.user);
     if (g_state.userRepo->saveUser(*g_state.user, g_state.activeUserId)) {
         return BRIDGE_OK;
     }
     LOG_ERROR("bridge: user_save 失败");
     return BRIDGE_ERR_GENERIC;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_init_default()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     g_state.user->initializeDefault();
     if (g_state.userRepo->saveUser(*g_state.user, g_state.activeUserId)) {
         return BRIDGE_OK;
     }
     return BRIDGE_ERR_GENERIC;
+    });
 }
 
 // ─── 强制用户初始化 ──────────────────────────────────────────────────────────────
@@ -624,14 +666,15 @@ double initPosteriorMean(const std::vector<std::pair<double, int>>& observations
 
 extern "C" CHINESE_CORE_EXPORT int user_is_initialized()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     return g_state.userRepo->isInitialized(g_state.activeUserId) ? 1 : 0;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_init_questions(QuestionData* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -646,6 +689,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_questions(QuestionData* out, int ma
         filled++;
     }
     return filled;
+    });
 }
 
 // 一次性完成 6 道初始化题：判题、写 quiz_attempts(is_init=1)、贝叶斯后验、
@@ -654,7 +698,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
                                                    int count, int64_t timestamp,
                                                    UserData* out_user)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (g_state.userRepo->isInitialized(g_state.activeUserId)) {
         LOG_WARN("bridge: user_init_apply 拒绝：当前档案已完成初始化，无补测");
@@ -765,7 +809,8 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
     const time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
 
     // 事务：写作答流水 + 清增量 + 落库 + 置 initialized
-    if (!execRawSql(db, "BEGIN IMMEDIATE")) return BRIDGE_ERR_GENERIC;
+    SqlTransaction tx(db, "BEGIN IMMEDIATE");
+    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
     bool ok = true;
 
     for (const auto& item : items) {
@@ -819,11 +864,9 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
         ok = false;
     }
 
-    if (ok) {
-        ok = execRawSql(db, "COMMIT");
-    }
+    if (ok) ok = tx.commit();
     if (!ok) {
-        execRawSql(db, "ROLLBACK");
+        LOG_ERROR("bridge: user_init_apply 事务失败");
         return BRIDGE_ERR_GENERIC;
     }
 
@@ -832,6 +875,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
     LOG_INFO("bridge: 用户初始化完成 — user_id={}, 覆盖维度 {} 个", g_state.activeUserId,
              static_cast<int>(coveredDims.size()));
     return BRIDGE_OK;
+    });
 }
 
 // ─── user profiles（本地多档案） ───────────────────────────────────────────────
@@ -839,7 +883,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
 // 未删除档案列表（按 id 升序）。返回条数；out 为空/容量不足按 0 处理（无错误码）。
 extern "C" CHINESE_CORE_EXPORT int user_list(ProfileData* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_count <= 0) return 0;
 
@@ -855,18 +899,20 @@ extern "C" CHINESE_CORE_EXPORT int user_list(ProfileData* out, int max_count)
         out[i].deleted = profiles[i].deleted;
     }
     return n;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_active_id()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return 0;
     return g_state.activeUserId;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_create 非法档案名（空或超 63 字节）");
@@ -879,11 +925,12 @@ extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
     }
     LOG_INFO("bridge: 已创建档案 id={} name={}", newId, name);
     return newId;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_create_inherit(const char* name, int source_id)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_create_inherit 非法档案名（空或超 63 字节）");
@@ -896,11 +943,12 @@ extern "C" CHINESE_CORE_EXPORT int user_create_inherit(const char* name, int sou
     }
     LOG_INFO("bridge: 已创建继承档案 id={} name={} source_id={}", newId, name, source_id);
     return newId;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_switch(int id)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (id <= 0 || !g_state.userRepo->isProfileActive(id)) {
         LOG_WARN("bridge: user_switch 档案不存在或已删除 id={}", id);
@@ -914,11 +962,12 @@ extern "C" CHINESE_CORE_EXPORT int user_switch(int id)
         return BRIDGE_ERR_GENERIC;
     }
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_rename 非法档案名（空或超 63 字节）");
@@ -929,11 +978,12 @@ extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
         return BRIDGE_ERR_USER;
     }
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_delete(int id)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (id == g_state.activeUserId) {
         LOG_WARN("bridge: user_delete 拒绝删除当前档案 id={}", id);
@@ -945,20 +995,22 @@ extern "C" CHINESE_CORE_EXPORT int user_delete(int id)
     }
     LOG_INFO("bridge: 档案已删除 id={}", id);
     return BRIDGE_OK;
+    });
 }
 
 // ─── text ──────────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int text_get_count()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     return static_cast<int>(g_state.texts->size());
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    bridge_guard_void(g_mtx, [&] {
     if (!g_state.initialized || !out) return;
     int n = std::min(max_count, static_cast<int>(g_state.texts->size()));
     for (int i = 0; i < n; i++) {
@@ -973,11 +1025,12 @@ extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
         std::strncpy(out[i].source, t.getSource().c_str(), 63);
         out[i].source[63] = '\0';
     }
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
 
@@ -1008,13 +1061,14 @@ extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
         out->difficulties[i] = text.getDifficulty(i);
     }
     return BRIDGE_OK;
+    });
 }
 
 // ─── annotations ──────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int max_len)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -1051,11 +1105,12 @@ extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int m
 
     sqlite3_finalize(stmt);
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int text_get_translation(int id, char* out, int max_len)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -1092,6 +1147,7 @@ extern "C" CHINESE_CORE_EXPORT int text_get_translation(int id, char* out, int m
 
     sqlite3_finalize(stmt);
     return BRIDGE_OK;
+    });
 }
 
 // ─── recommend ─────────────────────────────────────────────────────────────────
@@ -1100,7 +1156,7 @@ extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
                            int* out_ids, double* out_probs,
                            int out_ids_capacity, int out_probs_capacity)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !out_ids || !out_probs) return BRIDGE_ERR_GENERIC;
@@ -1119,6 +1175,7 @@ extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
     }
     LOG_INFO("bridge: 推荐完成 — 返回 {} 篇 (top_k={})", results.size(), top_k);
     return BRIDGE_OK;
+    });
 }
 
 // ─── knowledge tracker ─────────────────────────────────────────────────────────
@@ -1127,12 +1184,13 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
                                    double read_time, int64_t timestamp,
                                    UserData* out_user, int skip_effect)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     if (skip_effect == 0) {
         const int initRc = requireInitialized();
         if (initRc != BRIDGE_OK) return initRc;
     }
+    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
     auto it = g_state.textIndex->find(text_id);
     if (it == g_state.textIndex->end()) return BRIDGE_ERR_TEXT;
@@ -1143,7 +1201,8 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
     time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
     // R7：阅读效应 + 历史写入 + 落库同事务；失败回滚，避免"效应已应用但历史没写"或反之
     sqlite3* db = g_state.db->getConnection();
-    if (!execRawSql(db, "BEGIN")) return BRIDGE_ERR_GENERIC;
+    SqlTransaction tx(db, "BEGIN");
+    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
     bool ok = true;
 
     if (skip_effect == 0) {
@@ -1161,11 +1220,9 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
         ok = g_state.userRepo->saveUser(cpp_user, g_state.activeUserId);
         if (!ok) LOG_ERROR("bridge: 阅读效应落库失败 text_id={}", text_id);
     }
-    if (ok) {
-        ok = execRawSql(db, "COMMIT");
-    }
+    if (ok) ok = tx.commit();
     if (!ok) {
-        execRawSql(db, "ROLLBACK");
+        LOG_ERROR("bridge: tracker_apply_read 事务失败 text_id={}", text_id);
         return BRIDGE_ERR_GENERIC;
     }
 
@@ -1178,14 +1235,16 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
                  text_id, read_time);
     }
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user, int64_t now,
                                          UserData* out_user)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
+    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
     User cpp_user;
     c_to_user(user, cpp_user);
@@ -1193,13 +1252,15 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user
     g_state.tracker->applyForgettingEffect(cpp_user, static_cast<time_t>(now));
     user_to_c(cpp_user, out_user);
     return BRIDGE_OK;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t now, UserData* out_user)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
+    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
     User cpp_user;
     c_to_user(user, cpp_user);
@@ -1211,6 +1272,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t n
     g_state.userRepo->saveUser(cpp_user, g_state.activeUserId);
     g_state.user = std::make_unique<User>(cpp_user);
     return BRIDGE_OK;
+    });
 }
 
 // questions 表缺失（手动替换的旧库/损坏资产）时优雅降级：取题按"无题"、判题按"题目不存在"，
@@ -1228,7 +1290,7 @@ static bool questionsTableExists()
 extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionData* out,
                                                         int max_count, int* answered_all)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
@@ -1316,6 +1378,7 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
     LOG_INFO("bridge: question_get_by_text text_id={} → {} 题 (上限 {}, 剩余 {})",
              text_id, count, max_count, pool.size());
     return count;
+    });
 }
 
 // 复习间隔：base · 2^streak，封顶 REVIEW_MAX_INTERVAL
@@ -1349,9 +1412,10 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
                                       int user_choice, int64_t timestamp,
                                       UserData* out_user, int* out_correct, int is_review)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
+    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
     // 1. 查询题目（text_id / answer_index / dims CSV）
     std::string text_id, answer_index, dims;
@@ -1425,7 +1489,8 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
     // 4. 答题效应 + 落库 + 作答流水 + 复习状态（同一事务；失败回滚且返回错误）。
     // 防双计：若事务失败，能力/quiz_count/eta/增量与流水一起回滚，用户重试同一题不会二次生效
     sqlite3* db = g_state.db->getConnection();
-    if (!execRawSql(db, "BEGIN")) return BRIDGE_ERR_GENERIC;
+    SqlTransaction tx(db, "BEGIN");
+    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
     bool ok = true;
 
     if (!is_review) {
@@ -1434,7 +1499,6 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         user_to_c(cpp_user, out_user);
         if (!g_state.userRepo->saveUser(cpp_user, g_state.activeUserId)) {
             LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
-            execRawSql(db, "ROLLBACK");
             return BRIDGE_ERR_GENERIC;
         }
     } else {
@@ -1555,11 +1619,9 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
         sqlite3_finalize(stmt);
     }
 
-    if (ok) {
-        ok = execRawSql(db, "COMMIT");
-    }
+    if (ok) ok = tx.commit();
     if (!ok) {
-        execRawSql(db, "ROLLBACK");
+        LOG_ERROR("bridge: tracker_apply_quiz 事务失败 question_id={}", question_id);
         return BRIDGE_ERR_GENERIC;
     }
 
@@ -1574,6 +1636,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
                  question_id, correct);
     }
     return BRIDGE_OK;
+    });
 }
 
 // 到期错题列表：text_id=0 取全部，否则按篇过滤；只返回 next_review_at <= now 的条目，
@@ -1581,7 +1644,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
 extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItemData* out,
                                                          int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
@@ -1620,6 +1683,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
     }
     sqlite3_finalize(stmt);
     return count;
+    });
 }
 
 // 到期错题总数：与 quiz_get_review_items 同一过滤条件（含悬空过滤），
@@ -1627,7 +1691,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
 // "总数"与"明细"语义分离，reviewCount 走此通道，列表仍走 quiz_get_review_items）
 extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
@@ -1654,13 +1718,14 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
     }
     sqlite3_finalize(stmt);
     return count;
+    });
 }
 
 // 错题总数：当前用户 review_items 全部条目数（含未到期，过滤悬空题目）。
 // 与到期数分离，MyPage“错题总数 Y 题”用此通道。
 extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
@@ -1686,6 +1751,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
     }
     sqlite3_finalize(stmt);
     return count;
+    });
 }
 // 按 id 取题专用通道（复习用）：复习题是已答题，question_get_by_text 排除已答后拿不到，
 // 此通道不受排除已答影响。按输入顺序返回，上限 max_count（不校验 id 是否存在，
@@ -1693,7 +1759,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
 extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int count,
                                                              QuestionData* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!ids || !out || count <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
@@ -1736,6 +1802,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
     }
     sqlite3_finalize(stmt);
     return filled;
+    });
 }
 
 // 文章测验摘要：总题数/已答数/错题数（review_items 现役错题）一次查询。
@@ -1743,7 +1810,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
 extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* total,
                                                             int* answered, int* wrong)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (g_state.textIndex->find(text_id) == g_state.textIndex->end()) return BRIDGE_ERR_TEXT;
@@ -1786,13 +1853,14 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* to
         sqlite3_finalize(stmt);
     }
     return BRIDGE_OK;
+    });
 }
 
 // ─── history ──────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_time, int64_t timestamp)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return BRIDGE_ERR_NOT_INIT;
     bool ok = g_state.historyRepo->addRecord(g_state.activeUserId, text_id, read_time,
                                              static_cast<time_t>(timestamp));
@@ -1800,11 +1868,12 @@ extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_t
         LOG_INFO("bridge: history_add_record text_id={} read_time={:.1f}s", text_id, read_time);
     }
     return ok ? BRIDGE_OK : BRIDGE_ERR_GENERIC;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordData* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized || !out) return BRIDGE_ERR_NOT_INIT;
     // 钳制：非正 limit/max_count 按"无结果"处理（SQLite LIMIT -1 视为无限制，必须拦下）
     if (limit <= 0 || max_count <= 0) return 0;
@@ -1819,18 +1888,20 @@ extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordDa
         out[i].timestamp = static_cast<int64_t>(records[i].timestamp);
     }
     return n;
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_total_count()
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized) return 0;
     return g_state.historyRepo->getTotalReadCount(g_state.activeUserId);
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int max_count)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    return bridge_guard(g_mtx, [&] {
     if (!g_state.initialized || !out) return 0;
 
     auto ids = g_state.historyRepo->getTrackedTextIds(g_state.activeUserId);
@@ -1840,13 +1911,14 @@ extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int ma
         out[i] = ids[i];
     }
     return n;
+    });
 }
 
 // ─── logging ──────────────────────────────────────────────────────────────────
 
 extern "C" CHINESE_CORE_EXPORT void log_write(int level, const char* message)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    bridge_guard_void(g_mtx, [&] {
     switch (level) {
         case 0: LOG_DEBUG("{}", message); break;
         case 1: LOG_INFO("{}", message);  break;
@@ -1854,11 +1926,13 @@ extern "C" CHINESE_CORE_EXPORT void log_write(int level, const char* message)
         case 3: LOG_ERROR("{}", message); break;
         default: LOG_INFO("{}", message); break;
     }
+    });
 }
 
 extern "C" CHINESE_CORE_EXPORT void log_set_level(const char* level)
 {
-    std::lock_guard<std::mutex> lock(g_mtx);
+    bridge_guard_void(g_mtx, [&] {
     Logger::getInstance().setLevel(level);
     LOG_INFO("bridge: 日志级别切换为 {}", level);
+    });
 }

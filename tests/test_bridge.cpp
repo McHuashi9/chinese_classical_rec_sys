@@ -354,6 +354,33 @@ TEST_CASE("bridge - tracker_apply_quiz 答错拉低能力与参数校验", "[bri
     db_close();
 }
 
+TEST_CASE("bridge - FFI 空指针入参返回错误码而非崩溃", "[bridge][smoke]") {
+    db_close();
+
+    const auto [work, userPath] = quizWorkDb("null_ptr");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
+
+    UserData user;
+    REQUIRE(user_load(&user) == BRIDGE_OK);
+    UserData out;
+    int correct = -1;
+    const int64_t now = 1700000000LL;
+
+    REQUIRE(user_load(nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(user_save(nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_read(nullptr, 1, 30.0, now, &out, 0) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_read(&user, 1, 30.0, now, nullptr, 0) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_forgetting(nullptr, now, &out) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_forgetting(&user, now, nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_prune(nullptr, now, &out) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_prune(&user, now, nullptr) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_quiz(nullptr, 1, 0, now, &out, &correct, 0) == BRIDGE_ERR_GENERIC);
+    REQUIRE(tracker_apply_quiz(&user, 1, 0, now, nullptr, &correct, 0) == BRIDGE_ERR_GENERIC);
+
+    db_close();
+}
+
 TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
     db_close();
 
