@@ -29,6 +29,9 @@ class _ScriptedQuizTracker implements QuizTracker {
   /// getTotalReviewCount 的替代实现；null 走默认 0
   int Function()? totalReviewCountOverride;
 
+  /// applyRead 的返回结果（阅读效应用例）；null 走默认失败
+  User? readResult;
+
   @override
   (User?, bool?) applyQuiz(User user, int questionId, int choice,
       {bool isReview = false}) {
@@ -38,7 +41,7 @@ class _ScriptedQuizTracker implements QuizTracker {
   }
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
+  User? applyRead(User user, int textId, double readTime) => readResult;
 
   @override
   void disposeQuestions(List<Question> questions) {}
@@ -277,6 +280,33 @@ void main() {
       ctrl.submitQuiz(questions(1), [0]);
       expect(ctrl.totalReviewCount, 7); // 提交后置脏 → 重查
       expect(totalQueries, 2);
+    });
+  });
+
+  group('UserController.applyReadEffect', () {
+    late UserController ctrl;
+    late _ScriptedQuizTracker tracker;
+    late User initial;
+    late User updated;
+
+    setUp(() {
+      ctrl = UserController();
+      tracker = _ScriptedQuizTracker();
+      ctrl.initTracker(tracker);
+      initial = User.allocate(calloc);
+      updated = User.allocate(calloc);
+      ctrl.setUser(initial);
+      tracker.readResult = updated;
+    });
+
+    tearDown(() => ctrl.dispose());
+
+    test('阅读成功后通知 UI 且用户指针更新', () {
+      var notified = 0;
+      ctrl.addListener(() => notified++);
+      expect(ctrl.applyReadEffect(1, 60), isTrue);
+      expect(identical(ctrl.user, updated), isTrue);
+      expect(notified, 1);
     });
   });
 }

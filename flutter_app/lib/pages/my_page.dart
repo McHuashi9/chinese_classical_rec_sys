@@ -251,21 +251,14 @@ class _MyContent extends StatelessWidget {
 
   Widget _buildRecentList(BuildContext context, AppCoordinator coord) {
     final records = coord.getRecentHistory();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('最近阅读', style: Theme.of(context).textTheme.titleLarge),
-        SizedBox(height: context.gapMedium),
-        RecentReadingList(
-          records: records.take(10).toList(),
-          onTap: (textId) {
-            final ok = coord.loadTextForReading(textId);
-            if (ok && context.mounted) {
-              coord.navCtrl.switchPage(0);
-            }
-          },
-        ),
-      ],
+    return RecentReadingList(
+      records: records,
+      onTap: (textId) {
+        final ok = coord.loadTextForReading(textId);
+        if (ok && context.mounted) {
+          coord.navCtrl.switchPage(0);
+        }
+      },
     );
   }
 

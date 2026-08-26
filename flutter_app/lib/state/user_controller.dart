@@ -239,6 +239,9 @@ class UserController extends ChangeNotifier {
     } else {
       _user = updated;
     }
+    // 用户状态变化统一通知：阅读/初始化/答题/部分失败都经此路径，
+    // UI 通过 context.watch/select 能可靠刷新，不依赖祖先巧合重建。
+    notifyListeners();
     return true;
   }
 
@@ -327,11 +330,11 @@ class UserController extends ChangeNotifier {
     return answers;
   }
 
-  /// 提交后的收尾：复习状态可能已变（错题入队/移除），置脏错题数并通知
+  /// 提交后的收尾：复习状态可能已变（错题入队/移除），置脏错题数。
+  /// 不在这里通知：调用方在用户更新后已经过 [_updateUser] 统一通知，避免重复 rebuild。
   void _afterQuizSubmit() {
     _reviewCount = -1;
     _totalReviewCount = -1;
-    notifyListeners();
   }
 
   /// 外部数据变更（远程同步 db_replace 合并用户表）后调用：
