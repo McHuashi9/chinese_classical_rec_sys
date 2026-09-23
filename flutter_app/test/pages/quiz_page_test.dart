@@ -1,58 +1,22 @@
-import 'dart:convert';
 import 'dart:ffi' hide Size;
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
+import '../helpers/quiz_test_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_page.dart';
-import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/navigation_controller.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
-import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
-
-Widget _wrap(Widget child,
-    {AppCoordinator? coord,
-    SettingsController? settingsCtrl,
-    UserController? userCtrl}) {
-  final sCtrl = settingsCtrl ?? SettingsController();
-  final uCtrl = userCtrl ?? UserController();
-  // QuizPage._submit 读取 AppCoordinator.syncing（数据同步闸门）；测试默认非同步中
-  final appCoord = coord ??
-      AppCoordinator(
-        navCtrl: NavigationController(),
-        settingsCtrl: sCtrl,
-        readingCtrl: ReadingController(ReadTracker()),
-        userCtrl: uCtrl,
-        readTracker: ReadTracker(),
-      );
-  return MultiProvider(
-    providers: [
-      ChangeNotifierProvider.value(value: sCtrl),
-      ChangeNotifierProvider.value(value: uCtrl),
-      Provider.value(value: appCoord),
-    ],
-    child: MaterialApp(
-      theme: AppTheme.lightTheme(ScreenSize.medium, 1.0,
-          accentColor: AppTheme.vermilion),
-      darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
-          accentColor: AppTheme.vermilion),
-      themeMode: sCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
-      home: child,
-    ),
-  );
-}
 
 /// 模拟成功判分的 tracker（成功提交链路测试用）：
 /// 走真实 UserController.submitQuiz，仅 C++ 判题被替换
@@ -156,62 +120,12 @@ class _CountingCoordinator extends AppCoordinator {
   }
 }
 
-List<Question> _fakeQuestions(int n) {
-  final block = calloc<QuestionData>(n);
-  for (int i = 0; i < n; i++) {
-    final q = (block + i).ref;
-    q.id = 100 + i;
-    q.textId = 1;
-    _writeStr(q.qType, 'shici');
-    _writeStr(q.stem, '第${i + 1}题题干：加点词解释');
-    for (int k = 0; k < 4; k++) {
-      // options 为扁平 2048 字节（与 C++ char[4][512] 布局一致），按 512 偏移写
-      _writeStr(q.options, '选项${k + 1}释义', offset: k * 512);
-    }
-    _writeStr(q.dims, '3,4,9');
-    _writeStr(q.explanation, '第${i + 1}题解析');
-    q.difficulty = 0.5;
-  }
-  return [
-    for (int i = 0; i < n; i++) Question(block + i, owner: block),
-  ];
-}
-
-void _writeStr(Array<Uint8> arr, String s, {int offset = 0}) {
-  final bytes = utf8.encode(s);
-  for (int i = 0; i < bytes.length && i < 512; i++) {
-    arr[offset + i] = bytes[i];
-  }
-  arr[offset + bytes.length] = 0;
-}
-
-/// 在 TextSpan 树里找带下划线样式的目标词 span
-TextStyle? _findMarkStyle(InlineSpan span, String word) {
-  if (span is TextSpan) {
-    if (span.text == word &&
-        span.style?.decoration == TextDecoration.underline) {
-      return span.style;
-    }
-    for (final child in span.children ?? const <InlineSpan>[]) {
-      final hit = _findMarkStyle(child, word);
-      if (hit != null) return hit;
-    }
-  }
-  return null;
-}
-
 void main() {
   testWidgets('QuizPage 渲染题干、选项与题型徽标', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(2);
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '岳阳楼记',
       questions: questions,
     )));
@@ -226,18 +140,12 @@ void main() {
   });
 
   testWidgets('新题型 badge：虚词/断句显示中文文案', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
-    _writeStr(questions[0].ptr.ref.qType, 'xuci');
-    _writeStr(questions[1].ptr.ref.qType, 'duanju');
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(2);
+    writeQuestionStr(questions[0].ptr.ref.qType, 'xuci');
+    writeQuestionStr(questions[1].ptr.ref.qType, 'duanju');
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '新题型',
       questions: questions,
     )));
@@ -250,20 +158,14 @@ void main() {
   });
 
   testWidgets('带原句题目：题干下渲染划线句并高亮目标词', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(1);
     final q = questions.first;
-    _writeStr(q.ptr.ref.context, '项脊轩，旧南阁子也');
+    writeQuestionStr(q.ptr.ref.context, '项脊轩，旧南阁子也');
     q.ptr.ref.markStart = 4;
     q.ptr.ref.markLen = 1;
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '项脊轩志',
       questions: questions,
     )));
@@ -276,26 +178,19 @@ void main() {
     final rich = tester
         .widgetList<RichText>(find.byType(RichText))
         .firstWhere((r) => r.text.toPlainText().contains('旧南阁子'));
-    final markStyle = _findMarkStyle(rich.text, '旧');
+    final markStyle = findUnderlinedMark(rich.text, '旧');
     expect(markStyle, isNotNull);
     expect(markStyle!.decoration, TextDecoration.underline);
     // 划线颜色随主题强调色（默认朱砂），断言取当前主题 primary 而非硬编码
-    final scheme =
-        Theme.of(tester.element(find.byType(QuizPage))).colorScheme;
+    final scheme = Theme.of(tester.element(find.byType(QuizPage))).colorScheme;
     expect(markStyle.color, scheme.primary);
   });
 
   testWidgets('无原句题目：不渲染额外句子', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(1);
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '岳阳楼记',
       questions: questions,
     )));
@@ -305,16 +200,10 @@ void main() {
   });
 
   testWidgets('选择选项前进后退，末题变为提交并校验必答', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(2);
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '岳阳楼记',
       questions: questions,
     )));
@@ -356,14 +245,8 @@ void main() {
   });
 
   testWidgets('数据同步中（syncing）提交被短路：提示稍后重试，不判分', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(1);
 
     final userCtrl = UserController();
     final tracker = _FakeQuizTracker();
@@ -378,7 +261,7 @@ void main() {
     addTearDown(coord.dispose);
     coord.syncing.value = true; // 模拟 db_replace 替换窗口
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(articleTitle: '岳阳楼记', questions: questions),
       coord: coord,
     ));
@@ -396,16 +279,10 @@ void main() {
   });
 
   testWidgets('回改后前进：已答答案保留（提交可用而非被清空）', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(2);
 
-    await tester.pumpWidget(_wrap(QuizPage(
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
       articleTitle: '岳阳楼记',
       questions: questions,
     )));
@@ -434,15 +311,10 @@ void main() {
         isNotNull);
   });
 
-  testWidgets('成功提交 → pushReplacement 结果页：渲染统计与解析（H1 回归：结果页读题内存须仍有效）', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+  testWidgets('成功提交 → pushReplacement 结果页：渲染统计与解析（H1 回归：结果页读题内存须仍有效）',
+      (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
@@ -450,7 +322,7 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -485,14 +357,8 @@ void main() {
   });
 
   testWidgets('复习模式：标题错题复习，结果页显示复习不改变能力画像', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
@@ -500,7 +366,7 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -531,14 +397,8 @@ void main() {
   });
 
   testWidgets('AppBar 原文按钮打开只读预览', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
 
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
@@ -556,7 +416,7 @@ void main() {
       userCtrl.dispose();
     });
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -575,21 +435,15 @@ void main() {
   });
 
   testWidgets('初始化按篇模式记录答案并返回，不调用 applyInit', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final answers = <int, int?>{100: null, 101: null};
     final userCtrl = UserController()..setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
 
     SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       Builder(
         builder: (context) => Scaffold(
           body: Center(
@@ -636,19 +490,13 @@ void main() {
   });
 
   testWidgets('初始化答题页首次进入展示兜底提示，可跳过并写 seen', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
     final userCtrl = UserController()..setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
 
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '严先生祠堂记',
         questions: questions,
@@ -671,19 +519,13 @@ void main() {
   });
 
   testWidgets('初始化答题页已读引导后不再展示', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
     final userCtrl = UserController()..setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
 
     SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '严先生祠堂记',
         questions: questions,
@@ -698,19 +540,13 @@ void main() {
   });
 
   testWidgets('showQuizGuide 为 true 时展示第 5 步并写入 seen', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
     final userCtrl = UserController()..setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
 
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '严先生祠堂记',
         questions: questions,
@@ -733,14 +569,8 @@ void main() {
   });
 
   testWidgets('正式测验答错：结果页提示错题已入复习队列', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
@@ -748,7 +578,7 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -774,14 +604,8 @@ void main() {
   });
 
   testWidgets('部分判题失败：跳转结果页，展示已计入题数且不重提', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
@@ -789,7 +613,7 @@ void main() {
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -822,102 +646,9 @@ void main() {
     expect(tracker.disposeCount, 1);
   });
 
-  testWidgets('结果页展示全部选项并标记用户选择与正确答案', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
-    _writeStr(questions.first.ptr.ref.explanation, '正确答案：B。解析内容');
-    final answers = [
-      QuizAnswer(
-        questionId: 100,
-        selected: 0,
-        correct: false,
-        abilityBefore: List.filled(10, 0.5),
-      ),
-    ];
-
-    final userCtrl = UserController();
-    userCtrl.initTracker(_FakeQuizTracker());
-    userCtrl.setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    await tester.pumpWidget(_wrap(
-      QuizResultPage(
-        articleTitle: '岳阳楼记',
-        answers: answers,
-        questions: questions,
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
-
-    // 四个选项全部展示
-    for (var i = 1; i <= 4; i++) {
-      expect(find.text('选项$i释义'), findsOneWidget);
-    }
-    // 用户选 A、正确答案 B → 只有一个对勾（正确选项标记）
-    expect(find.text('你的选择'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('结果页能从解析中的正确答案文本识别正确选项', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(1);
-    addTearDown(() => calloc.free(questions.first.owner));
-    // 真实数据格式：正确答案后跟选项文本，而不是字母。
-    _writeStr(questions.first.ptr.ref.explanation, '正确答案：选项3释义。解析内容');
-    final answers = [
-      QuizAnswer(
-        questionId: 100,
-        selected: 0,
-        correct: false,
-        abilityBefore: List.filled(10, 0.5),
-      ),
-    ];
-
-    final userCtrl = UserController();
-    userCtrl.initTracker(_FakeQuizTracker());
-    userCtrl.setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    await tester.pumpWidget(_wrap(
-      QuizResultPage(
-        articleTitle: '岳阳楼记',
-        answers: answers,
-        questions: questions,
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
-
-    // 用户选 A、正确答案是选项3释义 → 应有一个绿色对勾标记正确选项
-    expect(find.text('你的选择'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox());
-  });
-
   testWidgets('活动阅读进入答题并提交：finishReadingSession 恰好一次并丢弃阅读状态', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
@@ -946,7 +677,7 @@ void main() {
     );
     addTearDown(readingCtrl.dispose);
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       QuizPage(
         articleTitle: '岳阳楼记',
         questions: questions,
@@ -972,14 +703,8 @@ void main() {
   });
 
   testWidgets('活动阅读进入答题后返回：不结算且阅读状态保留', (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    final questions = _fakeQuestions(2);
-    addTearDown(() => calloc.free(questions.first.owner));
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
 
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
@@ -1006,7 +731,7 @@ void main() {
       readTracker: readTracker,
     );
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(wrapQuizPage(
       Builder(
         builder: (context) => Scaffold(
           body: Center(
