@@ -120,6 +120,22 @@ class _CountingCoordinator extends AppCoordinator {
   }
 }
 
+/// 把答题页挂在宿主页里推入导航栈：退出轻确认用例需要验证 pop 后回到宿主。
+Widget _pushQuizHost(Widget Function() buildQuiz) {
+  return Builder(
+    builder: (context) => Scaffold(
+      body: Center(
+        child: FilledButton(
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(builder: (_) => buildQuiz()),
+          ),
+          child: const Text('打开答题'),
+        ),
+      ),
+    ),
+  );
+}
+
 void main() {
   testWidgets('QuizPage 渲染题干、选项与题型徽标', (tester) async {
     setQuizViewport(tester, height: 1000);
@@ -396,7 +412,7 @@ void main() {
     expect(tracker.disposeCount, 1);
   });
 
-  testWidgets('AppBar 原文按钮打开只读预览', (tester) async {
+  testWidgets('AppBar 切换按钮进入只读原文，并可切回题目', (tester) async {
     setQuizViewport(tester, height: 1200);
     final questions = fakeQuestions(1);
 
@@ -427,11 +443,213 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    // 题目视图：不产生新路由，工具栏按钮 tooltip 指向“将要去”的原文
+    expect(find.text('第 1/1 题'), findsOneWidget);
+    expect(find.byTooltip('查看原文'), findsOneWidget);
+
     await tester.tap(find.byIcon(Icons.menu_book));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('原文 · 岳阳楼记'), findsOneWidget);
+    // 仍在同一路由内（方案 D：页内视图翻转），原文正文可见
+    expect(find.byType(QuizPage), findsOneWidget);
     expect(find.textContaining('庆历四年春', findRichText: true), findsOneWidget);
+    expect(find.text('第 1/1 题'), findsNothing);
+
+    // 切回题目：按钮 tooltip 反向，答题视图恢复
+    expect(find.byTooltip('返回题目'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.pumpAndSettle();
+    expect(find.text('第 1/1 题'), findsOneWidget);
+    expect(find.byTooltip('查看原文'), findsOneWidget);
+  });
+
+  testWidgets('切到原文再切回：已选答案仍在（双视图保活）', (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
+
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
+      articleTitle: '岳阳楼记',
+      questions: questions,
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+    await tester.tap(find.text('下一题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项2释义'));
+    await tester.pump();
+
+    // 往返一次原文视图
+    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.pumpAndSettle();
+
+    // 进度与答案都还在：末题已答 → 提交按钮可用
+    expect(find.text('第 2/2 题'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull);
+  });
+
+  testWidgets('原文视图只读：不出现完成/放弃结算入口', (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
+
+    final settingsCtrl = SettingsController();
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    final coord = _PreviewCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: settingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: userCtrl,
+      readTracker: readTracker,
+    );
+    addTearDown(() {
+      readingCtrl.dispose();
+      userCtrl.dispose();
+    });
+
+    await tester.pumpWidget(wrapQuizPage(
+      QuizPage(articleTitle: '岳阳楼记', questions: questions),
+      coord: coord,
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.pumpAndSettle();
+
+    // ReadingFrame 的“完成阅读/放弃”不得出现在对照视图里
+    expect(find.text('完成阅读'), findsNothing);
+    expect(find.text('放弃'), findsNothing);
+    expect(find.text('返回'), findsWidgets);
+  });
+
+  testWidgets('退出轻确认：继续作答则留在原页，放弃才 pop', (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
+
+    await tester.pumpWidget(wrapQuizPage(_pushQuizHost(
+      () => QuizPage(articleTitle: '岳阳楼记', questions: questions),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+
+    // 未作答：直接退出，不弹确认
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('打开答题'), findsOneWidget);
+
+    // 重新进入并作答
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选项1释义'));
+    await tester.pump();
+
+    // 有未提交答案：弹轻确认，选“继续作答”留在答题页
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('放弃本次作答？'), findsOneWidget);
+    await tester.tap(find.text('继续作答'));
+    await tester.pumpAndSettle();
+    expect(find.text('第 1/2 题'), findsOneWidget);
+
+    // 再退一次并确认放弃 → 回到宿主页
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('放弃'));
+    await tester.pumpAndSettle();
+    expect(find.text('打开答题'), findsOneWidget);
+  });
+
+  testWidgets('活动阅读会话下切原文：计时继续、切回不结算', (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(1);
+
+    final settingsCtrl = SettingsController();
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    readingCtrl.loadText(ChineseText(
+      id: 1,
+      title: '岳阳楼记',
+      author: '范仲淹',
+      dynasty: '宋',
+      source: '古文观止',
+      content: '庆历四年春，滕子京谪守巴陵郡。',
+      charCount: 20,
+      difficulties: List.filled(10, 0.5),
+    ));
+    final userCtrl = UserController()..setUser(User.allocate(calloc));
+    final coord = _CountingCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: settingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: userCtrl,
+      readTracker: readTracker,
+    );
+    addTearDown(readingCtrl.dispose);
+    addTearDown(userCtrl.dispose);
+
+    await tester.pumpWidget(wrapQuizPage(
+      QuizPage(
+        articleTitle: '岳阳楼记',
+        questions: questions,
+        readingController: readingCtrl,
+      ),
+      coord: coord,
+      settingsCtrl: settingsCtrl,
+      userCtrl: userCtrl,
+    ));
+    await tester.pumpAndSettle();
+    // 让活动会话的 1s 周期计时器真的走两拍（fake async 下需显式推进时钟）
+    await tester.pump(const Duration(seconds: 2));
+
+    final before = readingCtrl.elapsedSeconds;
+    expect(before, greaterThan(0), reason: '活动会话应在计时中');
+
+    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    // 复用同一控制器 → 原文视图里计时不停
+    expect(readingCtrl.elapsedSeconds, greaterThan(before));
+
+    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.pumpAndSettle();
+
+    // 只切视图不是退出：不结算、会话仍在
+    expect(coord.finishCount, 0);
+    expect(readingCtrl.isReading, isTrue);
+
+    // 活动会话的周期计时器须在用例内停掉（否则框架报 pending timer）
+    readingCtrl.pauseTimer();
+  });
+
+  testWidgets('初始化按篇模式退出不确认（进度在共享答案表里）', (tester) async {
+    setQuizViewport(tester, height: 1200);
+    final questions = fakeQuestions(2);
+    final answers = <int, int?>{100: 1, 101: null};
+
+    await tester.pumpWidget(wrapQuizPage(_pushQuizHost(
+      () => QuizPage(
+        articleTitle: '严先生祠堂记',
+        questions: questions,
+        isInitPart: true,
+        initAnswers: answers,
+      ),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    expect(find.text('放弃本次作答？'), findsNothing);
+    expect(find.text('打开答题'), findsOneWidget);
   });
 
   testWidgets('初始化按篇模式记录答案并返回，不调用 applyInit', (tester) async {

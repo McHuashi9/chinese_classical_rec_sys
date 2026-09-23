@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
-import 'package:chinese_classical_rec_sys/pages/reading_preview_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
@@ -11,6 +10,7 @@ import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
+import 'package:chinese_classical_rec_sys/widgets/original_text_view.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
 /// [isReview] 错题复习模式：标题区分，提交走复习通道（不产生答题效应）
@@ -61,6 +61,12 @@ class _QuizPageState extends State<QuizPage> {
   final GlobalKey _originalButtonKey = GlobalKey();
   OverlayEntry? _quizGuideOverlay;
 
+  /// 当前视图：0 = 题目，1 = 原文（应用栏单图标互切，不产生新路由）。
+  int _viewIndex = 0;
+
+  /// 原文视图懒挂载标记：首次切过去才建（只读快照要读库，启动时不必付这成本）。
+  bool _originalViewOpened = false;
+
   UserController? _userCtrl;
 
   @override
@@ -91,7 +97,8 @@ class _QuizPageState extends State<QuizPage> {
       }
     }
     if (widget.isInitPart) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowQuizGuide());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _maybeShowQuizGuide());
     }
   }
 
@@ -230,34 +237,193 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
-  Future<void> _openOriginal() async {
-    final textId = widget.questions.isEmpty ? 0 : widget.questions.first.textId;
-    if (textId <= 0) {
+  /// 用户点被引导高亮的切换按钮即视为已了解该入口，先结束引导再切视图。
+  void _onToggleTap() {
+    if (_quizGuideOverlay != null) _finishQuizGuide();
+    _toggleView();
+  }
+
+  void _toggleView() {
+    final target = _viewIndex == 0 ? 1 : 0;
+    // 原文视图按需挂载：没有文章信息时保持不可进入（与旧“原文”按钮同提示）。
+    if (target == 1 && _textId <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('无法打开原文：缺少文章信息')),
       );
       return;
     }
-    // 用户点击被引导高亮的“原文”按钮即视为已了解该入口，结束引导。
-    if (_quizGuideOverlay != null) {
-      await _finishQuizGuide();
-      if (!mounted) return;
-    }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ReadingPreviewPage(
-          textId: textId,
-          activeController: widget.readingController,
-        ),
+    setState(() {
+      _viewIndex = target;
+      if (target == 1) _originalViewOpened = true;
+    });
+  }
+
+  /// 待展示文章 id；题组为空时视为缺失。
+  int get _textId =>
+      widget.questions.isEmpty ? 0 : widget.questions.first.textId;
+
+  /// 有未提交作答时按返回键先轻确认，避免误触丢进度。
+  ///
+  /// 初始化按篇模式例外：它使用共享答案表，退出后进度仍保留，不需要确认。
+  Future<bool> _confirmExitIfNeeded() async {
+    if (widget.isInitPart) return true;
+    if (!_choices.any((c) => c != null)) return true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('放弃本次作答？'),
+        content: const Text('已选的答案不会保留。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('继续作答'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('放弃'),
+          ),
+        ],
       ),
+    );
+    return leave ?? false;
+  }
+
+  Future<void> _onExitTap() async {
+    if (await _confirmExitIfNeeded() && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  /// 答题页正文（栏 1）：题干 + 选项 + 底栏导航区。
+  ///
+  /// 保留为独立方法以利 IndexedStack 双保活：切到原文再切回时，
+  /// 这里的状态（选项、滚动位置）都还在。
+  Widget _buildQuizView(BuildContext context) {
+    final q = widget.questions[_index];
+    final progress = (_index + 1) / widget.questions.length;
+
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(context.pagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '第 ${_index + 1}/${widget.questions.length} 题',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: context.appColors.inkSecondary,
+                    ),
+              ),
+              SizedBox(
+                height: context.gapSmall,
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor: context.appColors.border,
+                  valueColor: AlwaysStoppedAnimation(context.accent),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(context.pagePadding, 0,
+                context.pagePadding, context.pagePadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _typeBadge(q),
+                SizedBox(height: context.gapMedium),
+                Text(
+                  q.stem,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        height: 1.5,
+                      ),
+                ),
+                if (q.context.isNotEmpty) ...[
+                  SizedBox(height: context.gapSmall),
+                  MarkedSentence(
+                    text: q.context,
+                    markStart: q.markStart,
+                    markLen: q.markLen,
+                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                          height: 1.5,
+                        ),
+                  ),
+                ],
+                SizedBox(height: context.gapLg),
+                ...List.generate(4, (i) => _optionTile(q, i)),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.all(context.pagePadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isLast && _unansweredCount > 0) ...[
+                Padding(
+                  padding: EdgeInsets.only(bottom: context.gapMedium),
+                  child: Text(
+                    widget.isInitPart
+                        ? '还有 $_unansweredCount 题未作答，可返回补充后再完成本篇'
+                        : '还有 $_unansweredCount 题未作答，可返回补充后再提交',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: context.accent,
+                        ),
+                  ),
+                ),
+              ],
+              Row(
+                children: [
+                  if (_index > 0)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _prev,
+                        child: const Text('上一题'),
+                      ),
+                    ),
+                  if (_index > 0) SizedBox(width: context.gapMedium),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: context.accent,
+                        foregroundColor: context.appColors.onAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      onPressed:
+                          _isLast ? (_allowSubmit ? _submit : null) : _next,
+                      child: Text(
+                        _isLast ? (widget.isInitPart ? '完成本篇' : '提交') : '下一题',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: context.appColors.onAccent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final q = widget.questions[_index];
-    final progress = (_index + 1) / widget.questions.length;
-
     return Scaffold(
       backgroundColor: context.appColors.paper,
       appBar: AppBar(
@@ -266,7 +432,7 @@ class _QuizPageState extends State<QuizPage> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: context.appColors.ink),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _onExitTap,
         ),
         title: Text(
           widget.isInitPart
@@ -280,135 +446,32 @@ class _QuizPageState extends State<QuizPage> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          // 甲形态：单图标互切，tooltip 显示“将要去”的视图；无新路由，双视图保活。
           IconButton(
             key: _originalButtonKey,
-            tooltip: '原文',
-            icon: Icon(Icons.menu_book, color: context.appColors.ink),
-            onPressed: _openOriginal,
+            tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
+            icon: Icon(
+              _viewIndex == 0 ? Icons.menu_book : Icons.edit_note,
+              color: context.appColors.ink,
+            ),
+            onPressed: _onToggleTap,
           ),
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: IndexedStack(
+          index: _viewIndex,
           children: [
-            Padding(
-              padding: EdgeInsets.all(context.pagePadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '第 ${_index + 1}/${widget.questions.length} 题',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: context.appColors.inkSecondary,
-                        ),
-                  ),
-                  SizedBox(
-                    height: context.gapSmall,
-                  ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 4,
-                      backgroundColor: context.appColors.border,
-                      valueColor: AlwaysStoppedAnimation(context.accent),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(context.pagePadding, 0,
-                    context.pagePadding, context.pagePadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _typeBadge(q),
-                    SizedBox(height: context.gapMedium),
-                    Text(
-                      q.stem,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            height: 1.5,
-                          ),
-                    ),
-                    if (q.context.isNotEmpty) ...[
-                      SizedBox(height: context.gapSmall),
-                      MarkedSentence(
-                        text: q.context,
-                        markStart: q.markStart,
-                        markLen: q.markLen,
-                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                              height: 1.5,
-                            ),
-                      ),
-                    ],
-                    SizedBox(height: context.gapLg),
-                    ...List.generate(4, (i) => _optionTile(q, i)),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(context.pagePadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_isLast && _unansweredCount > 0) ...[
-                    Padding(
-                      padding: EdgeInsets.only(bottom: context.gapMedium),
-                      child: Text(
-                        widget.isInitPart
-                            ? '还有 $_unansweredCount 题未作答，可返回补充后再完成本篇'
-                            : '还有 $_unansweredCount 题未作答，可返回补充后再提交',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: context.accent,
-                            ),
-                      ),
-                    ),
-                  ],
-                  Row(
-                    children: [
-                      if (_index > 0)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _prev,
-                            child: const Text('上一题'),
-                          ),
-                        ),
-                      if (_index > 0) SizedBox(width: context.gapMedium),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: context.accent,
-                            foregroundColor: context.appColors.onAccent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          onPressed:
-                              _isLast ? (_allowSubmit ? _submit : null) : _next,
-                          child: Text(
-                            _isLast
-                                ? (widget.isInitPart ? '完成本篇' : '提交')
-                                : '下一题',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  color: context.appColors.onAccent,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            _buildQuizView(context),
+            // 首次切换后才挂载：只读快照要读库取全文，启动时不付这笔成本。
+            if (_originalViewOpened)
+              OriginalTextView(
+                textId: _textId,
+                activeController: widget.readingController,
+                onExit: _toggleView,
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
       ),
