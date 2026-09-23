@@ -547,5 +547,6 @@ C++ CLI 原型。
 [1.1.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.0
 [1.1.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.1.1
 [1.2.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.0
+[1.2.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.1
 [1.2.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.2
 [1.2.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.3

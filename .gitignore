@@ -32,7 +32,6 @@ flutter_app/ohos/
 /processed_classical/
 /data/
 /results/
-/论文复现指南.md
 /requirements.txt
 /scripts/project/config.json
 /scripts/project/output_config.py
@@ -49,18 +48,8 @@ flutter_app/ohos/
 
 # 本地文档与配置
 /AGENTS.md
-/Temp.md
-/plan.md
-/plan-supplement/
-/code-review.md
-/design-spec.md
-/harmonyos-plan.md
-/SIDELOAD_IOS.md
-/论文修订计划.md
-/result.md
 /local_docs/
 .vscode/
-.opencode/
 
 # 系统与编辑器临时文件
 .DS_Store
