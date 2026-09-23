@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_logger.dart';
+
 /// 公告弹出模式。
 enum AnnouncementMode {
   /// 每次冷启动都弹出。
@@ -46,27 +48,37 @@ class Announcement {
 /// 公告 asset 路径。
 const String kAnnouncementAssetPath = 'assets/data/announcement.md';
 
-/// asset 缺失/解析失败时的兜底公告。
-const Announcement kFallbackAnnouncement = Announcement(
-  id: 'v1.2.1-1',
-  markdown: '感谢使用文言文推荐系统。\n\n'
-      '这个版本是维护版，重点完善了初始化答题引导、节日弹窗与设置页日志目录体验。\n\n'
-      '## 版本改动\n\n'
-      '- 初始化答题页新增“回看原文”引导\n'
-      '- 七夕节日入口改为冷启动弹窗\n'
-      '- 设置页日志按钮改为打开日志目录',
-);
-
-/// 从 asset 加载当前公告；失败时返回 [kFallbackAnnouncement]。
-Future<Announcement> loadCurrentAnnouncement() async {
+/// 从 asset 加载当前公告。
+///
+/// **无兜底文案**：asset 缺失、读取失败或缺 `id` 时返回 null 并记 warn。
+/// 公告的唯一真相源是 [kAnnouncementAssetPath]；调用方按“没有公告”处理，
+/// 避免代码里再维护一份会过期的正文（旧实现的兜底文案曾落后两个版本）。
+Future<Announcement?> loadCurrentAnnouncement() async {
   try {
     final raw = await rootBundle.loadString(kAnnouncementAssetPath);
-    final parsed = parseAnnouncement(raw);
-    return parsed.id.isEmpty ? kFallbackAnnouncement : parsed;
-  } catch (_) {
-    return kFallbackAnnouncement;
+    return parseAnnouncementOrNull(raw);
+  } catch (e) {
+    AppLogger().warn('公告加载失败，已跳过: $kAnnouncementAssetPath ($e)');
+    return null;
   }
 }
+
+/// 解析公告文本；缺 `id` 的公告视为无效并记 warn 后返回 null。
+///
+/// 与 [loadCurrentAnnouncement] 共用同一套“无兜底”判定，
+/// 便于在不依赖 asset 的情况下用例化验证。
+Announcement? parseAnnouncementOrNull(String raw) {
+  final parsed = parseAnnouncement(raw);
+  if (parsed.id.isEmpty) {
+    AppLogger().warn('公告缺少 front matter id，已跳过: $kAnnouncementAssetPath');
+    return null;
+  }
+  return parsed;
+}
+
+/// front matter 中的 `id:` 行（值可带单/双引号，也可裸写）。
+final RegExp _frontMatterIdPattern =
+    RegExp(r'''^id:[ \t]*["']?([^"'\s]+)["']?[ \t]*$''', multiLine: true);
 
 /// 解析 `assets/data/announcement.md`：
 /// 支持以 `---` 包裹的极简 YAML front matter（目前只使用 `id`），
@@ -78,19 +90,8 @@ Announcement parseAnnouncement(String raw) {
   if (raw.startsWith('---')) {
     final end = raw.indexOf('\n---', 3);
     if (end != -1) {
-      final frontMatter = raw.substring(3, end).trim();
-      for (final line in frontMatter.split('\n')) {
-        final colon = line.indexOf(':');
-        if (colon <= 0) continue;
-        final key = line.substring(0, colon).trim();
-        if (key == 'id') {
-          id = line
-              .substring(colon + 1)
-              .trim()
-              .replaceAll('"', '')
-              .replaceAll("'", '');
-        }
-      }
+      final match = _frontMatterIdPattern.firstMatch(raw.substring(3, end));
+      if (match != null) id = match.group(1)!;
       body = raw.substring(end + 4).trim();
     }
   }

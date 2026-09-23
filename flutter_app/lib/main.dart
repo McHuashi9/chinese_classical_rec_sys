@@ -293,6 +293,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   Future<void> _maybeShowAnnouncement(
       AppCoordinator coord, SharedPreferences prefs) async {
     final announcement = await loadCurrentAnnouncement();
+    if (announcement == null) return; // 无公告（asset 缺失/坏格式）→ 静默跳过
     final mode = loadAnnouncementMode(prefs);
     final seen = prefs.getString(kAnnouncementSeenIdKey);
     if (mode == AnnouncementMode.onUpdate && seen == announcement.id) {

@@ -4,6 +4,18 @@ import 'package:chinese_classical_rec_sys/engine/announcement.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/announcement_dialog.dart';
 
+/// 弹窗渲染用例的固定文案：弹窗只负责渲染，正文由调用方提供。
+/// 不再引用引擎里的兜底公告——那份兜底文案已删除（公告唯一真相源是 asset）。
+const Announcement _fixtureAnnouncement = Announcement(
+  id: 'v1.2.1-1',
+  markdown: '感谢使用文言文推荐系统。\n\n'
+      '这个版本是维护版，重点完善了初始化答题引导、节日弹窗与设置页日志目录体验。\n\n'
+      '## 版本改动\n\n'
+      '- 初始化答题页新增“回看原文”引导\n'
+      '- 七夕节日入口改为冷启动弹窗\n'
+      '- 设置页日志按钮改为打开日志目录',
+);
+
 Future<void> _openDialog(
   WidgetTester tester, {
   AnnouncementMode initialMode = AnnouncementMode.always,
@@ -18,7 +30,7 @@ Future<void> _openDialog(
           child: FilledButton(
             onPressed: () => AnnouncementDialog.show(
               context,
-              announcement: kFallbackAnnouncement,
+              announcement: _fixtureAnnouncement,
               initialMode: initialMode,
               onModeChanged: onModeChanged,
             ),

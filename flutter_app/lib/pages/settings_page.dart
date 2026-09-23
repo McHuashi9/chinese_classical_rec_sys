@@ -496,6 +496,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 final announcement = await loadCurrentAnnouncement();
                 final prefs = await SharedPreferences.getInstance();
                 if (!mounted) return;
+                if (announcement == null) {
+                  // 公告 asset 缺失/坏格式：明确告知，而不是弹出空对话框
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('公告不可用，请稍后重试')),
+                  );
+                  return;
+                }
                 await AnnouncementDialog.show(
                   context,
                   announcement: announcement,
