@@ -71,7 +71,8 @@ class _OriginalTextViewState extends State<OriginalTextView> {
       }
     } else {
       if (_text == null) return;
-      _annotations = AnnotationParser.parse(coord.getAnnotations(widget.textId));
+      _annotations =
+          AnnotationParser.parse(coord.getAnnotations(widget.textId));
       _translation = coord.getTranslation(widget.textId);
       _localController = ReadingController(ReadTracker());
       _localController!.loadText(
