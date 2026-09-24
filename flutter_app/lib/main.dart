@@ -40,7 +40,36 @@ import 'widgets/profile_dialogs.dart';
 import 'widgets/feedback_dialog.dart';
 import 'widgets/screenshot_overlay.dart';
 
+/// 未捕获异常的兜底记录：写进 `logs/app.log`，便于事后排查。
+///
+/// 此前 main 没有任何全局错误处理，崩溃时 C++ 日志可能一行都不留，
+/// 只剩终端红字（且关掉终端即失去线索）。这里只做“记录”，不改控制流。
+void _logUncaughtError(String source, Object error, StackTrace? stack) {
+  try {
+    AppLogger().error('$source: $error${stack == null ? '' : '\n$stack'}');
+  } catch (_) {
+    // 日志系统本身不可用（如引擎未加载）时退化为控制台输出，绝不二次抛出。
+    debugPrint('$source: $error\n$stack');
+  }
+}
+
 void main() {
+  // 框架层异常（build/layout/paint 及 onPressed 等回调抛错）走这里。
+  final previousOnError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    _logUncaughtError(
+        'FlutterError', details.exception, details.stack ?? StackTrace.current);
+    previousOnError?.call(details);
+  };
+
+  // 异步未捕获异常（Future 未 await、Timer 内抛错等）走这里。
+  // 注意：已交由 FlutterError 处理的框架异常不会进这个 zone，二者互补不重复。
+  runZonedGuarded(() => _bootstrap(), (error, stack) {
+    _logUncaughtError('UncaughtError', error, stack);
+  });
+}
+
+void _bootstrap() {
   final readTracker = ReadTracker();
   final navCtrl = NavigationController();
   final settingsCtrl = SettingsController();
