@@ -7,6 +7,13 @@
 //
 // 依赖：需先构建核心（`cmake --build build --target chinese_core`）。
 // 未找到 .so 或 python3 时自动跳过，不挂非 Linux 的 CI。
+//
+// 用真库写这类用例的两个前置坑（都踩过）：
+//   1. `question_get_by_text` 内部走 requireInitialized()，用户档案未初始化时
+//      只会返回空题组（不报错）——所以必须先 _initDefaultProfile，再
+//      userCtrl.refreshInitState()（后者缓存了初始化状态）。
+//   2. `coord.texts` 是轻量缓存条目，`content` 为空；正文必须经
+//      `coord.getTextDetail(id)` 从内容库读。
 import 'dart:ffi' hide Size;
 import 'dart:io';
 
