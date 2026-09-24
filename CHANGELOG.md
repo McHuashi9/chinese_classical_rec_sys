@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-24
+
 ### Changed
 
 - **做题页「题目 / 原文」同页切换**：原先左上返回键与右上「原文」按钮看似重复（一个退出、一个对照），现改为右上单图标互切，不再跳转新页面；切到原文再切回时，已选答案与翻页位置都保留。
@@ -555,3 +557,4 @@ C++ CLI 原型。
 [1.2.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.1
 [1.2.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.2
 [1.2.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.3
+[1.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.0
