@@ -412,6 +412,70 @@ void main() {
     expect(tracker.disposeCount, 1);
   });
 
+  testWidgets('选项选中态暴露到语义树（读屏/自动化可断言）', (tester) async {
+    setQuizViewport(tester, height: 1000);
+    final handle = tester.ensureSemantics();
+    final questions = fakeQuestions(1);
+
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
+      articleTitle: '岳阳楼记',
+      questions: questions,
+    )));
+    await tester.pumpAndSettle();
+
+    // 初始四选项皆未选中，且都作为按钮暴露。
+    const letters = ['A', 'B', 'C', 'D'];
+    for (var i = 0; i < 4; i++) {
+      expect(
+        tester.getSemantics(find.text('选项${i + 1}释义')),
+        isSemantics(
+          isSelected: false,
+          isButton: true,
+          label: '选项 ${letters[i]}：选项${i + 1}释义\n选项${i + 1}释义',
+        ),
+        reason: '选项${i + 1}应作为未选中按钮暴露',
+      );
+    }
+
+    await tester.tap(find.text('选项2释义'));
+    await tester.pumpAndSettle();
+
+    // 回归点：改前语义树里四项恒 selected=false，验收只能靠人眼看截图。
+    expect(
+      tester.getSemantics(find.text('选项2释义')),
+      isSemantics(
+        isSelected: true,
+        isButton: true,
+        label: '选项 B：选项2释义\n选项2释义',
+      ),
+    );
+    expect(
+      tester.getSemantics(find.text('选项1释义')),
+      isSemantics(isSelected: false, isButton: true),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('AppBar 返回按钮带中文语义标签', (tester) async {
+    setQuizViewport(tester, height: 1000);
+    final handle = tester.ensureSemantics();
+    final questions = fakeQuestions(1);
+
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
+      articleTitle: '岳阳楼记',
+      questions: questions,
+    )));
+    await tester.pumpAndSettle();
+
+    // 改前图标按钮没有 content-desc，既读不出用途也无法被自动化定位。
+    expect(find.byTooltip('返回'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byIcon(Icons.arrow_back)),
+      isSemantics(tooltip: '返回'),
+    );
+    handle.dispose();
+  });
+
   testWidgets('AppBar 切换按钮进入只读原文，并可切回题目', (tester) async {
     setQuizViewport(tester, height: 1200);
     final questions = fakeQuestions(1);

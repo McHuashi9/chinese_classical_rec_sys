@@ -101,7 +101,8 @@ class _ReadingFrameState extends State<ReadingFrame> {
         : '';
     if (current.isEmpty) return;
 
-    final renderParagraph = _effectiveTextKey.currentContext?.findRenderObject();
+    final renderParagraph =
+        _effectiveTextKey.currentContext?.findRenderObject();
     if (renderParagraph is! RenderParagraph) return;
 
     final localPos = renderParagraph.globalToLocal(details.globalPosition);
@@ -377,7 +378,9 @@ class _ReadingFrameState extends State<ReadingFrame> {
             onPressed: canComplete ? widget.viewData.onComplete : null,
             child: Text(canComplete
                 ? '完成'
-                : '${(minReadTime - widget.viewData.elapsedSeconds).ceil()}s'),
+                : widget.viewData.pendingReadTextIds.isEmpty
+                    ? '${(minReadTime - widget.viewData.elapsedSeconds).ceil()}s'
+                    : '还需阅读 ${(minReadTime - widget.viewData.elapsedSeconds).ceil()}s'),
           );
     final quizButton = widget.onStartQuiz == null
         ? null

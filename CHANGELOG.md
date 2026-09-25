@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-25
+
+### Fixed
+
+- **初始化门禁提示说清还缺什么**：以前只要两篇短文还有没读完的，按钮就一律写「请先阅读两篇文章」——即使 6 道初始化题已经全部答完也照样这么写，让人以为系统没识别到已读。现在会点名还差哪几篇（如「还需阅读：周郑交质」），两篇都读完才改成提示答题。
+- **阅读进度可见**：阅读器底栏的倒计时补上「还需阅读 Ns」说明；初始化引导页的文章条目也显示「未读 · 还需 Ns」，不必进阅读器干等。
+- **初始化阅读点「放弃」不再被记为已读**：以前在初始化阅读器里点「放弃」也会把该篇记成已读（实测读 10 秒即显示「已读」），现在与普通阅读一致——放弃不保存，可稍后重新阅读。
+- **选项选中态进语义树**：读屏现在能读出当前选中的选项；此前 A/B/C/D 四项恒为“未选中”，自动化测试也无法断言选中状态。
+- **返回按钮补中文标签**：做题页、文章详情页、错题复习页的返回箭头，以及文库作者分组的展开箭头，此前读屏只读作“按钮”。
+
 ## [1.3.0] - 2026-09-24
 
 ### Changed
@@ -558,3 +568,4 @@ C++ CLI 原型。
 [1.2.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.2
 [1.2.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.3
 [1.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.0
+[1.3.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.1

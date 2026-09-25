@@ -414,18 +414,10 @@ class _ReadHubPageState extends State<ReadHubPage>
       initiallyExpanded: false,
       children: [
         for (final entry in innerGrouped.entries)
-          ExpansionTile(
-            title: Text('${entry.key}（${entry.value.length}篇）'),
-            initiallyExpanded: false,
-            tilePadding: const EdgeInsetsDirectional.only(start: 48),
-            childrenPadding: const EdgeInsetsDirectional.only(start: 48),
-            children: entry.value
-                .map((t) => TextCard(
-                      title: t.title,
-                      trailing: _ReadStatusLabel(textId: t.id),
-                      onTap: () => _onSelectText(t),
-                    ))
-                .toList(),
+          _AuthorGroup(
+            author: entry.key,
+            texts: entry.value,
+            onSelectText: _onSelectText,
           ),
       ],
     );
@@ -683,6 +675,52 @@ class _ReadHubPageState extends State<ReadHubPage>
   void _exitReading() {
     final coord = context.read<AppCoordinator>();
     coord.finishReadingSession();
+  }
+}
+
+/// 作者分组（库页二级分组）：给分组标题补中文语义标签。
+/// 此前展开箭头在语义树里只有 Collapsed/Expanded 状态，读屏不知道这组是什么。
+class _AuthorGroup extends StatefulWidget {
+  const _AuthorGroup({
+    required this.author,
+    required this.texts,
+    required this.onSelectText,
+  });
+
+  final String author;
+  final List<ChineseText> texts;
+  final void Function(ChineseText) onSelectText;
+
+  @override
+  State<_AuthorGroup> createState() => _AuthorGroupState();
+}
+
+class _AuthorGroupState extends State<_AuthorGroup> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = '${widget.author}（${widget.texts.length}篇）';
+    return ExpansionTile(
+      initiallyExpanded: false,
+      tilePadding: const EdgeInsetsDirectional.only(start: 48),
+      childrenPadding: const EdgeInsetsDirectional.only(start: 48),
+      onExpansionChanged: (v) => setState(() => _expanded = v),
+      // ExpansionTile 自带的展开箭头没有可读标签，标签挂在标题节点上。
+      title: Semantics(
+        button: true,
+        expanded: _expanded,
+        label: '作者分组 $title，${_expanded ? '已展开' : '已收起'}',
+        child: Text(title),
+      ),
+      children: widget.texts
+          .map((t) => TextCard(
+                title: t.title,
+                trailing: _ReadStatusLabel(textId: t.id),
+                onTap: () => widget.onSelectText(t),
+              ))
+          .toList(),
+    );
   }
 }
 

@@ -74,6 +74,7 @@ class _ReviewListPageState extends State<ReviewListPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: '返回',
           icon: Icon(Icons.arrow_back, color: context.appColors.ink),
           onPressed: () => Navigator.of(context).pop(),
         ),

@@ -28,11 +28,15 @@ void main() {
     required void Function(int, int) onPaginate,
     int charCount = 0,
     int elapsedSeconds = 0,
+    List<int> pendingReadTextIds = const [],
     VoidCallback? onComplete,
   }) {
     return ReadingViewData(
       text: ChineseText(
-        id: 1, title: '测试', author: 'a', dynasty: '唐',
+        id: 1,
+        title: '测试',
+        author: 'a',
+        dynasty: '唐',
         content: '原文内容\n\n第二段原文内容',
         charCount: charCount,
       ),
@@ -45,6 +49,7 @@ void main() {
       alreadyTracked: false,
       annotations: const {},
       showTranslation: showTranslation,
+      pendingReadTextIds: pendingReadTextIds,
       onToggleTranslation: onToggle,
       onPaginate: onPaginate,
       onNextPage: () {},
@@ -55,8 +60,7 @@ void main() {
     );
   }
 
-  testWidgets('切换 showTranslation 后触发重新分页（pages 非空也要分页）',
-      (tester) async {
+  testWidgets('切换 showTranslation 后触发重新分页（pages 非空也要分页）', (tester) async {
     final settings = SettingsController();
     var showTranslation = false;
     var paginateCount = 0;
@@ -189,6 +193,26 @@ void main() {
 
     await tester.tap(find.text('370s'));
     expect(completed, isFalse);
+  });
+
+  testWidgets('初始化引导场景：待读篇目非空时倒计时措辞自带说明', (tester) async {
+    final settings = SettingsController();
+    // charCount=500 -> T_min = 200s；elapsed=150 -> 还需 50s。
+    await tester.pumpWidget(wrap(
+      buildViewData(
+        showTranslation: false,
+        onToggle: () {},
+        onPaginate: (w, h) {},
+        charCount: 500,
+        elapsedSeconds: 150,
+        pendingReadTextIds: const [41, 166],
+      ),
+      settings,
+    ));
+    await tester.pump();
+
+    expect(find.text('还需阅读 50s'), findsOneWidget);
+    expect(find.text('完成'), findsNothing);
   });
 
   testWidgets('宽屏底栏显示页码指示', (tester) async {

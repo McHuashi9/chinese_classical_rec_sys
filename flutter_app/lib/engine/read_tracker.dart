@@ -9,6 +9,12 @@ class ReadTracker {
 
   bool isTextRead(int textId) => _states[textId]?.effectApplied ?? false;
 
+  /// 尚未达到阅读阈值（效应未应用）的篇目 id，按调用方给的顺序返回。
+  List<int> unreadTextIds(List<int> textIds) => [
+        for (final id in textIds)
+          if (!isTextRead(id)) id
+      ];
+
   bool hasUnrecordedReading(int? currentTextId) {
     if (currentTextId == null) return false;
     final state = _states[currentTextId];

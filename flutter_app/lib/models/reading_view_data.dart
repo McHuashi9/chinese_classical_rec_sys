@@ -17,6 +17,10 @@ class ReadingViewData {
   /// 非译文模式/未提供时按 false 处理。
   final List<bool>? pageStartsInTranslation;
 
+  /// 仍在等待达标阅读的篇目 id（初始化引导用）。
+  /// 非空时底栏倒计时带「还需阅读」措辞，让用户知道当前是在等阅读时长。
+  final List<int> pendingReadTextIds;
+
   final VoidCallback onToggleTranslation;
   final void Function(int innerWidth, int innerHeight) onPaginate;
   final VoidCallback onNextPage;
@@ -37,6 +41,7 @@ class ReadingViewData {
     required this.annotations,
     required this.showTranslation,
     this.pageStartsInTranslation,
+    this.pendingReadTextIds = const [],
     required this.onToggleTranslation,
     required this.onPaginate,
     required this.onNextPage,

@@ -52,6 +52,7 @@ class ArticleDetailPage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: '返回',
           icon: Icon(
             Icons.arrow_back,
             color: context.appColors.ink,

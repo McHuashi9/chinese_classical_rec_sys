@@ -431,6 +431,7 @@ class _QuizPageState extends State<QuizPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: '返回',
           icon: Icon(Icons.arrow_back, color: context.appColors.ink),
           onPressed: _onExitTap,
         ),
@@ -520,66 +521,78 @@ class _QuizPageState extends State<QuizPage> {
   Widget _optionTile(Question q, int i) {
     final isDark = context.select((SettingsController s) => s.darkMode);
     final selected = _choices[_index] == i;
-    return Padding(
-      padding: EdgeInsets.only(bottom: context.gapMedium),
-      child: Material(
-        color: selected
-            ? context.accent.withAlpha(isDark ? 60 : 24)
-            : context.appColors.cardBg,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
+    final optionText = q.option(i);
+    // 选中态必须进语义树：否则读屏读不出当前选项、自动化也无法断言选中状态
+    // （v1.3.0 真机验收只能靠人眼看截图，见 acceptance-v1.3.0-realdevice.md §7.2）。
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '选项 ${String.fromCharCode(0x41 + i)}：$optionText',
+      child: Padding(
+        padding: EdgeInsets.only(bottom: context.gapMedium),
+        child: Material(
+          color: selected
+              ? context.accent.withAlpha(isDark ? 60 : 24)
+              : context.appColors.cardBg,
           borderRadius: BorderRadius.circular(4),
-          onTap: () => _selectOption(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: selected ? context.accent : context.appColors.border,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => _selectOption(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: selected ? context.accent : context.appColors.border,
+                ),
               ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  width: 22,
-                  height: 22,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: selected
-                          ? context.accent
-                          : context.appColors.inkSecondary,
-                    ),
-                    // 合法例外：透明用于未选中选项的圆形占位。
-                    color: selected ? context.accent : Colors.transparent,
-                  ),
-                  child: Text(
-                    String.fromCharCode(0x41 + i),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: selected
-                          ? context.appColors.onAccent
-                          : context.appColors.inkSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                SizedBox(width: context.gapMedium),
-                Expanded(
-                  child: Text(
-                    q.option(i),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          height: 1.4,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 圆形里的字母与选项正文已并入外层 Semantics.label，
+                  // 排除掉可避免读屏把「A / 选项文本」再念一遍。
+                  ExcludeSemantics(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected
+                              ? context.accent
+                              : context.appColors.inkSecondary,
                         ),
+                        // 合法例外：透明用于未选中选项的圆形占位。
+                        color: selected ? context.accent : Colors.transparent,
+                      ),
+                      child: Text(
+                        String.fromCharCode(0x41 + i),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: selected
+                              ? context.appColors.onAccent
+                              : context.appColors.inkSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  SizedBox(width: context.gapMedium),
+                  Expanded(
+                    child: Text(
+                      optionText,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.4,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
