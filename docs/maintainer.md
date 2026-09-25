@@ -109,5 +109,10 @@ bash scripts/project/publish_data.sh
    CI 从干净环境构建，不受此影响（纯本地陷阱）。
 5. 人工编辑 `flutter_app/assets/data/announcement.md` 的作者的话（脚本不会覆盖该部分）。
 6. 提交并推送 `dev`（提交信息可参考 `CONTRIBUTING.md`，例如 `release: vX.Y.Z`）。
-7. 合并到 `main` 并打 tag `vX.Y.Z`，推送 tag。
-8. 等待 CI 构建/发布；如使用 `gh` 可关注 release 状态。
+7. 打 tag `vX.Y.Z` 并推送（tag 打在 `dev` 的发布提交上）。
+8. **让 `main` 前进到该 tag**：`git switch main && git merge --ff-only vX.Y.Z && git push origin main`。
+   - `main` 的语义 = **最近一次发布点**（不保证等于更早的发布点）；只在发版时前进，用 `--ff-only`，不要 `--no-ff`、不要产生合并提交。
+   - 非发版期**不要**把 `dev` 合进 `main`；`main` 因此可能落后 `dev` 若干提交，这是预期状态。
+   - 若 `--ff-only` 失败（`main` 有未发布提交），说明 `main` 被误改过，先查 `git log --oneline main --not dev` 再决定。
+   - 推送 `main` 只触发 `flutter-build` 的 main 分支构建（`release.yml` 是 tag 专属，不会重复发版）。
+9. 等待 CI 构建/发布；如使用 `gh` 可关注 release 状态：`gh run list --limit 5` / `gh run watch <id>`。
