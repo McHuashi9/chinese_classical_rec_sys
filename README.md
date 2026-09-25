@@ -127,17 +127,17 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 **C++ 核心** — 编译产物 `libchinese_core.so`，通过 40 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
-- `include/` 头文件（引擎 · 知识追踪）
-- `bridge/` C 跨语言函数接口（FFI）导出函数
-- `src/core/` 推荐引擎 · 知识追踪
-- `src/database/` SQLite 访问封装
-- `tests/` Catch2 单元测试
+- `include/` 头文件（引擎 · 知识追踪 · 数据访问抽象与仓储）
+- `bridge/` C 跨语言函数接口（FFI）导出函数，v1.4.0 起按域拆分为 8 个文件（`bridge_internal.h` 承载 `EngineState`/`S()`/共享 helper/事务 RAII）：`bridge_shared` · `bridge_lifecycle` · `bridge_user` · `bridge_text` · `bridge_tracker` · `bridge_quiz` · `bridge_history` · `bridge_log`
+- `src/core/` 推荐引擎 · 知识追踪 · 复习调度（`ReviewScheduler`，纯逻辑无数据库依赖）
+- `src/database/` SQLite 访问封装（RAII `Statement`/`Row`/`queryRows` + `User`/`Text`/`ReadingHistory`/`LearningIncrement`/`Quiz`/`Review` 仓储）
+- `tests/` Catch2 单元测试（`tests/python/` 为数据管线端到端测试，`venv/bin/python3` 直接运行）
 - `third_party/` 供应商库（sqlite3.c · spdlog · Catch2 · Boost.Nowide）
 
-**Python 数据管线** — 把 `articles/` 加工成 `classical.db`
+**Python 数据管线** — 把 `articles/` 加工成 `classical.db`（建库为单事务 + 临时文件原子替换，失败时目标库逐字节不变）
 
 - `articles/` 270 篇古文数据源（anthology 202 + textbook 68）
-- `scripts/project/` 核心脚本：init_data.py（建库）· generate_questions.py（题库）· features.json（13 维特征）· publish_data.sh（发布）· bump_version.sh（发版）· gen_db_version.sh · check_questions_reproducible.sh · check_content_db.py（内容库发布校验）· build_ios_core.sh
+- `scripts/project/` 核心脚本：init_data.py（建库，`--db` 与 `--questions-json` 显式同源）· generate_questions.py（题库）· features.json（13 维特征）· publish_data.sh（发布）· bump_version.sh（发版）· gen_db_version.sh · check_questions_reproducible.sh · check_content_db.py（内容库发布校验，含外键完整性闸门）· build_ios_core.sh
 - `scripts/` 辅助脚本：subset_fonts.py（字体子集化）· test_coverage_cpp.sh / summarize_cov.py（覆盖率）
 
 **Flutter 应用** — `flutter_app/`

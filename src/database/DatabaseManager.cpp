@@ -2,6 +2,7 @@
 #include "utils/Logger.h"
 #include <nowide/convert.hpp>
 #include <iostream>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -43,15 +44,10 @@ void DatabaseManager::close() {
 
 bool DatabaseManager::isReadable() {
     if (!db) return false;
-    sqlite3_stmt* stmt = nullptr;
-    const int rc = sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master LIMIT 1;", -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    const int stepRc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
     // 空库没有 sqlite_master 行，step 返回 SQLITE_DONE，仍属于可读 SQLite。
+    Statement stmt(db, "SELECT name FROM sqlite_master LIMIT 1;", &lastError);
+    if (!stmt.ok()) return false;
+    const int stepRc = stmt.step();
     if (stepRc != SQLITE_ROW && stepRc != SQLITE_DONE) {
         lastError = sqlite3_errmsg(db);
         return false;
@@ -64,16 +60,11 @@ bool DatabaseManager::attachDatabase(const std::string& alias, const std::string
         lastError = "数据库未打开";
         return false;
     }
-    sqlite3_stmt* stmt = nullptr;
     const std::string sql = "ATTACH DATABASE ? AS " + alias + ";";
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    sqlite3_bind_text(stmt, 1, dbPath.c_str(), -1, SQLITE_TRANSIENT);
-    const int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) {
+    Statement stmt(db, sql, &lastError);
+    if (!stmt.ok()) return false;
+    if (!stmt.bind({dbPath})) return false;
+    if (stmt.step() != SQLITE_DONE) {
         lastError = sqlite3_errmsg(db);
         return false;
     }
@@ -91,15 +82,14 @@ bool DatabaseManager::detachDatabase(const std::string& alias) {
 
 int DatabaseManager::getUserVersion() const {
     if (!db) return 0;
-    sqlite3_stmt* stmt = nullptr;
+    Statement stmt(db, "PRAGMA user_version;");
+    if (!stmt.ok()) return 0;
     int version = 0;
-    if (sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nullptr) != SQLITE_OK) {
-        return 0;
+    if (stmt.step() == SQLITE_ROW) {
+        Row row;
+        stmt.readRow(row);
+        version = static_cast<int>(row.integer(0));
     }
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        version = sqlite3_column_int(stmt, 0);
-    }
-    sqlite3_finalize(stmt);
     return version;
 }
 
@@ -112,178 +102,51 @@ bool DatabaseManager::executeSQL(const std::string& sql) {
         lastError = "数据库未打开";
         return false;
     }
-    
+
+    // 批次 4（明示排除）：errMsg 在失败且未分配时为 nullptr，直接赋给 std::string 是 UB；
+    // 属裸 sqlite3_exec 路径的独立条目（recon-db-access.md §5.1），本次工作项 1 不动。
     char* errMsg = nullptr;
     int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errMsg);
-    
+
     if (rc != SQLITE_OK) {
         lastError = errMsg;
         sqlite3_free(errMsg);
         return false;
     }
-    
+
     return true;
 }
 
 bool DatabaseManager::executeSQL(const std::string& sql, const std::vector<std::string>& params) {
-    std::vector<double> emptyReal;
-    return executeSQL(sql, params, emptyReal);
+    std::vector<SqlParam> mixed;
+    mixed.reserve(params.size());
+    for (const auto& param : params) {
+        mixed.emplace_back(param);
+    }
+    return executeSQL(sql, mixed);
 }
 
 bool DatabaseManager::executeSQL(const std::string& sql, const std::vector<double>& params) {
-    std::vector<std::string> emptyText;
-    return executeSQL(sql, emptyText, params);
-}
-
-bool DatabaseManager::executeQuery(const std::string& sql,
-                                    const std::vector<std::string>& textParams,
-                                    const std::vector<double>& realParams,
-                                    int (*callback)(void*, int, char**, char**),
-                                    void* callbackData) {
-    if (!db) {
-        lastError = "数据库未打开";
-        return false;
+    std::vector<SqlParam> mixed;
+    mixed.reserve(params.size());
+    for (double param : params) {
+        mixed.emplace_back(param);
     }
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    
-    // 绑定参数
-    if (!bindParameters(stmt, textParams, realParams)) {
-        sqlite3_finalize(stmt);
-        return false;
-    }
-    
-    // 执行查询并处理结果
-    int colCount = sqlite3_column_count(stmt);
-    std::vector<std::string> values(colCount);
-    std::vector<char*> valuePtrs(colCount);
-    std::vector<std::string> colNames(colCount);
-    std::vector<char*> colNamePtrs(colCount);
-    
-    // 列名只需获取一次
-    for (int i = 0; i < colCount; ++i) {
-        const char* name = sqlite3_column_name(stmt, i);
-        colNames[i] = name ? name : "";
-        colNamePtrs[i] = const_cast<char*>(colNames[i].c_str());
-    }
-    
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        for (int i = 0; i < colCount; ++i) {
-            const unsigned char* text = sqlite3_column_text(stmt, i);
-            values[i] = text ? reinterpret_cast<const char*>(text) : "";
-            valuePtrs[i] = const_cast<char*>(values[i].c_str());
-        }
-        
-        if (callbackData && callback) {
-            callback(callbackData, colCount, valuePtrs.data(), colNamePtrs.data());
-        }
-    }
-    
-    sqlite3_finalize(stmt);
-    
-    if (rc != SQLITE_DONE) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    
-    return true;
+    return executeSQL(sql, mixed);
 }
 
 bool DatabaseManager::executeSQL(const std::string& sql,
                                   const std::vector<std::string>& textParams,
                                   const std::vector<double>& realParams) {
-    if (!db) {
-        lastError = "数据库未打开";
-        return false;
+    std::vector<SqlParam> mixed;
+    mixed.reserve(textParams.size() + realParams.size());
+    for (const auto& param : textParams) {
+        mixed.emplace_back(param);
     }
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        lastError = sqlite3_errmsg(db);
-        return false;
+    for (double param : realParams) {
+        mixed.emplace_back(param);
     }
-    
-    // 绑定参数
-    if (!bindParameters(stmt, textParams, realParams)) {
-        sqlite3_finalize(stmt);
-        return false;
-    }
-    
-    // 执行语句
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
-    if (rc != SQLITE_DONE) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    
-    return true;
-}
-
-bool DatabaseManager::bindParameters(sqlite3_stmt* stmt,
-                                     const std::vector<std::string>& textParams,
-                                     const std::vector<double>& realParams) {
-    int rc = SQLITE_OK;
-    
-    // 绑定文本参数
-    for (size_t i = 0; i < textParams.size(); ++i) {
-        rc = sqlite3_bind_text(stmt, static_cast<int>(i + 1),
-                               textParams[i].c_str(), -1, SQLITE_TRANSIENT);
-        if (rc != SQLITE_OK) {
-            lastError = sqlite3_errmsg(db);
-            return false;
-        }
-    }
-    
-    // 绑定REAL参数
-    for (size_t i = 0; i < realParams.size(); ++i) {
-        int paramIndex = static_cast<int>(textParams.size() + i + 1);
-        rc = sqlite3_bind_double(stmt, paramIndex, realParams[i]);
-        if (rc != SQLITE_OK) {
-            lastError = sqlite3_errmsg(db);
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-bool DatabaseManager::bindMixedParameters(sqlite3_stmt* stmt,
-                                          const std::vector<SqlParam>& params) {
-    int rc = SQLITE_OK;
-    
-    for (size_t i = 0; i < params.size(); ++i) {
-        int paramIndex = static_cast<int>(i + 1);
-        
-        std::visit([&rc, stmt, paramIndex](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, std::string>) {
-                rc = sqlite3_bind_text(stmt, paramIndex, arg.c_str(), -1, SQLITE_TRANSIENT);
-            } else if constexpr (std::is_same_v<T, double>) {
-                rc = sqlite3_bind_double(stmt, paramIndex, arg);
-            } else if constexpr (std::is_same_v<T, int>) {
-                rc = sqlite3_bind_int(stmt, paramIndex, arg);
-            } else if constexpr (std::is_same_v<T, int64_t>) {
-                rc = sqlite3_bind_int64(stmt, paramIndex, arg);
-            }
-        }, params[i]);
-        
-        if (rc != SQLITE_OK) {
-            lastError = sqlite3_errmsg(db);
-            return false;
-        }
-    }
-    
-    return true;
+    return executeSQL(sql, mixed);
 }
 
 bool DatabaseManager::executeSQL(const std::string& sql, const std::vector<SqlParam>& params) {
@@ -291,31 +154,81 @@ bool DatabaseManager::executeSQL(const std::string& sql, const std::vector<SqlPa
         lastError = "数据库未打开";
         return false;
     }
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        lastError = sqlite3_errmsg(db);
-        return false;
-    }
-    
-    // 绑定参数
-    if (!bindMixedParameters(stmt, params)) {
-        sqlite3_finalize(stmt);
-        return false;
-    }
-    
-    // 执行语句
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
+
+    Statement stmt(db, sql, &lastError);
+    if (!stmt.ok()) return false;
+    if (!stmt.bind(params)) return false;
+
+    const int rc = stmt.step();
     if (rc != SQLITE_DONE) {
-        lastError = sqlite3_errmsg(db);
+        lastError = stmt.error().empty() ? sqlite3_errmsg(db) : stmt.error();
         return false;
     }
-    
+
     return true;
+}
+
+bool DatabaseManager::queryRows(const std::string& sql, std::vector<Row>& out) {
+    return queryRows(sql, std::vector<SqlParam>{}, out);
+}
+
+bool DatabaseManager::queryRows(const std::string& sql, const std::vector<SqlParam>& params,
+                                std::vector<Row>& out) {
+    out.clear();
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+
+    Statement stmt(db, sql, &lastError);
+    if (!stmt.ok()) return false;
+    if (!stmt.bind(params)) return false;
+
+    int rc = SQLITE_DONE;
+    while ((rc = stmt.step()) == SQLITE_ROW) {
+        Row row;
+        stmt.readRow(row);
+        out.push_back(std::move(row));
+    }
+
+    if (rc != SQLITE_DONE) {
+        out.clear();  // 失败不向调用方暴露半截结果集
+        lastError = stmt.error().empty() ? sqlite3_errmsg(db) : stmt.error();
+        return false;
+    }
+
+    return true;
+}
+
+bool DatabaseManager::backupTo(const std::string& destPath) {
+    if (!db) {
+        lastError = "数据库未打开";
+        return false;
+    }
+
+    sqlite3* dest = nullptr;
+    if (sqlite3_open(destPath.c_str(), &dest) != SQLITE_OK) {
+        lastError = dest ? sqlite3_errmsg(dest) : "无法打开备份目标";
+        if (dest) sqlite3_close(dest);
+        return false;
+    }
+
+    sqlite3_backup* backup = sqlite3_backup_init(dest, "main", db, "main");
+    if (!backup) {
+        lastError = sqlite3_errmsg(dest);
+        sqlite3_close(dest);
+        return false;
+    }
+
+    const int stepRc = sqlite3_backup_step(backup, -1);
+    if (stepRc == SQLITE_DONE) {
+        lastError.clear();
+    } else {
+        lastError = sqlite3_errmsg(dest);
+    }
+    sqlite3_backup_finish(backup);
+    sqlite3_close(dest);
+    return stepRc == SQLITE_DONE;
 }
 
 std::string DatabaseManager::getLastError() const {

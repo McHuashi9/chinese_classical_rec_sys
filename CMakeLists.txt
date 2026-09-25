@@ -88,7 +88,19 @@ endif()
 
 # ─── Flutter FFI 共享库 (chinese_core) ──────────────────────────────────────────
 
-add_library(chinese_core SHARED "bridge/bridge.cpp")
+# v1.4.0 工作项 3：bridge.cpp 按域拆为 8 个 .cpp（bridge_internal.h 不入列）。
+# 共享域（bridge_shared.cpp）持有 EngineState/S()/g_mtx + 跨域 helper + SqlTransaction/execRawSql，
+# 必须在 chinese_core target 内编译（hidden visibility），不得下沉到 src/。
+add_library(chinese_core SHARED
+    "bridge/bridge_shared.cpp"
+    "bridge/bridge_lifecycle.cpp"
+    "bridge/bridge_user.cpp"
+    "bridge/bridge_text.cpp"
+    "bridge/bridge_tracker.cpp"
+    "bridge/bridge_quiz.cpp"
+    "bridge/bridge_history.cpp"
+    "bridge/bridge_log.cpp"
+)
 target_include_directories(chinese_core PUBLIC
     ${CMAKE_SOURCE_DIR}/bridge
 )

@@ -72,7 +72,7 @@ bash scripts/project/publish_data.sh
 
 1. 刷新 `db_version.txt`（调 `gen_db_version.sh`）并修订提交（amend）进数据提交；`SKIP_AMEND=1` 跳过版本号刷新与 amend。
 2. 题库可复现性检查（`check_questions_reproducible.sh`，连跑两次生成比对哈希）；`SKIP_REPRO_CHECK=1` 跳过。
-3. 内容库一致性校验（`check_content_db.py`，硬闸门：表集合 / user_version / 初始化 q_key / q_key 唯一 / 题数 / db_version blob hash）。
+3. 内容库一致性校验（`check_content_db.py`，硬闸门：表集合 / user_version / 初始化 q_key / q_key 唯一 / 题数 / 外键完整性（`PRAGMA foreign_key_check`）/ db_version blob hash）。
 4. 压缩 DB 发布为 GitHub 预发布（prerelease）。
 
 约束：

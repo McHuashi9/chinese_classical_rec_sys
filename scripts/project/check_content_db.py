@@ -6,9 +6,11 @@
 1. 表集合恰为内容表（classical_text / questions）+ SQLite 内部表（sqlite_*），
    不得包含任何旧用户表（kUserTableNames，须与 bridge/user_tables.h 同步）；
 2. PRAGMA user_version == 1（db_version=1）；
-3. 6 个强制初始化 q_key 全部存在（须与 bridge.cpp 两处列表同步）；
+3. 6 个强制初始化 q_key 全部存在（须与 C++ 侧单一来源 initQKeys() 同步，见下）；
 4. questions.q_key 非空且唯一，题数与 build/data/questions.json 一致；
-5. db_version.txt 格式 YYYYMMDDHHMM-hash（兼容 YYYYMMDD-hash），
+5. PRAGMA foreign_key_check 为 0 行（v1.4.0 新增：兜住「文章集变化 → 题
+   库 text_id 悬空」这类 integrity_check 与前述闸门都发现不了的坏库）；
+6. db_version.txt 格式 YYYYMMDDHHMM-hash（兼容 YYYYMMDD-hash），
    其中 hash 为内容库的 Git blob hash 短哈希（git hash-object classical.db 前 7 位），
    不受 publish_data.sh 的 commit --amend 影响。
 
@@ -38,7 +40,11 @@ USER_TABLES = [
     "review_items",
 ]
 
-# 6 个强制初始化 q_key：与 bridge.cpp 的 kInitQKeys / initQKeyList() 两处保持同步。
+# 6 个强制初始化 q_key：唯一来源是 C++ 侧 `initQKeys()`（include/database/QuizRepository.h
+# + src/database/QuizRepository.cpp）。v1.4.0 之前此处需与 bridge.cpp 的两份硬编码
+# （kInitQKeys[] / initQKeyList()）人工同步，bridge.cpp 已随分域拆分删除。
+# 现由 tests/test_review_scheduler.cpp 的「q_key 单源对拍」用例在构建期解析本文件逐项比对，
+# 改动任一处必须同步另一处。
 INIT_Q_KEYS = [
     "d648b695e1579dbe",
     "28a1103b477177ee",
@@ -102,14 +108,14 @@ def main() -> None:
             continue
         if name not in ("classical_text", "questions"):
             fail(f"内容库出现非预期表 {name}（仅允许 classical_text/questions/sqlite_* 内部表）")
-    print(f"OK 1/5 表集合纯净（{len(tables)} 张表，无旧用户表）")
+    print(f"OK 1/6 表集合纯净（{len(tables)} 张表，无旧用户表）")
 
     # 2. user_version
     user_version = cur.execute("PRAGMA user_version").fetchone()[0]
     if user_version != 1:
         conn.close()
         fail(f"PRAGMA user_version 必须为 1，当前 {user_version}")
-    print("OK 2/5 db_version(user_version)=1")
+    print("OK 2/6 db_version(user_version)=1")
 
     # 3. 初始化 q_key
     present = {row[0] for row in cur.execute(
@@ -118,7 +124,7 @@ def main() -> None:
     if missing:
         conn.close()
         fail(f"内容库缺少初始化 q_key: {missing}")
-    print(f"OK 3/5 初始化 q_key 齐全（{len(INIT_Q_KEYS)} 个）")
+    print(f"OK 3/6 初始化 q_key 齐全（{len(INIT_Q_KEYS)} 个）")
 
     # 4. q_key 唯一 + 题数
     empty = cur.execute(
@@ -139,9 +145,16 @@ def main() -> None:
     if db_count != len(rows):
         conn.close()
         fail(f"内容库题数 {db_count} != questions.json 题数 {len(rows)}")
-    print(f"OK 4/5 q_key 唯一且题数一致（{db_count} 题）")
+    print(f"OK 4/6 q_key 唯一且题数一致（{db_count} 题）")
 
-    # 5. db_version.txt ↔ 内容库 blob hash
+    # 5. 外键完整性（坏库兜底闸门：foreign_key_check 直接暴露悬空 text_id）
+    fk_rows = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if fk_rows:
+        conn.close()
+        fail(f"内容库存在 {len(fk_rows)} 行悬空外键，样例: {fk_rows[:3]}")
+    print("OK 5/6 外键完整性（PRAGMA foreign_key_check 0 行）")
+
+    # 6. db_version.txt ↔ 内容库 blob hash
     ver_text = ver_path.read_text(encoding="utf-8").strip()
     m = DB_VERSION_RE.fullmatch(ver_text)
     if not m:
@@ -152,7 +165,7 @@ def main() -> None:
     if suffix[:7].lower() != blob_short.lower():
         conn.close()
         fail(f"db_version.txt hash {suffix} != 内容库 blob hash {blob_short}")
-    print(f"OK 5/5 db_version.txt 与内容库 blob hash 一致（{ver_text}）")
+    print(f"OK 6/6 db_version.txt 与内容库 blob hash 一致（{ver_text}）")
 
     conn.close()
     print(f"PASS: 内容库发布校验通过 -> {db_path}")

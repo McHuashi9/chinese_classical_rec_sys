@@ -96,28 +96,23 @@ std::vector<ReadingRecord> ReadingHistoryRepository::getRecentRecords(int userId
                       "FROM reading_history "
                       "WHERE user_id = ? "
                       "ORDER BY read_timestamp DESC LIMIT ?;";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
+
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, std::vector<SqlParam>{userId, limit}, rows)) {
         LOG_ERROR("查询阅读历史失败: {}", db->getLastError());
         return records;
     }
-    
-    sqlite3_bind_int(stmt, 1, userId);
-    sqlite3_bind_int(stmt, 2, limit);
-    
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+    records.reserve(rows.size());
+    for (const Row& row : rows) {
         ReadingRecord record;
-        record.id = sqlite3_column_int(stmt, 0);
-        record.textId = sqlite3_column_int(stmt, 1);
-        record.readTime = sqlite3_column_double(stmt, 2);
-        record.timestamp = static_cast<time_t>(sqlite3_column_int64(stmt, 3));
+        record.id = static_cast<int>(row.integer("id"));
+        record.textId = static_cast<int>(row.integer("text_id"));
+        record.readTime = row.real("read_time");
+        record.timestamp = static_cast<time_t>(row.integer("read_timestamp"));
         records.push_back(record);
     }
-    
-    sqlite3_finalize(stmt);
+
     return records;
 }
 
@@ -127,22 +122,14 @@ int ReadingHistoryRepository::getTotalReadCount(int userId) {
     }
     
     const char* sql = "SELECT COUNT(*) FROM reading_history WHERE user_id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
+
+    // 出错与空结果都返回 0（与旧实现一致：prepare 失败/无行均静默 0）
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows) || rows.empty()) {
         return 0;
     }
-    
-    sqlite3_bind_int(stmt, 1, userId);
 
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        count = sqlite3_column_int(stmt, 0);
-    }
-    
-    sqlite3_finalize(stmt);
-    return count;
+    return static_cast<int>(rows[0].integer(0));
 }
 
 bool ReadingHistoryRepository::markAsTracked(int userId, int textId) {
@@ -161,20 +148,17 @@ std::vector<int> ReadingHistoryRepository::getTrackedTextIds(int userId) {
     }
 
     const char* sql = "SELECT text_id FROM text_tracking WHERE user_id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
 
-    if (rc != SQLITE_OK) {
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows)) {
         LOG_ERROR("查询已追踪文本失败: {}", db->getLastError());
         return ids;
     }
 
-    sqlite3_bind_int(stmt, 1, userId);
-
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        ids.push_back(sqlite3_column_int(stmt, 0));
+    ids.reserve(rows.size());
+    for (const Row& row : rows) {
+        ids.push_back(static_cast<int>(row.integer("text_id")));
     }
 
-    sqlite3_finalize(stmt);
     return ids;
 }

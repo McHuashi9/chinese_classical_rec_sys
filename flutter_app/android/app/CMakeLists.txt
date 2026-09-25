@@ -25,9 +25,25 @@ list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Command(Registry|Parser)\\.cpp$")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*PathUtils\\.cpp$")
-list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge.cpp")
+# v1.4.0 工作项 3：bridge.cpp 按域拆为 8 个 .cpp（与根 CMakeLists.txt 同步）
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_shared.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_lifecycle.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_user.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_text.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_tracker.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_quiz.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_history.cpp")
+list(APPEND CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../bridge/bridge_log.cpp")
 
 add_library(chinese_core SHARED ${CORE_SOURCES})
+# v1.4.0：与根 CMakeLists.txt 的 desktop target 保持一致——默认隐藏符号，
+# 只有 bridge/export.h 的 CHINESE_CORE_EXPORT 显式标注的 40 个 C 符号进动态表。
+# 缺这段时 bridge 的跨域共享 helper（S()/copyCString/fillQuestionRow 等）会以默认
+# 可见性进入 APK 的 .so 动态符号表（桌面产物无此问题，故 verify-1「零泄漏」只在桌面成立）。
+set_target_properties(chinese_core PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
+)
 target_include_directories(chinese_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/spdlog-1.17.0/include

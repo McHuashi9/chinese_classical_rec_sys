@@ -1,15 +1,13 @@
 #ifndef DATABASE_MANAGER_H
 #define DATABASE_MANAGER_H
 
+#include "database/Statement.h"
+
 #include <sqlite3.h>
 #include <string>
 #include <vector>
-#include <variant>
 
-/**
- * @brief SQL 参数类型（支持文本、实数、32 位整数、64 位整数——时间戳用 int64_t 绑定，避免 double 精度回环）
- */
-using SqlParam = std::variant<std::string, double, int, int64_t>;
+// SqlParam（绑定参数类型）自 v1.4.0 工作项 1 起定义在 Statement.h，此处传递性导出。
 
 /**
  * @brief 简单的 SQLite 数据库管理器
@@ -111,20 +109,38 @@ public:
     bool executeSQL(const std::string& sql, const std::vector<SqlParam>& params);
 
     /**
-     * @brief 执行带参数的 SELECT 查询（使用预处理语句，防止 SQL 注入）
-     * @param sql SQL 语句，使用 ? 作为占位符
-     * @param textParams 文本参数（按顺序绑定）
-     * @param realParams REAL 参数（接在文本参数之后绑定）
-     * @param callback SQLite 回调函数
-     * @param callbackData 回调函数用户数据指针
-     * @return true 成功，false 失败
+     * @brief 执行无参数 SELECT 查询，按行收集到 out
+     * @param sql SQL 语句
+     * @param out 输出行集合（进入时清空；失败时保持为空）
+     * @return true 查询完成（含空结果集），false 失败（lastError 已置）
      */
-    bool executeQuery(const std::string& sql,
-                      const std::vector<std::string>& textParams,
-                      const std::vector<double>& realParams,
-                      int (*callback)(void*, int, char**, char**),
-                      void* callbackData);
-    
+    bool queryRows(const std::string& sql, std::vector<Row>& out);
+
+    /**
+     * @brief 执行带参数 SELECT 查询，按行收集到 out
+     *
+     * 契约：返回值区分「空结果」与「出错」——成功且无行时返回 true 且 out 为空；
+     * 出错返回 false，out 被清空，lastError 可用（消费方 `LOG_ERROR(getLastError())`）。
+     *
+     * @param sql SQL 语句，使用 ? 作为占位符
+     * @param params 参数列表，按 SQL 中出现顺序绑定
+     * @param out 输出行集合（进入时清空；失败时保持为空）
+     */
+    bool queryRows(const std::string& sql, const std::vector<SqlParam>& params,
+                   std::vector<Row>& out);
+
+    /**
+     * @brief 整库快照备份（sqlite3_backup）：把当前主库完整复制到 destPath
+     *
+     * v1.4.0 工作项 2：自 bridge 的 user_export 下沉（原 bridge.cpp:410-442 的
+     * sqlite3_open/sqlite3_backup_init/step/finish/close 编排），使桥层不再直接持有原始连接。
+     * 失败返回 false，lastError 可用于 `LOG_ERROR(getLastError())`。
+     *
+     * @param destPath 目标文件路径（已存在时按 SQLite 语义覆盖）
+     * @return true 成功
+     */
+    bool backupTo(const std::string& destPath);
+
     /**
      * @brief 获取最后一次错误信息
      */
@@ -138,25 +154,6 @@ public:
 private:
     sqlite3* db;
     std::string lastError;
-    
-    /**
-     * @brief 绑定预处理语句参数
-     * @param stmt 预处理语句指针
-     * @param textParams 文本参数（按顺序绑定）
-     * @param realParams REAL 参数（接在文本参数之后绑定）
-     * @return true 成功，false 失败
-     */
-    bool bindParameters(sqlite3_stmt* stmt,
-                        const std::vector<std::string>& textParams,
-                        const std::vector<double>& realParams);
-
-    /**
-     * @brief 绑定预处理语句参数（混合类型）
-     * @param stmt 预处理语句指针
-     * @param params 参数列表（按顺序绑定）
-     * @return true 成功，false 失败
-     */
-    bool bindMixedParameters(sqlite3_stmt* stmt, const std::vector<SqlParam>& params);
 };
 
 #endif

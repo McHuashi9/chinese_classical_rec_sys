@@ -38,26 +38,18 @@ bool LearningIncrementRepository::addIncrement(int userId, int dimension, double
     
     const char* sql = "INSERT INTO learning_increments (user_id, dimension, delta, timestamp, type) "
                       "VALUES (?, ?, ?, ?, ?);";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("准备插入增量语句失败: {}", sqlite3_errmsg(db->getConnection()));
+
+    Statement stmt(db->getConnection(), sql);
+    if (!stmt.ok()) {
+        LOG_ERROR("准备插入增量语句失败: {}", stmt.error());
         return false;
     }
-    
-    sqlite3_bind_int(stmt, 1, userId);
-    sqlite3_bind_int(stmt, 2, dimension);
-    sqlite3_bind_double(stmt, 3, delta);
-    sqlite3_bind_int64(stmt, 4, static_cast<sqlite3_int64>(timestamp));
-    sqlite3_bind_text(stmt, 5, type.c_str(), -1, SQLITE_TRANSIENT);
-    
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
-    if (rc != SQLITE_DONE) {
-        LOG_ERROR("插入增量失败: {}", sqlite3_errmsg(db->getConnection()));
+    if (!stmt.bind({userId, dimension, delta, static_cast<int64_t>(timestamp), type})) {
+        LOG_ERROR("绑定插入增量参数失败: {}", stmt.error());
+        return false;
+    }
+    if (stmt.step() != SQLITE_DONE) {
+        LOG_ERROR("插入增量失败: {}", stmt.error());
         return false;
     }
     
@@ -75,30 +67,26 @@ std::vector<LearningIncrement> LearningIncrementRepository::getAllIncrements(int
     const char* sql = "SELECT id, user_id, dimension, delta, timestamp, type "
                       "FROM learning_increments WHERE user_id = ? "
                       "ORDER BY dimension, timestamp ASC;";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("准备查询所有增量语句失败: {}", sqlite3_errmsg(db->getConnection()));
+
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows)) {
+        LOG_ERROR("准备查询所有增量语句失败: {}", db->getLastError());
         return increments;
     }
-    
-    sqlite3_bind_int(stmt, 1, userId);
-    
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+
+    increments.reserve(rows.size());
+    for (const Row& row : rows) {
         LearningIncrement inc;
-        inc.id = sqlite3_column_int(stmt, 0);
-        inc.userId = sqlite3_column_int(stmt, 1);
-        inc.dimension = sqlite3_column_int(stmt, 2);
-        inc.delta = sqlite3_column_double(stmt, 3);
-        inc.timestamp = static_cast<time_t>(sqlite3_column_int64(stmt, 4));
-        const char* typeStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        inc.type = typeStr ? typeStr : "read";
+        inc.id = static_cast<int>(row.integer("id"));
+        inc.userId = static_cast<int>(row.integer("user_id"));
+        inc.dimension = static_cast<int>(row.integer("dimension"));
+        inc.delta = row.real("delta");
+        inc.timestamp = static_cast<time_t>(row.integer("timestamp"));
+        // NULL 才回退 'read'（旧实现是 text 指针为空时回退，空串仍是空串）
+        inc.type = row.isNull("type") ? std::string("read") : row.text("type");
         increments.push_back(inc);
     }
-    
-    sqlite3_finalize(stmt);
+
     return increments;
 }
 
@@ -117,30 +105,54 @@ bool LearningIncrementRepository::deleteIncrements(const std::vector<int>& ids) 
         sql += (i > 0) ? ", ?" : "?";
     }
     sql += ");";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql.c_str(), -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("准备批量删除增量语句失败: {}", sqlite3_errmsg(db->getConnection()));
+
+    std::vector<SqlParam> params;
+    params.reserve(ids.size());
+    for (const int id : ids) {
+        params.emplace_back(id);
+    }
+
+    Statement stmt(db->getConnection(), sql);
+    if (!stmt.ok()) {
+        LOG_ERROR("准备批量删除增量语句失败: {}", stmt.error());
         return false;
     }
-    
-    // 绑定所有参数
-    for (size_t i = 0; i < ids.size(); ++i) {
-        sqlite3_bind_int(stmt, static_cast<int>(i + 1), ids[i]);
+    if (!stmt.bind(params)) {
+        LOG_ERROR("绑定批量删除增量参数失败: {}", stmt.error());
+        return false;
     }
-    
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
-    if (rc != SQLITE_DONE) {
-        LOG_ERROR("批量删除增量失败: {}", sqlite3_errmsg(db->getConnection()));
+    if (stmt.step() != SQLITE_DONE) {
+        LOG_ERROR("批量删除增量失败: {}", stmt.error());
         return false;
     }
     
     LOG_DEBUG("批量删除 {} 条增量", ids.size());
     return true;
+}
+
+bool LearningIncrementRepository::deleteByDimensions(int userId, const std::vector<int>& dimensions) {
+    if (dimensions.empty()) {
+        return true;
+    }
+    if (!db || !db->getConnection()) {
+        return false;
+    }
+
+    // 与 bridge.cpp 原内联实现同形：user_id = ? AND dimension IN (?, ?, ...)
+    std::string sql = "DELETE FROM learning_increments WHERE user_id = ? AND dimension IN (";
+    for (size_t i = 0; i < dimensions.size(); ++i) {
+        sql += (i > 0) ? ", ?" : "?";
+    }
+    sql += ");";
+
+    std::vector<SqlParam> params;
+    params.reserve(dimensions.size() + 1);
+    params.emplace_back(userId);
+    for (const int dimension : dimensions) {
+        params.emplace_back(dimension);
+    }
+
+    return db->executeSQL(sql, params);
 }
 
 int LearningIncrementRepository::getIncrementCount(int userId) {
@@ -149,21 +161,12 @@ int LearningIncrementRepository::getIncrementCount(int userId) {
     }
     
     const char* sql = "SELECT COUNT(*) FROM learning_increments WHERE user_id = ?;";
-    
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr);
-    
-    if (rc != SQLITE_OK) {
+
+    // 出错与空结果都返回 0（与旧实现一致：prepare 失败/无行均静默 0）
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows) || rows.empty()) {
         return 0;
     }
-    
-    sqlite3_bind_int(stmt, 1, userId);
-    
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        count = sqlite3_column_int(stmt, 0);
-    }
-    
-    sqlite3_finalize(stmt);
-    return count;
+
+    return static_cast<int>(rows[0].integer(0));
 }

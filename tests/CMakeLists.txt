@@ -14,7 +14,16 @@ set(TEST_SOURCES
     test_recommendation_engine.cpp
     test_knowledge_tracker.cpp
     test_models.cpp
-    ${CMAKE_SOURCE_DIR}/bridge/bridge.cpp
+    test_statement.cpp
+    test_review_scheduler.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_shared.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_lifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_user.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_text.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_tracker.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_quiz.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_history.cpp
+    ${CMAKE_SOURCE_DIR}/bridge/bridge_log.cpp
 )
 
 # Catch2 编译源
@@ -45,6 +54,8 @@ configure_file(
 
 target_compile_definitions(run_tests PRIVATE
     TEST_DB_PATH="${CMAKE_CURRENT_BINARY_DIR}/test_classical.db"
+    # v1.4.0 工作项 3：q_key 单源对拍用例读取 Python 侧 INIT_Q_KEYS
+    CHECK_CONTENT_DB_PATH="${CMAKE_SOURCE_DIR}/scripts/project/check_content_db.py"
 )
 
 # 添加到 CTest（暂时绕过 Windows 平台路径问题）

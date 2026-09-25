@@ -331,16 +331,22 @@ def create_tables(conn: sqlite3.Connection) -> bool:
         ON questions(q_key) WHERE q_key != '';
     """)
     
-    conn.commit()
     return True
 
 
-def init_database(db_path: str, id_map: dict | None = None) -> bool:
+def init_database(db_path: str, id_map: dict | None = None,
+                  questions_json: str = "") -> bool:
     """初始化数据库并导入数据
 
     id_map: {q_key: 旧 id} 映射（export_question_id_map.py 导出）。
     提供时按 q_key 认领旧 id，新题尾部追加——老用户 quiz_attempts/review_items
     引用的 question_id 不漂移；None 时全新自增（首次建库）。
+
+    questions_json: 题库 JSON 路径。显式给出时锚定该文件（保证与 --db 同批次）；
+    留空时沿用默认 build/data/questions.json（与 --db 路径无关，向后兼容）。
+
+    整个建库（schema → 清空 → 写入 → user_version → 纯净断言）在单个事务内完成，
+    且先写到 <db>.tmp、提交成功后再原子替换目标库：任何失败都回到运行前状态。
     """
     start_time = time.time()
     db_dir = os.path.dirname(db_path)
@@ -370,11 +376,32 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
         for m in missing:
             print(f"  - {m}")
     
+    # 题库路径：显式 --questions-json 锚定该文件；否则沿用默认（避免静默取错批次）
+    if questions_json:
+        questions_file = questions_json
+    else:
+        questions_file = os.path.join(os.path.dirname(DB_PATH), "questions.json")
+        db_dir_abs = os.path.dirname(os.path.abspath(db_path))
+        q_dir_abs = os.path.dirname(os.path.abspath(questions_file))
+        if db_dir_abs != q_dir_abs:
+            print(f"提示: 题库默认取自 {questions_file}（与 --db 不同目录）；"
+                  f"如库与题库不属同一批次，请用 --questions-json 显式指定")
+
+    # 先建到临时文件，全部成功后再原子替换，失败时目标库逐字节不变
+    tmp_path = db_path + ".tmp"
+    conn = None
     try:
-        conn = sqlite3.connect(db_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        conn = sqlite3.connect(tmp_path)
+        conn.isolation_level = None                # 关掉 Python 隐式 BEGIN，全程手工控制事务
+        conn.execute("PRAGMA foreign_keys = ON")   # 必须在 BEGIN 之前（事务内为 no-op）
+        conn.execute("BEGIN IMMEDIATE")            # 立刻取 RESERVED 锁，避免中途升级失败
         create_tables(conn)
-        conn.execute("PRAGMA user_version = 1")
         cursor = conn.cursor()
+        # 外键方向：先删子表 questions，再删父表 classical_text（插入顺序仍为父→子）
+        cursor.execute("DELETE FROM questions")
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='questions'")
         cursor.execute("DELETE FROM classical_text")
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='classical_text'")
         
@@ -425,17 +452,13 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
                 ),
             )
         
-        conn.commit()
         elapsed = time.time() - start_time
         cursor.execute("SELECT COUNT(*) FROM classical_text")
         count = cursor.fetchone()[0]
 
-        # 导入题库（build/data/questions.json，generate_questions.py --json 生成）
+        # 导入题库（generate_questions.py --json 生成；路径由 --questions-json 或默认给出）
         q_imported = 0
-        questions_file = os.path.join(os.path.dirname(DB_PATH), "questions.json")
         if os.path.exists(questions_file):
-            cursor.execute("DELETE FROM questions")
-            cursor.execute("DELETE FROM sqlite_sequence WHERE name='questions'")
             title_to_id = {r[0]: r[1] for r in
                            cursor.execute("SELECT title, id FROM classical_text").fetchall()}
             with open(questions_file, encoding="utf-8") as f:
@@ -469,43 +492,35 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
                 # 显式 id 模式下让自增序列跟随最大 id
                 if qid is not None and (next_id is not None):
                     next_id = max(next_id, qid + 1)
-                if qid is None:
-                    cursor.execute(
-                        """
-                        INSERT INTO questions
-                        (text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
-                         context, mark_start, mark_len, q_key)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
-                         r["answer_index"], r["explanation"], r["difficulty"],
-                         r["dims"], r["seq"], r.get("context", ""),
-                         r.get("mark_start", -1), r.get("mark_len", 0), q_key),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO questions
-                        (id, text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
-                         context, mark_start, mark_len, q_key)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (qid, tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
-                         r["answer_index"], r["explanation"], r["difficulty"],
-                         r["dims"], r["seq"], r.get("context", ""),
-                         r.get("mark_start", -1), r.get("mark_len", 0), q_key),
-                    )
+                # 单条 14 列 INSERT：qid=None 时写 NULL，由 SQLite 自增（与显式 id 分支合并）
+                cursor.execute(
+                    """
+                    INSERT INTO questions
+                    (id, text_id, q_type, stem, options, answer_index, explanation, difficulty, dims, seq,
+                     context, mark_start, mark_len, q_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (qid, tid, r["q_type"], r["stem"], json.dumps(r["options"], ensure_ascii=False),
+                     r["answer_index"], r["explanation"], r["difficulty"],
+                     r["dims"], r["seq"], r.get("context", ""),
+                     r.get("mark_start", -1), r.get("mark_len", 0), q_key),
+                )
                 q_imported += 1
             if next_id is not None:
                 # 自增序列对齐：未来 AUTOINCREMENT 从当前最大 id+1 继续
                 cursor.execute("DELETE FROM sqlite_sequence WHERE name='questions'")
                 cursor.execute("INSERT INTO sqlite_sequence(name, seq) VALUES ('questions', ?)",
                                (max(used_ids, default=0),))
-            conn.commit()
             print(f"题库导入: {q_imported} 题（来源 {questions_file}"
                   f"{'，id-map 对齐 ' + str(len(used_ids)) + ' 题' if next_id is not None else ''}）")
         else:
+            if questions_json:
+                # 显式指定的题库缺失＝配置错误：直接失败回滚，避免静默产出无题库库
+                raise FileNotFoundError(f"题库文件不存在: {questions_file}")
             print(f"题库文件不存在（跳过）: {questions_file}")
+
+        # user_version 在数据写入之后、commit 之前（实测可回滚），与内容同生共死
+        conn.execute("PRAGMA user_version = 1")
 
         # 内容库纯净断言：只允许内容表 + SQLite 内部表，且 user_version=1
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -526,15 +541,33 @@ def init_database(db_path: str, id_map: dict | None = None) -> bool:
             raise RuntimeError(f"内容库 user_version 应为 1，实际为 {version}")
         print(f"内容库断言通过：表={sorted(tables - {'sqlite_sequence'})}，user_version={version}")
 
+        conn.commit()                   # 唯一 commit：断言全部通过后才落盘
         conn.close()
-        
+        conn = None
+        os.replace(tmp_path, db_path)   # 原子替换：失败时目标库逐字节不变
+
         print(f"导入完成: {count} 篇, 耗时 {elapsed:.2f}s")
         print(f"数据库: {db_path}")
         return True
         
-    except sqlite3.Error as e:
+    except Exception as e:
+        # 捕获面须覆盖断言 RuntimeError / OSError / JSONDecodeError / KeyError，全部回滚
+        if conn is not None:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass
         print(f"数据库错误: {e}")
         return False
+    finally:
+        if conn is not None:
+            conn.close()
+        # 成功路径的临时文件已被 os.replace 移走；失败路径在此清理，保证目标库不变
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 def main():
@@ -543,6 +576,9 @@ def main():
     ap.add_argument("--id-map", default="",
                     help="旧库 q_key→id 映射 JSON（export_question_id_map.py 导出），"
                          "用于题库 id 对齐（老用户复习数据不漂移）")
+    ap.add_argument("--questions-json", default="",
+                    help="题库 JSON 路径（默认 build/data/questions.json，与 --db 路径无关）；"
+                         "自定义 --db 时显式给出，避免库与题库来自两个批次")
     args = ap.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -556,7 +592,7 @@ def main():
     print(f"工作目录: {os.getcwd()}")
     print(f"数据库: {args.db}")
 
-    success = init_database(args.db, id_map)
+    success = init_database(args.db, id_map, args.questions_json)
 
     if success:
         print("数据初始化成功！")

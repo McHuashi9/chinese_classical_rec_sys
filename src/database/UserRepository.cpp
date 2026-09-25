@@ -103,52 +103,48 @@ bool UserRepository::initTable() {
         return false;
     }
 
-    // 迁移：为旧数据库添加 last_read_time 列（如果不存在）
-    db->executeSQL("ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;");  // 忽略错误
+    // ── 迁移：按列存在性补/删列（v1.4.0 工作项 1）─────────────────────────────
+    // 设计定稿：不提 PRAGMA user_version（它是 bridge 的打开门控，提升会让旧版二进制
+    // 拒绝打开用户库），也不再用「盲执行 ALTER + 忽略错误」；改用 dbschema::tableColumns()
+    // 内省。对已存在库的最终 schema 与旧实现等价（旧实现对已存在列执行 ALTER 失败即忽略），
+    // 且可重复执行、幂等。注：本仓代码原无「版本号快路径短路」，此项是「不引入」，无删除动作。
+    {
+        const std::set<std::string> userCols = tableColumns(c, "user");
+        const auto addUserColumn = [&](const std::string& column, const std::string& ddl) {
+            if (userCols.count(column)) return;
+            if (!db->executeSQL(ddl)) {
+                LOG_WARN("UserRepository: user 表补列 {} 失败: {}", column, db->getLastError());
+            }
+        };
 
-    // v1.0.0：强制初始化标记（仅版本 1 用户库可能缺列时补，旧 0 版会在 db_open 阶段被拒）
-    db->executeSQL("ALTER TABLE user ADD COLUMN initialized INTEGER NOT NULL DEFAULT 0;");  // 忽略错误
+        addUserColumn("last_read_time", "ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;");
+        // v1.0.0：强制初始化标记
+        addUserColumn("initialized",
+                      "ALTER TABLE user ADD COLUMN initialized INTEGER NOT NULL DEFAULT 0;");
 
-    // 迁移：移除已弃用的 name 列（如果存在）
-    db->executeSQL("ALTER TABLE user DROP COLUMN name;");  // 忽略错误（列不存在或 SQLite < 3.35.0）
+        // 迁移：添加基础能力字段
+        for (int i = 1; i <= 10; ++i) {
+            const std::string suffix = std::to_string(i) + "_base_ability";
+            addUserColumn("d" + suffix,
+                          "ALTER TABLE user ADD COLUMN d" + suffix + " REAL DEFAULT 0.0;");
+        }
+        // 迁移：悟性 η 与累计答题次数 N_j（答题效应，论文§5.3）
+        addUserColumn("eta", "ALTER TABLE user ADD COLUMN eta REAL DEFAULT 0.08;");
+        for (int i = 1; i <= 10; ++i) {
+            const std::string suffix = std::to_string(i) + "_quiz_count";
+            addUserColumn("d" + suffix,
+                          "ALTER TABLE user ADD COLUMN d" + suffix + " INTEGER DEFAULT 0;");
+        }
 
-    // 迁移：添加基础能力字段（如果不存在）
-    const char* baseAbilityMigrations[] = {
-        "ALTER TABLE user ADD COLUMN d1_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d2_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d3_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d4_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d5_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d6_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d7_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d8_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d9_base_ability REAL DEFAULT 0.0;",
-        "ALTER TABLE user ADD COLUMN d10_base_ability REAL DEFAULT 0.0;"
-    };
-    for (const char* migrate : baseAbilityMigrations) {
-        db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
+        // 迁移：移除已弃用的 name 列（如果存在）
+        if (userCols.count("name")) {
+            // SQLite < 3.35.0 不支持 DROP COLUMN，与旧实现一样忽略失败
+            db->executeSQL("ALTER TABLE user DROP COLUMN name;");
+        }
     }
 
-    // 迁移：悟性 η 与累计答题次数 N_j（答题效应，论文§5.3）
-    const char* quizMigrations[] = {
-        "ALTER TABLE user ADD COLUMN eta REAL DEFAULT 0.08;",
-        "ALTER TABLE user ADD COLUMN d1_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d2_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d3_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d4_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d5_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d6_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d7_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d8_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d9_quiz_count INTEGER DEFAULT 0;",
-        "ALTER TABLE user ADD COLUMN d10_quiz_count INTEGER DEFAULT 0;"
-    };
-    for (const char* migrate : quizMigrations) {
-        db->executeSQL(migrate);  // 忽略错误（列已存在时会失败）
-    }
-
-    // 测验闭环（作答流水 + 错题复习状态）：用户库无版本号机制，
-    // CREATE IF NOT EXISTS 幂等建表 + ALTER 补列，旧库打开即自动迁移
+    // 测验闭环（作答流水 + 错题复习状态）：CREATE IF NOT EXISTS 幂等建表 + 按列内省补列，
+    // 旧库打开即自动迁移
     const char* quizAttemptsSql =
         "CREATE TABLE IF NOT EXISTS quiz_attempts ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -180,11 +176,20 @@ bool UserRepository::initTable() {
         return false;
     }
 
-    // 旧 quiz_attempts 表补 user_id 列（必须先于依赖该列的索引创建）
-    db->executeSQL("ALTER TABLE quiz_attempts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1;");  // 忽略错误
-
-    // v1.0.0：初始化题标记
-    db->executeSQL("ALTER TABLE quiz_attempts ADD COLUMN is_init INTEGER DEFAULT 0;");  // 忽略错误
+    // 旧 quiz_attempts 表补列（必须先于依赖该列的索引创建）
+    {
+        const std::set<std::string> attemptCols = tableColumns(c, "quiz_attempts");
+        const auto addAttemptColumn = [&](const std::string& column, const std::string& ddl) {
+            if (attemptCols.count(column)) return;
+            if (!db->executeSQL(ddl)) {
+                LOG_WARN("UserRepository: quiz_attempts 补列 {} 失败: {}", column, db->getLastError());
+            }
+        };
+        addAttemptColumn("user_id",
+                         "ALTER TABLE quiz_attempts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1;");
+        // v1.0.0：初始化题标记
+        addAttemptColumn("is_init", "ALTER TABLE quiz_attempts ADD COLUMN is_init INTEGER DEFAULT 0;");
+    }
 
     if (!db->executeSQL(quizAttemptsIdxSql) || !db->executeSQL(quizAttemptsUserIdxSql)) {
         LOG_ERROR("UserRepository::initTable quiz index failed: {}", db->getLastError());
@@ -301,7 +306,9 @@ bool UserRepository::getUser(User& user, int userId) {
     char* errMsg = nullptr;
 
     struct GetUserData { User* user; bool found = false; } gd = {&user, false};
-    
+
+    // 批次 4（明示排除）：裸 sqlite3_exec + C 回调 + errMsg 空指针风险，本次工作项 1 不动。
+    // 该路径的 id 仍是字符串拼接 SQL（userId 为 int，无注入面），随批次 4 一并处理。
     int rc = sqlite3_exec(db->getConnection(), sql.c_str(), getUserCallback, &gd, &errMsg);
     
     if (rc != SQLITE_OK) {
@@ -328,6 +335,8 @@ bool UserRepository::saveUser(const User& user, int userId) {
     for (int i = 0; i < 10; ++i) {
         params.emplace_back(user.getQuizCount(i));
     }
+    // 批次 4（明示排除）：last_read_time 列是 INTEGER，这里仍按 double 绑定
+    // （recon-db-access.md §5.5）；改 int64 是可测的行为变化，不属本版「不改行为」边界。
     params.emplace_back(static_cast<double>(user.getLastReadTime()));
 
     return db->executeSQL(
@@ -374,28 +383,57 @@ bool UserRepository::saveUser(const User& user, int userId) {
     );
 }
 
+namespace {
+
+// 未删除档案数。返回 false = 查询失败（等价旧实现的 count < 0）。
+// 有意不在 helper 内打日志：失败语义由调用点决定（createProfile 静默失败、
+// createProfileInherit 与超限共用一条误导日志，见 recon-db-access.md §4.2）。
+bool profileCountOk(DatabaseManager* db, int& count)
+{
+    std::vector<Row> rows;
+    if (!db->queryRows("SELECT COUNT(*) FROM profiles WHERE deleted = 0;", rows) || rows.empty()) {
+        return false;
+    }
+    count = static_cast<int>(rows[0].integer(0));
+    return true;
+}
+
+// 未删除档案名是否可用。返回 false = 查询失败；available 仅在返回 true 时有效。
+bool profileNameAvailable(DatabaseManager* db, const std::string& name, bool& available)
+{
+    std::vector<Row> rows;
+    if (!db->queryRows("SELECT 1 FROM profiles WHERE deleted = 0 AND name = ?;",
+                       std::vector<SqlParam>{name}, rows)) {
+        return false;
+    }
+    available = rows.empty();
+    return true;
+}
+
+}  // namespace
+
 std::vector<ProfileInfo> UserRepository::listProfiles() {
     std::vector<ProfileInfo> out;
     if (!db || !db->getConnection()) return out;
 
     const char* sql = "SELECT id, name, deleted, created_at, last_used_at "
                       "FROM profiles WHERE deleted = 0 ORDER BY id ASC;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db->getConnection(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    std::vector<Row> rows;
+    if (!db->queryRows(sql, rows)) {
         LOG_ERROR("查询档案列表失败: {}", db->getLastError());
         return out;
     }
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+
+    out.reserve(rows.size());
+    for (const Row& row : rows) {
         ProfileInfo p;
-        p.id = sqlite3_column_int(stmt, 0);
-        const unsigned char* name = sqlite3_column_text(stmt, 1);
-        if (name) p.name = reinterpret_cast<const char*>(name);
-        p.deleted = sqlite3_column_int(stmt, 2);
-        p.createdAt = sqlite3_column_int64(stmt, 3);
-        p.lastUsedAt = sqlite3_column_int64(stmt, 4);
+        p.id = static_cast<int>(row.integer("id"));
+        p.name = row.text("name");  // NULL 列取空串，与旧回调的 if (name) 行为一致
+        p.deleted = static_cast<int>(row.integer("deleted"));
+        p.createdAt = row.integer("created_at");
+        p.lastUsedAt = row.integer("last_used_at");
         out.push_back(std::move(p));
     }
-    sqlite3_finalize(stmt);
     return out;
 }
 
@@ -403,6 +441,7 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
 
+    // 批次 4（明示排除）：裸 sqlite3_exec 事务控制 + err 空指针风险，本次不动
     char* err = nullptr;
     if (sqlite3_exec(c, "BEGIN IMMEDIATE", nullptr, nullptr, &err) != SQLITE_OK) {
         LOG_ERROR("createProfile BEGIN 失败: {}", err ? err : "?");
@@ -411,62 +450,37 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     }
 
     bool ok = true;
-    // 未删除档案同名拒绝（软删档案名可复用）；上限保护（防 UI 绕过/未来多端并发）
-    {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT COUNT(*) FROM profiles WHERE deleted = 0;", -1, &chk, nullptr)
-            != SQLITE_OK) {
-            ok = false;
-        } else {
-            const int count = (sqlite3_step(chk) == SQLITE_ROW) ? sqlite3_column_int(chk, 0) : -1;
-            sqlite3_finalize(chk);
-            if (count < 0) {
-                ok = false;
-            } else if (count >= kMaxProfiles) {
-                LOG_WARN("createProfile 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
-                ok = false;
-            }
-        }
+    // 上限保护（防 UI 绕过/未来多端并发）：查询失败与旧实现一致——静默失败，不并进「已达上限」
+    int count = 0;
+    if (!profileCountOk(db, count)) {
+        ok = false;
+    } else if (count >= kMaxProfiles) {
+        LOG_WARN("createProfile 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
+        ok = false;
     }
+    // 未删除档案同名拒绝（软删档案名可复用）
     if (ok) {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE deleted = 0 AND name = ?;", -1, &chk, nullptr)
-            != SQLITE_OK) {
+        bool available = false;
+        if (!profileNameAvailable(db, name, available)) {
+            ok = false;  // 查询失败：与旧 prepare 失败一致，不并进「重名拒绝」
+        } else if (!available) {
+            LOG_WARN("createProfile 重名拒绝: {}", name);
             ok = false;
-        } else {
-            sqlite3_bind_text(chk, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-            const bool dup = (sqlite3_step(chk) == SQLITE_ROW);
-            sqlite3_finalize(chk);
-            if (dup) {
-                LOG_WARN("createProfile 重名拒绝: {}", name);
-                ok = false;
-            }
         }
     }
 
-    sqlite3_stmt* stmt = nullptr;
     const int64_t now = static_cast<int64_t>(time(nullptr));
-    if (ok && sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
-                              "VALUES (?, ?, ?, 0);", -1, &stmt, nullptr) != SQLITE_OK) {
+    if (ok && !db->executeSQL("INSERT INTO profiles(name, created_at, last_used_at, deleted) "
+                              "VALUES (?, ?, ?, 0);",
+                              std::vector<SqlParam>{name, now, now})) {
         ok = false;
-    } else if (ok) {
-        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(stmt, 2, now);
-        sqlite3_bind_int64(stmt, 3, now);
-        ok = sqlite3_step(stmt) == SQLITE_DONE;
-        sqlite3_finalize(stmt);
     }
     if (ok) {
         outId = static_cast<int>(sqlite3_last_insert_rowid(c));
         // 能力等数据仍按 id 存 user 表：先建默认行，切换/首读时再初始化能力默认值
-        sqlite3_stmt* u = nullptr;
-        if (sqlite3_prepare_v2(c, "INSERT OR IGNORE INTO user(id) VALUES (?);", -1, &u, nullptr)
-            != SQLITE_OK) {
+        if (!db->executeSQL("INSERT OR IGNORE INTO user(id) VALUES (?);",
+                            std::vector<SqlParam>{outId})) {
             ok = false;
-        } else {
-            sqlite3_bind_int(u, 1, outId);
-            ok = sqlite3_step(u) == SQLITE_DONE;
-            sqlite3_finalize(u);
         }
     }
 
@@ -482,23 +496,21 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
 bool UserRepository::renameProfile(int userId, const std::string& name) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
-    sqlite3_stmt* stmt = nullptr;
     // 同名拒绝（排除自身，仅未删除档案参与比较）
     const char* sql =
         "UPDATE profiles SET name = ? "
         "WHERE id = ? AND deleted = 0 "
         "AND NOT EXISTS (SELECT 1 FROM profiles WHERE deleted = 0 AND name = ? AND id <> ?);";
-    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        LOG_ERROR("renameProfile prepare 失败: {}", sqlite3_errmsg(c));
+    Statement stmt(c, sql);
+    if (!stmt.ok()) {
+        LOG_ERROR("renameProfile prepare 失败: {}", stmt.error());
         return false;
     }
-    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 2, userId);
-    sqlite3_bind_text(stmt, 3, name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 4, userId);
-    const int rc = sqlite3_step(stmt);
+    if (!stmt.bind({name, userId, name, userId})) {
+        return false;
+    }
+    const int rc = stmt.step();
     const int changes = sqlite3_changes(c);
-    sqlite3_finalize(stmt);
     return rc == SQLITE_DONE && changes > 0;
 }
 
@@ -516,14 +528,16 @@ bool deleteUserDataRows(sqlite3* c, int userId)
         "DELETE FROM review_items WHERE user_id = ?;",
     };
     for (const char* sql : statements) {
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-            LOG_ERROR("deleteUserDataRows prepare 失败: {}", sqlite3_errmsg(c));
+        Statement stmt(c, sql);
+        if (!stmt.ok()) {
+            LOG_ERROR("deleteUserDataRows prepare 失败: {}", stmt.error());
             return false;
         }
-        sqlite3_bind_int(stmt, 1, userId);
-        const int rc = sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
+        if (!stmt.bind({userId})) {
+            LOG_ERROR("deleteUserDataRows 绑定失败: {}", stmt.error());
+            return false;
+        }
+        const int rc = stmt.step();
         if (rc != SQLITE_DONE) {
             LOG_ERROR("deleteUserDataRows 执行失败 rc={}", rc);
             return false;
@@ -546,29 +560,27 @@ bool UserRepository::deleteProfile(int userId) {
 
     bool ok = true;
     {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;",
-                               -1, &chk, nullptr) != SQLITE_OK) {
+        Statement stmt(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;");
+        if (!stmt.ok()) {
+            ok = false;
+        } else if (!stmt.bind({userId})) {
             ok = false;
         } else {
-            sqlite3_bind_int(chk, 1, userId);
-            ok = sqlite3_step(chk) == SQLITE_ROW;
-            sqlite3_finalize(chk);
+            ok = stmt.step() == SQLITE_ROW;
         }
     }
     if (ok) {
         ok = deleteUserDataRows(c, userId);
     }
     if (ok) {
-        sqlite3_stmt* stmt = nullptr;
-        const char* sql = "DELETE FROM profiles WHERE id = ? AND deleted = 0;";
-        if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        Statement stmt(c, "DELETE FROM profiles WHERE id = ? AND deleted = 0;");
+        if (!stmt.ok()) {
+            ok = false;
+        } else if (!stmt.bind({userId})) {
             ok = false;
         } else {
-            sqlite3_bind_int(stmt, 1, userId);
-            const int rc = sqlite3_step(stmt);
+            const int rc = stmt.step();
             const int changes = sqlite3_changes(c);
-            sqlite3_finalize(stmt);
             ok = rc == SQLITE_DONE && changes > 0;
         }
     }
@@ -588,16 +600,15 @@ bool UserRepository::purgeDeletedProfiles() {
 
     std::vector<int> ids;
     {
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT id FROM profiles WHERE deleted = 1;",
-                               -1, &stmt, nullptr) != SQLITE_OK) {
-            LOG_ERROR("purgeDeletedProfiles 查询失败: {}", sqlite3_errmsg(c));
+        std::vector<Row> rows;
+        if (!db->queryRows("SELECT id FROM profiles WHERE deleted = 1;", rows)) {
+            LOG_ERROR("purgeDeletedProfiles 查询失败: {}", db->getLastError());
             return false;
         }
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            ids.push_back(sqlite3_column_int(stmt, 0));
+        ids.reserve(rows.size());
+        for (const Row& row : rows) {
+            ids.push_back(static_cast<int>(row.integer("id")));
         }
-        sqlite3_finalize(stmt);
     }
     if (ids.empty()) return true;
 
@@ -614,17 +625,18 @@ bool UserRepository::purgeDeletedProfiles() {
             ok = false;
             break;
         }
-        sqlite3_stmt* del = nullptr;
-        const char* sql = "DELETE FROM profiles WHERE id = ? AND deleted = 1;";
-        if (sqlite3_prepare_v2(c, sql, -1, &del, nullptr) != SQLITE_OK) {
+        Statement del(c, "DELETE FROM profiles WHERE id = ? AND deleted = 1;");
+        if (!del.ok()) {
             ok = false;
             break;
         }
-        sqlite3_bind_int(del, 1, id);
-        if (sqlite3_step(del) != SQLITE_DONE) {
+        if (!del.bind({id})) {
+            ok = false;
+            break;
+        }
+        if (del.step() != SQLITE_DONE) {
             ok = false;
         }
-        sqlite3_finalize(del);
         if (!ok) break;
     }
 
@@ -640,58 +652,42 @@ bool UserRepository::purgeDeletedProfiles() {
 bool UserRepository::isProfileActive(int userId) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;";
-    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt, 1, userId);
-    const bool active = (sqlite3_step(stmt) == SQLITE_ROW);
-    sqlite3_finalize(stmt);
-    return active;
+    Statement stmt(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;");
+    if (!stmt.ok()) return false;
+    if (!stmt.bind({userId})) return false;
+    return stmt.step() == SQLITE_ROW;
 }
 
 bool UserRepository::touchProfile(int userId) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "UPDATE profiles SET last_used_at = ? WHERE id = ? AND deleted = 0;";
-    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(time(nullptr)));
-    sqlite3_bind_int(stmt, 2, userId);
-    const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
-    sqlite3_finalize(stmt);
-    return ok;
+    Statement stmt(c, "UPDATE profiles SET last_used_at = ? WHERE id = ? AND deleted = 0;");
+    if (!stmt.ok()) return false;
+    if (!stmt.bind({static_cast<int64_t>(time(nullptr)), userId})) return false;
+    return stmt.step() == SQLITE_DONE;
 }
 
 bool UserRepository::ensureProfileExists(int userId, const std::string& name) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
-    sqlite3_stmt* stmt = nullptr;
     const int64_t now = static_cast<int64_t>(time(nullptr));
-    const char* sql = "INSERT OR IGNORE INTO profiles(id, name, created_at, last_used_at, deleted) "
-                      "VALUES (?, ?, ?, ?, 0);";
-    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt, 1, userId);
-    sqlite3_bind_text(stmt, 2, name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 3, now);
-    sqlite3_bind_int64(stmt, 4, now);
-    const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
-    sqlite3_finalize(stmt);
-    return ok;
+    Statement stmt(c, "INSERT OR IGNORE INTO profiles(id, name, created_at, last_used_at, deleted) "
+                      "VALUES (?, ?, ?, ?, 0);");
+    if (!stmt.ok()) return false;
+    if (!stmt.bind({userId, name, now, now})) return false;
+    return stmt.step() == SQLITE_DONE;
 }
 
 bool UserRepository::isInitialized(int userId) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT initialized FROM user WHERE id = ?;";
-    if (sqlite3_prepare_v2(c, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt, 1, userId);
-    bool initialized = false;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        initialized = sqlite3_column_int(stmt, 0) != 0;
-    }
-    sqlite3_finalize(stmt);
-    return initialized;
+    Statement stmt(c, "SELECT initialized FROM user WHERE id = ?;");
+    if (!stmt.ok()) return false;
+    if (!stmt.bind({userId})) return false;
+    if (stmt.step() != SQLITE_ROW) return false;
+    Row row;
+    stmt.readRow(row);
+    return row.integer("initialized") != 0;
 }
 
 bool UserRepository::setInitialized(int userId) {
@@ -714,61 +710,47 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
     }
 
     bool ok = true;
-    // 与 createProfile 相同的约束：上限、未删除档案重名拒绝
-    {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT COUNT(*) FROM profiles WHERE deleted = 0;", -1, &chk, nullptr)
-            != SQLITE_OK) {
-            ok = false;
-        } else {
-            const int count = (sqlite3_step(chk) == SQLITE_ROW) ? sqlite3_column_int(chk, 0) : -1;
-            sqlite3_finalize(chk);
-            if (count < 0 || count >= kMaxProfiles) {
-                LOG_WARN("createProfileInherit 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
-                ok = false;
-            }
-        }
+    // 与 createProfile 相同的约束：上限、未删除档案重名拒绝。
+    // 现状语义（recon §4.2）：查询失败与超限共用同一条「已达上限」误导日志；
+    // 该合并只保留在调用点，helper 保持中性（返回是否查询成功）。
+    int count = 0;
+    if (!profileCountOk(db, count) || count >= kMaxProfiles) {
+        LOG_WARN("createProfileInherit 已达上限 {} 个档案，拒绝创建 {}", kMaxProfiles, name);
+        ok = false;
     }
     if (ok) {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE deleted = 0 AND name = ?;", -1, &chk, nullptr)
-            != SQLITE_OK) {
+        bool available = false;
+        if (!profileNameAvailable(db, name, available)) {
             ok = false;
-        } else {
-            sqlite3_bind_text(chk, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-            const bool dup = (sqlite3_step(chk) == SQLITE_ROW);
-            sqlite3_finalize(chk);
-            if (dup) {
-                LOG_WARN("createProfileInherit 重名拒绝: {}", name);
-                ok = false;
-            }
+        } else if (!available) {
+            LOG_WARN("createProfileInherit 重名拒绝: {}", name);
+            ok = false;
         }
     }
-    // 源档案必须存在、未删除且已完成初始化
+    // 源档案必须存在、未删除
     if (ok) {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;", -1, &chk, nullptr)
-            != SQLITE_OK) {
+        Statement stmt(c, "SELECT 1 FROM profiles WHERE id = ? AND deleted = 0;");
+        if (!stmt.ok()) {
             ok = false;
-        } else {
-            sqlite3_bind_int(chk, 1, sourceId);
-            const bool active = (sqlite3_step(chk) == SQLITE_ROW);
-            sqlite3_finalize(chk);
-            if (!active) {
-                LOG_WARN("createProfileInherit 源档案不存在或已删除 id={}", sourceId);
-                ok = false;
-            }
+        } else if (!stmt.bind({sourceId})) {
+            ok = false;
+        } else if (stmt.step() != SQLITE_ROW) {
+            LOG_WARN("createProfileInherit 源档案不存在或已删除 id={}", sourceId);
+            ok = false;
         }
     }
+    // 且已完成初始化
     if (ok) {
-        sqlite3_stmt* chk = nullptr;
-        if (sqlite3_prepare_v2(c, "SELECT initialized FROM user WHERE id = ?;", -1, &chk, nullptr)
-            != SQLITE_OK) {
+        Statement stmt(c, "SELECT initialized FROM user WHERE id = ?;");
+        if (!stmt.ok()) {
+            ok = false;
+        } else if (!stmt.bind({sourceId})) {
             ok = false;
         } else {
-            sqlite3_bind_int(chk, 1, sourceId);
-            const bool initialized = (sqlite3_step(chk) == SQLITE_ROW) && sqlite3_column_int(chk, 0) != 0;
-            sqlite3_finalize(chk);
+            Row row;
+            const bool hasRow = stmt.step() == SQLITE_ROW;
+            if (hasRow) stmt.readRow(row);
+            const bool initialized = hasRow && row.integer("initialized") != 0;
             if (!initialized) {
                 LOG_WARN("createProfileInherit 源档案未完成初始化 id={}", sourceId);
                 ok = false;
@@ -777,16 +759,10 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
     }
 
     const int64_t now = static_cast<int64_t>(time(nullptr));
-    sqlite3_stmt* stmt = nullptr;
-    if (ok && sqlite3_prepare_v2(c, "INSERT INTO profiles(name, created_at, last_used_at, deleted) "
-                               "VALUES (?, ?, ?, 0);", -1, &stmt, nullptr) != SQLITE_OK) {
+    if (ok && !db->executeSQL("INSERT INTO profiles(name, created_at, last_used_at, deleted) "
+                              "VALUES (?, ?, ?, 0);",
+                              std::vector<SqlParam>{name, now, now})) {
         ok = false;
-    } else if (ok) {
-        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(stmt, 2, now);
-        sqlite3_bind_int64(stmt, 3, now);
-        ok = sqlite3_step(stmt) == SQLITE_DONE;
-        sqlite3_finalize(stmt);
     }
     if (ok) {
         outId = static_cast<int>(sqlite3_last_insert_rowid(c));
@@ -813,15 +789,14 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
             "d1_quiz_count, d2_quiz_count, d3_quiz_count, d4_quiz_count, d5_quiz_count, "
             "d6_quiz_count, d7_quiz_count, d8_quiz_count, d9_quiz_count, d10_quiz_count, "
             "last_read_time, 1 FROM user WHERE id = ?;";
-        sqlite3_stmt* u = nullptr;
-        if (sqlite3_prepare_v2(c, sql, -1, &u, nullptr) != SQLITE_OK) {
-            LOG_ERROR("createProfileInherit 复制 user 准备失败: {}", sqlite3_errmsg(c));
+        Statement u(c, sql);
+        if (!u.ok()) {
+            LOG_ERROR("createProfileInherit 复制 user 准备失败: {}", u.error());
+            ok = false;
+        } else if (!u.bind({outId, sourceId})) {
             ok = false;
         } else {
-            sqlite3_bind_int(u, 1, outId);
-            sqlite3_bind_int(u, 2, sourceId);
-            ok = sqlite3_step(u) == SQLITE_DONE;
-            sqlite3_finalize(u);
+            ok = u.step() == SQLITE_DONE;
         }
     }
 
@@ -840,25 +815,28 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
             "SELECT ?, question_id, text_id, correct_streak, wrong_count, next_review_at FROM review_items WHERE user_id = ?;",
         };
         for (const char* sql : copies) {
-            sqlite3_stmt* s = nullptr;
-            if (sqlite3_prepare_v2(c, sql, -1, &s, nullptr) != SQLITE_OK) {
-                LOG_ERROR("createProfileInherit 复制表准备失败: {}", sqlite3_errmsg(c));
+            Statement s(c, sql);
+            if (!s.ok()) {
+                LOG_ERROR("createProfileInherit 复制表准备失败: {}", s.error());
                 ok = false;
                 break;
             }
-            sqlite3_bind_int(s, 1, outId);
-            sqlite3_bind_int(s, 2, sourceId);
-            if (sqlite3_step(s) != SQLITE_DONE) {
-                LOG_ERROR("createProfileInherit 复制表失败: {}", sqlite3_errmsg(c));
+            if (!s.bind({outId, sourceId})) {
+                LOG_ERROR("createProfileInherit 复制表绑定失败: {}", s.error());
+                ok = false;
+                break;
+            }
+            if (s.step() != SQLITE_DONE) {
+                LOG_ERROR("createProfileInherit 复制表失败: {}", s.error());
                 ok = false;
             }
-            sqlite3_finalize(s);
             if (!ok) break;
         }
     }
 
     // 自增序列对齐（profiles 已由 AUTOINCREMENT 自动维护，其余显式插入后保险对齐）
     if (ok) {
+        // 批次 4（明示排除）：裸 sqlite3_exec（拼接表名，来源为硬编码白名单）
         for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts", "profiles"}) {
             const std::string upd = "UPDATE sqlite_sequence SET seq = "
                 "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "
