@@ -97,7 +97,17 @@ bash scripts/project/publish_data.sh
    - 在 CHANGELOG 生成 `[X.Y.Z]` 头部和版本链接
    - 自动把最新 CHANGELOG 的 Added / Changed / Fixed 同步到 `flutter_app/assets/data/announcement.md` 的“版本改动”，并更新 front matter `id`
 3. 人工检查/整理 CHANGELOG 的发布描述；若改动过 CHANGELOG 文案，重跑 `bash scripts/project/sync_announcement.sh X.Y.Z`。
-4. 人工编辑 `flutter_app/assets/data/announcement.md` 的作者的话（脚本不会覆盖该部分）。
-5. 提交并推送 `dev`（提交信息可参考 `CONTRIBUTING.md`，例如 `release: vX.Y.Z`）。
-6. 合并到 `main` 并打 tag `vX.Y.Z`，推送 tag。
-7. 等待 CI 构建/发布；如使用 `gh` 可关注 release 状态。
+   - 注意公告“版本改动”按 `### Added|Changed|Fixed` 下的 `- ` 条目逐条抓取，**引用块（`>`）不会进公告**；条目写太长会原样显示在 App 内公告里，压到一两句为宜。
+4. **改完版本号要重新 configure**：根 `CMakeLists.txt` 与 `flutter_app/android/app/CMakeLists.txt` 都在 CMake configure 期读 `pubspec.yaml`，而 CMake / Gradle `.cxx` 并不把 pubspec 当依赖。只跑增量构建会得到**内嵌旧版本号**的原生库（表现为启动横幅 `===== vX.Y.Z 启动 =====` 与 APK 版本不一致）。本地构建/验收前执行：
+
+   ```bash
+   rm -rf build flutter_app/android/app/.cxx   # 或至少重跑 cmake -B build
+   cmake -B build && cmake --build build -j$(nproc) --target chinese_core
+   strings build/libchinese_core.so | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'   # 应等于新版本号
+   ```
+
+   CI 从干净环境构建，不受此影响（纯本地陷阱）。
+5. 人工编辑 `flutter_app/assets/data/announcement.md` 的作者的话（脚本不会覆盖该部分）。
+6. 提交并推送 `dev`（提交信息可参考 `CONTRIBUTING.md`，例如 `release: vX.Y.Z`）。
+7. 合并到 `main` 并打 tag `vX.Y.Z`，推送 tag。
+8. 等待 CI 构建/发布；如使用 `gh` 可关注 release 状态。

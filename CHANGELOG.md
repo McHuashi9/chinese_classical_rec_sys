@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-25
+
 ### Changed
 
 - **文言文库数据包更靠得住**：数据包重建改为「要么全成功、要么完全不动」——以前中途失败可能留下「新文章 + 旧题库」的坏数据包，界面不报错但答题会对不上文章；现在失败时手机里的旧数据包保持原样。发布前的自动校验也新增了外键完整性检查，坏包不会再被放出去。
@@ -591,3 +593,4 @@ C++ CLI 原型。
 [1.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.0
 [1.3.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.1
 [1.3.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.2
+[1.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.0
