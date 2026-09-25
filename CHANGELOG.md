@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-09-25
+
 ### Changed
 
 - **文章详情「预计阅读收益」默认折叠**：以前直接铺开 10 条维度百分比，认知负担重；现在只显示「综合收益 + 10 维平均」，点「展开 10 维明细」才看逐维明细。
@@ -582,3 +584,4 @@ C++ CLI 原型。
 [1.2.3]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.2.3
 [1.3.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.0
 [1.3.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.1
+[1.3.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.2
