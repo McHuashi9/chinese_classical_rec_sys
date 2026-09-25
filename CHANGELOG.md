@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-26
+
 ### Fixed
 
 - **恢复 iOS 构建**：v1.4.0 的 iOS 包因一处编译错误未能产出（构建在 iOS 15 部署目标下不可用），已修复，本轮重新提供 iOS 安装包。
@@ -598,3 +600,4 @@ C++ CLI 原型。
 [1.3.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.1
 [1.3.2]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.3.2
 [1.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.0
+[1.4.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.1
