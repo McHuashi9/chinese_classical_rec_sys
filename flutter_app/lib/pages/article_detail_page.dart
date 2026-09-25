@@ -128,7 +128,7 @@ class ArticleDetailPage extends StatelessWidget {
                 text.difficulties.length == abilityCount) ...[
               _buildDifficultyMatchSection(context, text, userCtrl.user!),
               SizedBox(height: context.gapLg),
-              _buildEstimatedGainSection(context, text, userCtrl.user!),
+              _EstimatedGainSection(text: text, user: userCtrl.user!),
               SizedBox(height: context.gapLg),
             ],
             if (text.background.isNotEmpty) ...[
@@ -219,12 +219,53 @@ class ArticleDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildEstimatedGainSection(
-      BuildContext context, ChineseText text, User user) {
-    final gains = <double>[];
-    for (int i = 0; i < abilityCount; i++) {
-      gains.add(_learningGain(text.difficulties[i], user.getAbility(i)));
+  void _startReading(BuildContext context, ChineseText text) async {
+    final readingCtrl = context.read<ReadingController>();
+    final coord = context.read<AppCoordinator>();
+    if (readingCtrl.hasUnrecordedReading &&
+        readingCtrl.readingText?.id != text.id) {
+      readingCtrl.pauseTimer();
+      final discard = await showConfirmDialog(
+        context,
+        title: '确认切换',
+        content: '当前文章未达到本文最低阅读时间，确定放弃？',
+        confirmLabel: '放弃',
+      );
+      if (!discard) {
+        readingCtrl.resumeTimer();
+        return;
+      }
+      readingCtrl.discardReading();
     }
+    coord.loadTextForReading(text.id);
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+}
+
+/// 预计阅读收益区块：默认折叠为「综合收益 + 10 维平均」，展开后才渲染
+/// 10 条维度明细（P6-b：真机验收反馈一次铺 10 条对普通用户认知负担重）。
+class _EstimatedGainSection extends StatefulWidget {
+  final ChineseText text;
+  final User user;
+
+  const _EstimatedGainSection({required this.text, required this.user});
+
+  @override
+  State<_EstimatedGainSection> createState() => _EstimatedGainSectionState();
+}
+
+class _EstimatedGainSectionState extends State<_EstimatedGainSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final gains = <double>[
+      for (int i = 0; i < abilityCount; i++)
+        _learningGain(
+            widget.text.difficulties[i], widget.user.getAbility(i)),
+    ];
     final total = gains.reduce((a, b) => a + b) / gains.length;
     final totalPct = (total * 100).toStringAsFixed(1);
 
@@ -241,6 +282,14 @@ class ArticleDetailPage extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: context.appColors.inkSecondary,
                   ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+              child: Text(_expanded ? '收起明细' : '展开 10 维明细'),
             ),
           ],
         ),
@@ -269,9 +318,11 @@ class ArticleDetailPage extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: context.gapMedium),
-        ...List.generate(
-            abilityCount, (i) => _buildGainBar(context, i, gains[i])),
+        if (_expanded) ...[
+          SizedBox(height: context.gapMedium),
+          ...List.generate(
+              abilityCount, (i) => _buildGainBar(context, i, gains[i])),
+        ],
       ],
     );
   }
@@ -329,30 +380,6 @@ class ArticleDetailPage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  void _startReading(BuildContext context, ChineseText text) async {
-    final readingCtrl = context.read<ReadingController>();
-    final coord = context.read<AppCoordinator>();
-    if (readingCtrl.hasUnrecordedReading &&
-        readingCtrl.readingText?.id != text.id) {
-      readingCtrl.pauseTimer();
-      final discard = await showConfirmDialog(
-        context,
-        title: '确认切换',
-        content: '当前文章未达到本文最低阅读时间，确定放弃？',
-        confirmLabel: '放弃',
-      );
-      if (!discard) {
-        readingCtrl.resumeTimer();
-        return;
-      }
-      readingCtrl.discardReading();
-    }
-    coord.loadTextForReading(text.id);
-    if (context.mounted) {
-      Navigator.of(context).pop();
-    }
   }
 }
 

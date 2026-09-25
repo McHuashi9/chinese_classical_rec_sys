@@ -203,9 +203,23 @@ void main() {
     expect(find.text('综合收益 '), findsOneWidget);
     expect(find.text('87.4%'), findsOneWidget);
     expect(find.text('  ·  10 维平均'), findsOneWidget);
+    // 默认折叠：不渲染 10 条维度明细
+    expect(find.text('平均句长'), findsNothing);
+    expect(find.text('语义复杂度'), findsNothing);
+    expect(find.text('87%'), findsNothing);
+
+    // 展开后才渲染 10 维明细
+    await tester.tap(find.text('展开 10 维明细'));
+    await tester.pumpAndSettle();
     expect(find.text('平均句长'), findsOneWidget);
     expect(find.text('语义复杂度'), findsOneWidget);
     expect(find.text('87%'), findsNWidgets(10));
+
+    // 再次点击收起
+    await tester.tap(find.text('收起明细'));
+    await tester.pumpAndSettle();
+    expect(find.text('平均句长'), findsNothing);
+    expect(find.text('87%'), findsNothing);
   });
 
   testWidgets('能力 0.3、难度 0.5 → 综合收益 96.2%', (tester) async {
@@ -225,6 +239,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('96.2%'), findsOneWidget);
+    await tester.tap(find.text('展开 10 维明细'));
+    await tester.pumpAndSettle();
     expect(find.text('96%'), findsNWidgets(10));
   });
 

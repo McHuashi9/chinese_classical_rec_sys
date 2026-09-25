@@ -172,7 +172,7 @@ class _InitOnboardingPageState extends State<InitOnboardingPage> {
               ],
               SizedBox(height: context.gapXl),
               Text(
-                '已完成 $_answeredCount/${_initQuestions?.length ?? 0} 题',
+                '已完成 $_answeredCount/${_initQuestions?.length ?? 0} 题 · 已保存，可稍后继续',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: context.appColors.inkSecondary,
                     ),

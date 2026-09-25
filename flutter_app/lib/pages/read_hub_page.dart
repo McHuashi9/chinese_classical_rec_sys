@@ -704,7 +704,8 @@ class _AuthorGroupState extends State<_AuthorGroup> {
     return ExpansionTile(
       initiallyExpanded: false,
       tilePadding: const EdgeInsetsDirectional.only(start: 48),
-      childrenPadding: const EdgeInsetsDirectional.only(start: 48),
+      // P7-1：条目比分组头再进一层（72 vs 48），展开后能一眼看出层级归属
+      childrenPadding: const EdgeInsetsDirectional.only(start: 72),
       onExpansionChanged: (v) => setState(() => _expanded = v),
       // ExpansionTile 自带的展开箭头没有可读标签，标签挂在标题节点上。
       title: Semantics(

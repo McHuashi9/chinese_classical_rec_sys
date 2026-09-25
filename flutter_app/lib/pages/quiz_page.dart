@@ -392,26 +392,55 @@ class _QuizPageState extends State<QuizPage> {
                   if (_index > 0) SizedBox(width: context.gapMedium),
                   Expanded(
                     flex: 2,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: context.accent,
-                        foregroundColor: context.appColors.onAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      onPressed:
-                          _isLast ? (_allowSubmit ? _submit : null) : _next,
-                      child: Text(
-                        _isLast ? (widget.isInitPart ? '完成本篇' : '提交') : '下一题',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: context.appColors.onAccent,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                      ),
-                    ),
+                    child: !_isLast && _choices[_index] == null
+                        // P3：未作答时「下一题」降级为次按钮样式（仍可跳过，行为不变）；
+                        // 选中后恢复主按钮，避免"满血样式但点了才提示"的误导。
+                        ? OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: context.accent,
+                              side: BorderSide(color: context.accent),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            onPressed: _next,
+                            child: Text(
+                              '下一题',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: context.accent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          )
+                        : FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: context.accent,
+                              foregroundColor: context.appColors.onAccent,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            onPressed: _isLast
+                                ? (_allowSubmit ? _submit : null)
+                                : _next,
+                            child: Text(
+                              _isLast
+                                  ? (widget.isInitPart ? '完成本篇' : '提交')
+                                  : '下一题',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: context.appColors.onAccent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
                   ),
                 ],
               ),
@@ -452,7 +481,8 @@ class _QuizPageState extends State<QuizPage> {
             key: _originalButtonKey,
             tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
             icon: Icon(
-              _viewIndex == 0 ? Icons.menu_book : Icons.edit_note,
+              // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的「阅读」撞车
+              _viewIndex == 0 ? Icons.article_outlined : Icons.quiz_outlined,
               color: context.appColors.ink,
             ),
             onPressed: _onToggleTap,

@@ -230,7 +230,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('请完成 6 道题'), findsOneWidget);
-    expect(find.text('已完成 0/0 题'), findsOneWidget);
+    expect(find.text('已完成 0/0 题 · 已保存，可稍后继续'), findsOneWidget);
   });
 
   testWidgets('按篇作答后统一提交初始化题', (tester) async {
@@ -264,7 +264,7 @@ void main() {
     }
     await tester.tap(find.text('完成本篇'));
     await tester.pumpAndSettle();
-    expect(find.text('已完成 3/6 题'), findsOneWidget);
+    expect(find.text('已完成 3/6 题 · 已保存，可稍后继续'), findsOneWidget);
 
     // 第二篇：完成 3 题后返回
     await tester.tap(find.text('做题').last);
@@ -279,7 +279,7 @@ void main() {
     }
     await tester.tap(find.text('完成本篇'));
     await tester.pumpAndSettle();
-    expect(find.text('已完成 6/6 题'), findsOneWidget);
+    expect(find.text('已完成 6/6 题 · 已保存，可稍后继续'), findsOneWidget);
     expect(find.text('提交 6 题初始化'), findsOneWidget);
 
     // 统一提交：一次传入 6 个 qid/choice
@@ -455,7 +455,7 @@ void main() {
       await completeReading(tester, 10);
       await answerArticle(tester, '严先生祠堂记');
 
-      expect(find.text('已完成 3/6 题'), findsOneWidget);
+      expect(find.text('已完成 3/6 题 · 已保存，可稍后继续'), findsOneWidget);
       expect(find.text('请先阅读两篇文章'), findsNothing);
       expect(find.text('还需阅读：周郑交质'), findsOneWidget);
       // 「已读」标记只在已读完那一篇的卡片上，另一篇仍是「阅读」按钮。

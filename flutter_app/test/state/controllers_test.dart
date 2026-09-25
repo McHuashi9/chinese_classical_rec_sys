@@ -12,6 +12,17 @@ import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
+import '../helpers/quiz_test_support.dart';
+
+/// 阅读写库可控的 tracker：[readOk] 为 false 时 applyRead 返回 null（模拟写库失败）。
+class _ReadEffectTracker extends FakeQuizTracker {
+  bool readOk = false;
+
+  @override
+  User? applyRead(User user, int textId, double readTime) =>
+      readOk ? User.allocate(calloc) : null;
+}
+
 void main() {
   group('NavigationController', () {
     late NavigationController nav;
@@ -368,6 +379,28 @@ void main() {
       coord.settleReadingAfterDiscardChoice(discard: true);
       expect(readingCtrl.isReading, isFalse);
       expect(readingCtrl.hasUnrecordedReading, isFalse);
+    });
+
+    testWidgets('写库失败不置已读（按写入返回码标记）', (tester) async {
+      final tracker = _ReadEffectTracker();
+      userCtrl.initTracker(tracker);
+      userCtrl.setUser(User.allocate(calloc));
+      // setUp 里 loadText 启动的计时器在 fake async 区之外，先重启到用例内再推进时钟
+      readingCtrl.pauseTimer();
+      readingCtrl.startTimer();
+      await tester.pump(const Duration(seconds: 9));
+      readingCtrl.pauseTimer();
+      expect(readingCtrl.elapsedSeconds, greaterThanOrEqualTo(8),
+          reason: '前置：应已超过本篇最低阅读时间（charCount=20 → 8s）');
+
+      tracker.readOk = false;
+      coord.applyReadingEffect();
+      expect(readTracker.isTextRead(1), isFalse,
+          reason: '写库失败不得置已读（否则本会话内守卫会拦掉补记）');
+
+      tracker.readOk = true;
+      coord.applyReadingEffect();
+      expect(readTracker.isTextRead(1), isTrue, reason: '下次结算应补记成功');
     });
   });
 }

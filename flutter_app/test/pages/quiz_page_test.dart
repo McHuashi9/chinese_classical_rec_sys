@@ -260,6 +260,30 @@ void main() {
     expect(find.text('提交失败，请重试'), findsOneWidget);
   });
 
+  testWidgets('未作答时「下一题」为次按钮样式，选中后恢复主按钮（P3 降级样式）',
+      (tester) async {
+    setQuizViewport(tester, height: 1000);
+    final questions = fakeQuestions(2);
+
+    await tester.pumpWidget(wrapQuizPage(QuizPage(
+      articleTitle: '岳阳楼记',
+      questions: questions,
+    )));
+    await tester.pumpAndSettle();
+
+    // 未作答：次按钮，但仍可点（行为不变：不强制作答）
+    final nextOutlined = find.widgetWithText(OutlinedButton, '下一题');
+    expect(nextOutlined, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(nextOutlined).onPressed, isNotNull);
+    expect(find.widgetWithText(FilledButton, '下一题'), findsNothing);
+
+    // 选中后恢复主按钮
+    await tester.tap(find.text('选项2释义'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, '下一题'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '下一题'), findsNothing);
+  });
+
   testWidgets('数据同步中（syncing）提交被短路：提示稍后重试，不判分', (tester) async {
     setQuizViewport(tester, height: 1000);
     final questions = fakeQuestions(1);
@@ -511,7 +535,7 @@ void main() {
     expect(find.text('第 1/1 题'), findsOneWidget);
     expect(find.byTooltip('查看原文'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.tap(find.byIcon(Icons.article_outlined));
     await tester.pumpAndSettle();
 
     // 仍在同一路由内（方案 D：页内视图翻转），原文正文可见
@@ -521,7 +545,7 @@ void main() {
 
     // 切回题目：按钮 tooltip 反向，答题视图恢复
     expect(find.byTooltip('返回题目'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.tap(find.byIcon(Icons.quiz_outlined));
     await tester.pumpAndSettle();
     expect(find.text('第 1/1 题'), findsOneWidget);
     expect(find.byTooltip('查看原文'), findsOneWidget);
@@ -545,9 +569,9 @@ void main() {
     await tester.pump();
 
     // 往返一次原文视图
-    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.tap(find.byIcon(Icons.article_outlined));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.tap(find.byIcon(Icons.quiz_outlined));
     await tester.pumpAndSettle();
 
     // 进度与答案都还在：末题已答 → 提交按钮可用
@@ -583,7 +607,7 @@ void main() {
       userCtrl: userCtrl,
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.tap(find.byIcon(Icons.article_outlined));
     await tester.pumpAndSettle();
 
     // ReadingFrame 的“完成阅读/放弃”不得出现在对照视图里
@@ -675,13 +699,13 @@ void main() {
     final before = readingCtrl.elapsedSeconds;
     expect(before, greaterThan(0), reason: '活动会话应在计时中');
 
-    await tester.tap(find.byIcon(Icons.menu_book));
+    await tester.tap(find.byIcon(Icons.article_outlined));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 2));
     // 复用同一控制器 → 原文视图里计时不停
     expect(readingCtrl.elapsedSeconds, greaterThan(before));
 
-    await tester.tap(find.byIcon(Icons.edit_note));
+    await tester.tap(find.byIcon(Icons.quiz_outlined));
     await tester.pumpAndSettle();
 
     // 只切视图不是退出：不结算、会话仍在

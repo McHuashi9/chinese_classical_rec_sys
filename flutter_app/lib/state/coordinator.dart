@@ -328,8 +328,10 @@ class AppCoordinator {
         text != null &&
         !readTracker.isTextRead(textId) &&
         seconds >= minReadTimeSeconds(text.charCount)) {
-      readTracker.markEffectApplied(textId);
+      // 按写库返回码决定是否标记已读（与 recordInitRead 同口径）：先标记后写库
+      // 会在写库失败时把内存置为已读，本会话内守卫不再补记、界面误报已读。
       if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
+        readTracker.markEffectApplied(textId);
         _statsGeneration++;
       }
     }
