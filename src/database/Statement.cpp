@@ -1,6 +1,5 @@
 #include "database/Statement.h"
 
-#include <charconv>
 #include <cstdlib>
 #include <type_traits>
 #include <utility>
@@ -52,18 +51,20 @@ bool Row::isNull(int col) const
 std::string Row::text(int col) const
 {
     if (col < 0 || col >= columnCount()) return {};
-    if (nulls_[static_cast<size_t>(col)]) return {};
+    const auto idx = static_cast<size_t>(col);
+    if (nulls_[idx]) return {};
 
-    const SqlParam& value = values_[static_cast<size_t>(col)];
+    // 数值列优先返回 SQLite 自身的文本形式（与存储格式一致；也避免依赖
+    // 浮点版 std::to_chars——libc++ 在 iOS < 16.3 上不可用）
+    if (idx < sqliteText_.size() && !sqliteText_[idx].empty()) {
+        return sqliteText_[idx];
+    }
+
+    const SqlParam& value = values_[idx];
     if (const auto* s = std::get_if<std::string>(&value)) return *s;
     if (const auto* i64 = std::get_if<int64_t>(&value)) return std::to_string(*i64);
     if (const auto* i = std::get_if<int>(&value)) return std::to_string(*i);
-    if (const auto* d = std::get_if<double>(&value)) {
-        char buf[40];
-        const auto res = std::to_chars(buf, buf + sizeof(buf), *d);
-        if (res.ec == std::errc()) return std::string(buf, res.ptr);
-        return std::to_string(*d);
-    }
+    if (const auto* d = std::get_if<double>(&value)) return std::to_string(*d);
     return {};
 }
 
@@ -207,12 +208,14 @@ void Statement::readRow(Row& out) const
     out.names_.clear();
     out.values_.clear();
     out.nulls_.clear();
+    out.sqliteText_.clear();
     if (!stmt_) return;
 
     const int count = sqlite3_column_count(stmt_);
     out.names_.reserve(static_cast<size_t>(count));
     out.values_.reserve(static_cast<size_t>(count));
     out.nulls_.reserve(static_cast<size_t>(count));
+    out.sqliteText_.reserve(static_cast<size_t>(count));
 
     for (int i = 0; i < count; ++i) {
         const char* name = sqlite3_column_name(stmt_, i);
@@ -237,6 +240,15 @@ void Statement::readRow(Row& out) const
             default:  // SQLITE_NULL / SQLITE_BLOB（BLOB 不建模，按空串占位）
                 out.values_.emplace_back(std::string());
                 break;
+        }
+
+        // 数值列额外缓存 SQLite 的文本形式（TEXT 列已在 values_ 里，留空以免重复占内存）
+        if (type == SQLITE_INTEGER || type == SQLITE_FLOAT) {
+            const unsigned char* t = sqlite3_column_text(stmt_, i);
+            out.sqliteText_.emplace_back(t ? std::string(reinterpret_cast<const char*>(t))
+                                           : std::string());
+        } else {
+            out.sqliteText_.emplace_back();
         }
     }
 }

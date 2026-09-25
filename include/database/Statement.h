@@ -54,7 +54,12 @@ public:
     /** 具名列是否为 NULL（未知列名视为 NULL） */
     bool isNull(const std::string& name) const { return isNull(columnIndex(name)); }
 
-    /** TEXT 取值（NULL/越界返回空串；数值列转十进制字符串） */
+    /**
+     * TEXT 取值（NULL/越界返回空串）
+     *
+     * 数值列返回**该值在 SQLite 中的文本形式**（SQLite 对 REAL 给出最短往返表示），
+     * 与列实际存储格式一致；TEXT 列直接返回原串。
+     */
     std::string text(int col) const;
     std::string text(const std::string& name) const { return text(columnIndex(name)); }
 
@@ -72,6 +77,10 @@ private:
     std::vector<std::string> names_;
     std::vector<SqlParam> values_;  // 与 names_ 等长；SQLITE_INTEGER 统一存 int64_t，NULL 存占位
     std::vector<bool> nulls_;
+    // 与 names_ 等长的 SQLite 文本形式缓存（仅数值列非空；TEXT 列已在 values_ 中）。
+    // 用途：text() 返回与 SQLite 一致的字符串。不用 std::to_chars 是刻意的——
+    // libc++ 在 iOS < 16.3 上不提供浮点版 to_chars（CI 的 ios-build 曾因此编译失败）。
+    std::vector<std::string> sqliteText_;
 };
 
 /**

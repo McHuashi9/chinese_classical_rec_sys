@@ -283,6 +283,37 @@ TEST_CASE("Row：NULL 列与越界列名/下标的取值边界", "[statement]") 
     REQUIRE(row.text("d") == "x");
 }
 
+TEST_CASE("Row::text 对 REAL 列返回 SQLite 自身文本形式", "[statement][row]") {
+    const std::string dir = workDir("statement_real_text");
+    const std::string path = dir + "/real_text.db";
+    std::error_code ec;
+    fs::remove(path, ec);
+
+    sqlite3* raw = nullptr;
+    REQUIRE(sqlite3_open(path.c_str(), &raw) == SQLITE_OK);
+    execRaw(raw, "CREATE TABLE t (v REAL);");
+    execRaw(raw, "INSERT INTO t (v) VALUES (0.1), (1.0), (3.14159265358979), (-2.5);");
+    sqlite3_close(raw);
+
+    DatabaseManager db;
+    REQUIRE(db.open(path));
+    std::vector<Row> rows;
+    REQUIRE(db.queryRows("SELECT v FROM t ORDER BY rowid;", rows));
+    REQUIRE(rows.size() == 4);
+
+    // 关键：用 SQLite 的文本形式（最短往返），而不是 std::to_string 的定点 6 位
+    // （后者会把 0.1 变成 "0.100000"）。libc++ 在 iOS < 16.3 无浮点 std::to_chars，
+    // 故实现改为读 sqlite3_column_text——本用例锁住该语义。
+    REQUIRE(rows[0].text("v") == "0.1");
+    REQUIRE(rows[1].text("v") == "1.0");
+    REQUIRE(rows[2].text("v") == "3.14159265358979");
+    REQUIRE(rows[3].text("v") == "-2.5");
+    // 数值取值不受影响
+    REQUIRE(rows[0].real("v") == 0.1);
+    REQUIRE(rows[2].real("v") == 3.14159265358979);
+    db.close();
+}
+
 TEST_CASE("迁移：内容库副本重复 initTable 幂等，版本号与内容表不变", "[statement][migration]") {
     const std::string dir = workDir("statement_migrate");
     const std::string copy = dir + "/asset_copy.db";
