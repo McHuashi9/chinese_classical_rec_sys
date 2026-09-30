@@ -39,7 +39,9 @@ Future<void> showFeedbackDialog(
               platform: platform,
               contentDataVersion: contentDataVersion,
               schemaVersions: schemaVersions,
-              logTail: logTail,
+              // A4：移动端无本地日志时，正文里不再写「（暂无日志文件）」占位，
+              // 而是给出平台事实说明（本平台日志在系统日志中，不含于反馈）。
+              logTail: logTailForFeedback(logTail, platformName: platform),
             );
           },
       logTailLoader: loadLogTail,
@@ -385,6 +387,39 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                             );
                           },
                         ),
+                      // A4：移动端无本地日志（readLogTail 恒空）时给出「系统日志
+                      // 不含于反馈」的指引，而不是静默显示「（暂无日志文件）」。
+                      FutureBuilder<String>(
+                        future: _logTailFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const SizedBox.shrink();
+                          }
+                          if (!isMobileLogPlatform(widget.platformName) ||
+                              !isEmptyLogTail(snapshot.data)) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4, bottom: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.info_outline,
+                                    size: 16, color: secondaryColor),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    kMobileSystemLogNotice,
+                                    style: theme.textTheme.bodySmall
+                                        ?.copyWith(color: secondaryColor),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         '默认邮件客户端不是你想用的？请点“复制完整反馈内容”，到任意网页邮箱粘贴发送。',

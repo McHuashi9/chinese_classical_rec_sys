@@ -11,7 +11,7 @@ class SettingsController extends ChangeNotifier {
   bool _showTranslation = false;
   bool _showRuledLines = true;
   double _fontScale = 1.0;
-  String _logLevel = 'INFO';
+  String _logLevel = defaultLogLevel;
   /// 用户主色（ARGB int，默认朱砂红 AppTheme.vermilion）
   int _accentColorValue = AppTheme.vermilion.toARGB32();
   String? _error;
@@ -62,13 +62,46 @@ class SettingsController extends ChangeNotifier {
   }
 
   void setLogLevel(String value) {
-    _logLevel = value;
-    final cLevel = value.toLowerCase();
-    final ptr = cLevel.toNativeUtf8(allocator: calloc);
-    _bridge?.logSetLevel(ptr);
-    calloc.free(ptr);
-    _prefs?.setString('logLevel', value);
+    // A5：白名单归一（下拉项本身已是白名单，这里兜底程序化/脏输入，
+    // 避免下拉的 value 与 items 不匹配而断言失败）。
+    _logLevel = normalizeLogLevel(value);
+    applyLogLevel(_bridge, _logLevel);
+    _prefs?.setString('logLevel', _logLevel);
     notifyListeners();
+  }
+
+  /// logLevel 合法取值（A5 白名单，同时作为设置页下拉的取值域单一源）。
+  static const List<String> logLevelOptions = ['INFO', 'DEBUG', 'WARN', 'ERROR'];
+
+  /// 兜底级别：脏 prefs / 未知取值一律回退 INFO。
+  static const String defaultLogLevel = 'INFO';
+
+  /// 白名单归一（A5）：大小写不敏感，非法值回退 [defaultLogLevel]。
+  ///
+  /// 只归一到白名单，不做业务改写；[applyLogLevel] 的下发语义保持不变。
+  static String normalizeLogLevel(String? raw) {
+    final value = (raw ?? defaultLogLevel).toUpperCase();
+    return logLevelOptions.contains(value) ? value : defaultLogLevel;
+  }
+
+  /// 把 `logLevel` 经既有 `log_set_level` 导出符号下发给 C++（零 ABI）。
+  ///
+  /// A3：`main.dart` 在 `coord.init`（`db_open` → `Logger::init`）之前先调用
+  /// [applySavedLogLevel]，使启动段（DB 打开/内置数据升级/档案加载）也受用户级别控制；
+  /// [init] 之后再下发一次，留下一条不被自身级别过滤的切换回执。
+  /// 原样下发调用方给的值（归一在 [normalizeLogLevel] 完成，不在此静默改写）。
+  static void applyLogLevel(NativeBridge? bridge, String level) {
+    final ptr = level.toLowerCase().toNativeUtf8(allocator: calloc);
+    try {
+      bridge?.logSetLevel(ptr);
+    } finally {
+      calloc.free(ptr);
+    }
+  }
+
+  /// 从 prefs 读取 `logLevel`（缺失或非法时 INFO）并下发（A3 + A5）。
+  static void applySavedLogLevel(SharedPreferences prefs, NativeBridge? bridge) {
+    applyLogLevel(bridge, normalizeLogLevel(prefs.getString('logLevel')));
   }
 
   void clearError() {
@@ -100,12 +133,10 @@ class SettingsController extends ChangeNotifier {
     _showRuledLines = prefs.getBool('showRuledLines') ?? true;
     _accentColorValue =
         prefs.getInt('accentColor') ?? AppTheme.vermilion.toARGB32();
-    final savedLevel = prefs.getString('logLevel') ?? 'INFO';
+    // A5：脏 prefs（如历史遗留/手改的非法值）回退 INFO，取值域收敛到白名单。
+    final savedLevel = normalizeLogLevel(prefs.getString('logLevel'));
     _logLevel = savedLevel;
-    final cLevel = savedLevel.toLowerCase();
-    final ptr = cLevel.toNativeUtf8(allocator: calloc);
-    bridge?.logSetLevel(ptr);
-    calloc.free(ptr);
+    applyLogLevel(bridge, savedLevel);
     _updateChecker = UpdateChecker(_prefs!);
   }
 

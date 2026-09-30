@@ -14,6 +14,8 @@ Future<void> _openDialog(
   Future<bool> Function(Uri uri)? launcher,
   Future<FeedbackSubmitResult> Function(FeedbackDraft draft)? submitFeedback,
   String? initialScreenshotPath,
+  String platform = 'Linux',
+  String logTail = 'line1',
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -28,12 +30,12 @@ Future<void> _openDialog(
             onPressed: () => showFeedbackDialog(
               context,
               appVersion: '1.0.2',
-              platform: 'Linux',
+              platform: platform,
               contentDataVersion: 'data-20260816-213645',
               schemaVersions: '用户 1 · 内容 1',
               initialScreenshotPath: initialScreenshotPath,
               diagnosticsLoader: loader ?? () async => '【环境信息】\nApp 版本：1.0.2',
-              logTailLoader: () async => 'line1',
+              logTailLoader: () async => logTail,
               mailtoLauncher: launcher ?? (_) async => true,
               submitFeedback: submitFeedback,
             ),
@@ -248,5 +250,44 @@ void main() {
       ),
     );
     expect(button.onPressed, isNull);
+  });
+
+  group('A4 移动端空日志指引', () {
+    testWidgets('移动端无本地日志时给出系统日志指引，而非静默占位', (tester) async {
+      await _openDialog(
+        tester,
+        platform: 'android',
+        logTail: kEmptyLogTailPlaceholder,
+      );
+
+      expect(find.text(kMobileSystemLogNotice), findsOneWidget);
+      expect(find.text(kEmptyLogTailPlaceholder), findsNothing);
+    });
+
+    testWidgets('空字符串尾部（移动端）也视作无本地日志', (tester) async {
+      await _openDialog(tester, platform: 'ios', logTail: '');
+
+      expect(find.text(kMobileSystemLogNotice), findsOneWidget);
+    });
+
+    testWidgets('桌面端无本地日志时不显示系统日志指引', (tester) async {
+      await _openDialog(
+        tester,
+        platform: 'linux',
+        logTail: kEmptyLogTailPlaceholder,
+      );
+
+      expect(find.text(kMobileSystemLogNotice), findsNothing);
+    });
+
+    testWidgets('有本地日志时不显示指引', (tester) async {
+      await _openDialog(
+        tester,
+        platform: 'android',
+        logTail: '2026-09-30 [INFO] line1',
+      );
+
+      expect(find.text(kMobileSystemLogNotice), findsNothing);
+    });
   });
 }

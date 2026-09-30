@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
+import 'package:chinese_classical_rec_sys/engine/feedback_mailto.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
@@ -272,13 +273,13 @@ void main() {
 
         expect(find.text('打开日志目录'), findsOneWidget);
         expect(find.text('打开截图目录'), findsOneWidget);
-        expect(find.text('移动端日志已包含在反馈中'), findsNothing);
+        expect(find.text(kMobileSystemLogNotice), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('移动平台显示日志已包含在反馈中', (tester) async {
+    testWidgets('移动平台显示系统日志事实说明', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -292,7 +293,7 @@ void main() {
 
         expect(find.text('打开日志目录'), findsNothing);
         expect(find.text('打开截图目录'), findsNothing);
-        expect(find.text('移动端日志已包含在反馈中'), findsOneWidget);
+        expect(find.text(kMobileSystemLogNotice), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
