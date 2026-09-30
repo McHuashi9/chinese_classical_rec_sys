@@ -137,7 +137,8 @@ _FakeCoordinator _makeCoordinator({String defaultName = '默认用户'}) {
   );
 }
 
-Widget _host(AppCoordinator coord, {VoidCallback? onPopped}) {
+Widget _host(AppCoordinator coord,
+    {VoidCallback? onPopped, void Function(bool?)? onResult}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: coord.navCtrl),
@@ -157,9 +158,10 @@ Widget _host(AppCoordinator coord, {VoidCallback? onPopped}) {
           body: Center(
             child: ElevatedButton(
               onPressed: () async {
-                await Navigator.of(context).push<bool>(
+                final result = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const WelcomePage()),
                 );
+                onResult?.call(result);
                 onPopped?.call();
               },
               child: const Text('打开欢迎页'),
@@ -254,5 +256,28 @@ void main() {
     expect(find.text('重命名失败，请检查名称长度'), findsOneWidget);
     expect(find.byType(WelcomePage), findsOneWidget);
     expect(popped, isFalse);
+  });
+
+  testWidgets('系统返回键可退出欢迎页：pop(false)、不重命名、不写 welcome_seen',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final coord = _makeCoordinator();
+    bool? popResult;
+    var popped = false;
+    await tester.pumpWidget(_host(coord,
+        onPopped: () => popped = true, onResult: (r) => popResult = r));
+    await tester.tap(find.text('打开欢迎页'));
+    await tester.pumpAndSettle();
+    expect(find.byType(WelcomePage), findsOneWidget);
+
+    // 真走 PopScope：模拟系统返回（真机等价于 adb keyevent 4 / 边缘手势返回）。
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WelcomePage), findsNothing, reason: '返回应离开欢迎页，不得被静默吞掉');
+    expect(popped, isTrue, reason: '路由 pop 完成后外层 await 应恢复');
+    expect(popResult, isFalse, reason: '返回等价「稍后继续」，返回 false 而非 true');
+    expect(coord.renameCalled, isFalse, reason: '返回不应触发重命名');
+    expect(coord.userCtrl.profiles.first.name, '默认用户');
   });
 }
