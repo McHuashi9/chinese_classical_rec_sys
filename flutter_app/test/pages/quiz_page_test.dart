@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/quiz_test_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -16,60 +15,7 @@ import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
-import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
-
-/// 模拟成功判分的 tracker（成功提交链路测试用）：
-/// 走真实 UserController.submitQuiz，仅 C++ 判题被替换
-class _FakeQuizTracker implements QuizTracker {
-  int _calls = 0;
-  int failFrom = 0; // 第 N 次起判题失败（0 表示全成功）
-
-  /// disposeQuestions 调用次数（验证题目内存恰好释放一次）
-  int disposeCount = 0;
-
-  @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-      {bool isReview = false}) {
-    // 每次必须返回新分配的 User（submitQuiz 会 dispose 中间态）
-    if (failFrom > 0 && _calls >= failFrom) {
-      _calls++;
-      return (null, null);
-    }
-    final out = User.allocate(calloc);
-    final correct = _calls == 0; // 第 1 题对、其余错
-    _calls++;
-    return (out, correct);
-  }
-
-  @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
-
-  @override
-  QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
-
-  @override
-  List<ReviewItem> getDueReviews(int textId) => [];
-
-  @override
-  int getDueReviewCount(int textId) => 0;
-
-  @override
-  int getTotalReviewCount(int textId) => 0;
-
-  @override
-  List<Question> getQuestionsByIds(List<int> ids) => [];
-
-  @override
-  QuizAttemptSummary? getAttemptSummary(int textId) => null;
-
-  @override
-  void disposeQuestions(List<Question> questions) {
-    disposeCount++;
-  }
-}
+import 'package:chinese_classical_rec_sys/engine/one_shot_guide.dart';
 
 class _PreviewCoordinator extends AppCoordinator {
   _PreviewCoordinator({
@@ -136,16 +82,112 @@ Widget _pushQuizHost(Widget Function() buildQuiz) {
   );
 }
 
+/// 答题页 widget 测试的公共挂载：视口 + 伪题目 + provider 包装 + 首帧 settle。
+///
+/// [questions] 省略时按 [n] 新建；需在挂载前改写题目字段（原句/题型）的用例
+/// 自行构造后传入。返回实际挂载的题目列表，供内存所有权断言复用。
+/// [inHost] 时经 [_pushQuizHost] 推入导航栈并点开，用于验证 pop 回宿主。
+/// [preview] 为只读原文对照用例装配 [_PreviewCoordinator]（含阅读/用户控制器与收尾），
+/// 此时忽略传入的 [coord] / [settingsCtrl] / [userCtrl] / [readingController]。
+Future<List<Question>> _pumpQuiz(
+  WidgetTester tester, {
+  int n = 1,
+  List<Question>? questions,
+  String articleTitle = '岳阳楼记',
+  double height = 1000,
+  bool isReview = false,
+  bool isInitPart = false,
+  Map<int, int?>? initAnswers,
+  bool showQuizGuide = false,
+  bool inHost = false,
+  bool preview = false,
+  AppCoordinator? coord,
+  SettingsController? settingsCtrl,
+  UserController? userCtrl,
+  ReadingController? readingController,
+}) async {
+  final quizQuestions = questions ?? fakeQuestions(n);
+  setQuizViewport(tester, height: height);
+  var effectiveCoord = coord;
+  var effectiveSettingsCtrl = settingsCtrl;
+  var effectiveUserCtrl = userCtrl;
+  if (preview) {
+    final readTracker = ReadTracker();
+    final readingCtrl = ReadingController(readTracker);
+    final previewUserCtrl = UserController()..setUser(User.allocate(calloc));
+    final previewSettingsCtrl = SettingsController();
+    effectiveUserCtrl = previewUserCtrl;
+    effectiveSettingsCtrl = previewSettingsCtrl;
+    effectiveCoord = _PreviewCoordinator(
+      navCtrl: NavigationController(),
+      settingsCtrl: previewSettingsCtrl,
+      readingCtrl: readingCtrl,
+      userCtrl: previewUserCtrl,
+      readTracker: readTracker,
+    );
+    addTearDown(() {
+      readingCtrl.dispose();
+      previewUserCtrl.dispose();
+    });
+  }
+  final page = QuizPage(
+    articleTitle: articleTitle,
+    questions: quizQuestions,
+    isReview: isReview,
+    isInitPart: isInitPart,
+    initAnswers: initAnswers,
+    showQuizGuide: showQuizGuide,
+    readingController: readingController,
+  );
+  await tester.pumpWidget(wrapQuizPage(
+    inHost ? _pushQuizHost(() => page) : page,
+    coord: effectiveCoord,
+    settingsCtrl: effectiveSettingsCtrl,
+    userCtrl: effectiveUserCtrl,
+  ));
+  await tester.pumpAndSettle();
+  if (inHost) {
+    await tester.tap(find.text('打开答题'));
+    await tester.pumpAndSettle();
+  }
+  return quizQuestions;
+}
+
+/// 初始化按篇答题页的公共挂载：在 [_pumpQuiz] 上叠加 seen 标记与引导开关。
+///
+/// [seen] 写入 [kInitQuizGuideSeenKey] 模拟「引导已读」；[showGuide] 透传
+/// `QuizPage.showQuizGuide`（阅读教程第 4 步进入 → 强制展示第 5 步）。
+/// [answers] 为按篇模式的共享答案表；[inHost] 见 [_pumpQuiz]。
+/// 返回持有 owner 的 [UserController]（用完自动 dispose），供 `isInitialized` 断言。
+Future<UserController> _pumpInitQuiz(
+  WidgetTester tester, {
+  int n = 1,
+  bool seen = false,
+  bool showGuide = false,
+  bool inHost = false,
+  Map<int, int?>? answers,
+}) async {
+  final userCtrl = UserController()..setUser(User.allocate(calloc));
+  addTearDown(userCtrl.dispose);
+  SharedPreferences.setMockInitialValues(
+      seen ? const {kInitQuizGuideSeenKey: true} : const {});
+  await _pumpQuiz(
+    tester,
+    n: n,
+    articleTitle: '严先生祠堂记',
+    height: 1200,
+    isInitPart: true,
+    initAnswers: answers,
+    showQuizGuide: showGuide,
+    inHost: inHost,
+    userCtrl: userCtrl,
+  );
+  return userCtrl;
+}
+
 void main() {
   testWidgets('QuizPage 渲染题干、选项与题型徽标', (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2);
 
     expect(find.text('第 1/2 题'), findsOneWidget);
     expect(find.textContaining('第1题题干'), findsOneWidget);
@@ -156,16 +198,11 @@ void main() {
   });
 
   testWidgets('新题型 badge：虚词/断句显示中文文案', (tester) async {
-    setQuizViewport(tester, height: 1000);
     final questions = fakeQuestions(2);
     writeQuestionStr(questions[0].ptr.ref.qType, 'xuci');
     writeQuestionStr(questions[1].ptr.ref.qType, 'duanju');
 
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '新题型',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, questions: questions, articleTitle: '新题型');
 
     expect(find.text('虚词'), findsOneWidget);
     await tester.tap(find.text('下一题'));
@@ -174,18 +211,13 @@ void main() {
   });
 
   testWidgets('带原句题目：题干下渲染划线句并高亮目标词', (tester) async {
-    setQuizViewport(tester, height: 1000);
     final questions = fakeQuestions(1);
     final q = questions.first;
     writeQuestionStr(q.ptr.ref.context, '项脊轩，旧南阁子也');
     q.ptr.ref.markStart = 4;
     q.ptr.ref.markLen = 1;
 
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '项脊轩志',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, questions: questions, articleTitle: '项脊轩志');
 
     expect(
       find.textContaining('项脊轩，旧南阁子也', findRichText: true),
@@ -203,27 +235,13 @@ void main() {
   });
 
   testWidgets('无原句题目：不渲染额外句子', (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(1);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester);
 
     expect(find.textContaining('原句', findRichText: true), findsNothing);
   });
 
   testWidgets('选择选项前进后退，末题变为提交并校验必答', (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2);
 
     // 未选题时"下一题"可点（不强制），先选题
     await tester.tap(find.text('选项2释义'));
@@ -262,14 +280,7 @@ void main() {
 
   testWidgets('未作答时「下一题」为次按钮样式，选中后恢复主按钮（P3 降级样式）',
       (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2);
 
     // 未作答：次按钮，但仍可点（行为不变：不强制作答）
     final nextOutlined = find.widgetWithText(OutlinedButton, '下一题');
@@ -285,11 +296,8 @@ void main() {
   });
 
   testWidgets('数据同步中（syncing）提交被短路：提示稍后重试，不判分', (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(1);
-
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker();
+    final tracker = FakeQuizTracker();
     userCtrl.initTracker(tracker);
     final coord = AppCoordinator(
       navCtrl: NavigationController(),
@@ -301,11 +309,7 @@ void main() {
     addTearDown(coord.dispose);
     coord.syncing.value = true; // 模拟 db_replace 替换窗口
 
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(articleTitle: '岳阳楼记', questions: questions),
-      coord: coord,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, coord: coord);
 
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
@@ -319,14 +323,7 @@ void main() {
   });
 
   testWidgets('回改后前进：已答答案保留（提交可用而非被清空）', (tester) async {
-    setQuizViewport(tester, height: 1000);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2);
 
     // 第 1 题选"选项1"，第 2 题选"选项2"
     await tester.tap(find.text('选项1释义'));
@@ -353,24 +350,19 @@ void main() {
 
   testWidgets('成功提交 → pushReplacement 结果页：渲染统计与解析（H1 回归：结果页读题内存须仍有效）',
       (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker();
+    final tracker = FakeQuizTracker();
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
 
     // 作答并提交
     await tester.tap(find.text('选项1释义'));
@@ -397,25 +389,20 @@ void main() {
   });
 
   testWidgets('复习模式：标题错题复习，结果页显示复习不改变能力画像', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker();
+    final tracker = FakeQuizTracker();
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-        isReview: true,
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
+      isReview: true,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
 
     expect(find.textContaining('错题复习'), findsOneWidget);
 
@@ -437,15 +424,8 @@ void main() {
   });
 
   testWidgets('选项选中态暴露到语义树（读屏/自动化可断言）', (tester) async {
-    setQuizViewport(tester, height: 1000);
     final handle = tester.ensureSemantics();
-    final questions = fakeQuestions(1);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester);
 
     // 初始四选项皆未选中，且都作为按钮暴露。
     const letters = ['A', 'B', 'C', 'D'];
@@ -481,15 +461,8 @@ void main() {
   });
 
   testWidgets('AppBar 返回按钮带中文语义标签', (tester) async {
-    setQuizViewport(tester, height: 1000);
     final handle = tester.ensureSemantics();
-    final questions = fakeQuestions(1);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester);
 
     // 改前图标按钮没有 content-desc，既读不出用途也无法被自动化定位。
     expect(find.byTooltip('返回'), findsOneWidget);
@@ -501,35 +474,7 @@ void main() {
   });
 
   testWidgets('AppBar 切换按钮进入只读原文，并可切回题目', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-
-    final settingsCtrl = SettingsController();
-    final readTracker = ReadTracker();
-    final readingCtrl = ReadingController(readTracker);
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    final coord = _PreviewCoordinator(
-      navCtrl: NavigationController(),
-      settingsCtrl: settingsCtrl,
-      readingCtrl: readingCtrl,
-      userCtrl: userCtrl,
-      readTracker: readTracker,
-    );
-    addTearDown(() {
-      readingCtrl.dispose();
-      userCtrl.dispose();
-    });
-
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-      ),
-      coord: coord,
-      settingsCtrl: settingsCtrl,
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, height: 1200, preview: true);
 
     // 题目视图：不产生新路由，工具栏按钮 tooltip 指向“将要去”的原文
     expect(find.text('第 1/1 题'), findsOneWidget);
@@ -552,14 +497,7 @@ void main() {
   });
 
   testWidgets('切到原文再切回：已选答案仍在（双视图保活）', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(QuizPage(
-      articleTitle: '岳阳楼记',
-      questions: questions,
-    )));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2, height: 1200);
 
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
@@ -581,32 +519,7 @@ void main() {
   });
 
   testWidgets('原文视图只读：不出现完成/放弃结算入口', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-
-    final settingsCtrl = SettingsController();
-    final readTracker = ReadTracker();
-    final readingCtrl = ReadingController(readTracker);
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    final coord = _PreviewCoordinator(
-      navCtrl: NavigationController(),
-      settingsCtrl: settingsCtrl,
-      readingCtrl: readingCtrl,
-      userCtrl: userCtrl,
-      readTracker: readTracker,
-    );
-    addTearDown(() {
-      readingCtrl.dispose();
-      userCtrl.dispose();
-    });
-
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(articleTitle: '岳阳楼记', questions: questions),
-      coord: coord,
-      settingsCtrl: settingsCtrl,
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, height: 1200, preview: true);
     await tester.tap(find.byIcon(Icons.article_outlined));
     await tester.pumpAndSettle();
 
@@ -617,15 +530,7 @@ void main() {
   });
 
   testWidgets('退出轻确认：继续作答则留在原页，放弃才 pop', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
-    await tester.pumpWidget(wrapQuizPage(_pushQuizHost(
-      () => QuizPage(articleTitle: '岳阳楼记', questions: questions),
-    )));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开答题'));
-    await tester.pumpAndSettle();
+    await _pumpQuiz(tester, n: 2, height: 1200, inHost: true);
 
     // 未作答：直接退出，不弹确认
     await tester.tap(find.byIcon(Icons.arrow_back));
@@ -655,9 +560,6 @@ void main() {
   });
 
   testWidgets('活动阅读会话下切原文：计时继续、切回不结算', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
     final readingCtrl = ReadingController(readTracker);
@@ -682,17 +584,14 @@ void main() {
     addTearDown(readingCtrl.dispose);
     addTearDown(userCtrl.dispose);
 
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-        readingController: readingCtrl,
-      ),
+    await _pumpQuiz(
+      tester,
+      height: 1200,
+      readingController: readingCtrl,
       coord: coord,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
     // 让活动会话的 1s 周期计时器真的走两拍（fake async 下需显式推进时钟）
     await tester.pump(const Duration(seconds: 2));
 
@@ -717,21 +616,9 @@ void main() {
   });
 
   testWidgets('初始化按篇模式退出不确认（进度在共享答案表里）', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
     final answers = <int, int?>{100: 1, 101: null};
-
-    await tester.pumpWidget(wrapQuizPage(_pushQuizHost(
-      () => QuizPage(
-        articleTitle: '严先生祠堂记',
-        questions: questions,
-        isInitPart: true,
-        initAnswers: answers,
-      ),
-    )));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开答题'));
-    await tester.pumpAndSettle();
+    // 本用例验退出确认语义，引导浮层先标记已读以免遮挡返回键
+    await _pumpInitQuiz(tester, n: 2, seen: true, answers: answers, inHost: true);
 
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
@@ -741,42 +628,14 @@ void main() {
   });
 
   testWidgets('初始化按篇模式记录答案并返回，不调用 applyInit', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final answers = <int, int?>{100: null, 101: null};
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
-    await tester.pumpWidget(wrapQuizPage(
-      Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: FilledButton(
-              onPressed: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (_) => QuizPage(
-                      articleTitle: '严先生祠堂记',
-                      questions: questions,
-                      isInitPart: true,
-                      initAnswers: answers,
-                    ),
-                  ),
-                );
-              },
-              child: const Text('打开答题'),
-            ),
-          ),
-        ),
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('打开答题'));
-    await tester.pumpAndSettle();
+    final userCtrl = await _pumpInitQuiz(
+      tester,
+      n: 2,
+      seen: true,
+      answers: answers,
+      inHost: true,
+    );
     expect(find.textContaining('初始化答题'), findsOneWidget);
 
     await tester.tap(find.text('选项1释义'));
@@ -796,21 +655,7 @@ void main() {
   });
 
   testWidgets('初始化答题页首次进入展示兜底提示，可跳过并写 seen', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '严先生祠堂记',
-        questions: questions,
-        isInitPart: true,
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpInitQuiz(tester);
 
     expect(find.text('提示'), findsOneWidget);
     expect(find.text('可回看原文对照'), findsOneWidget);
@@ -825,43 +670,14 @@ void main() {
   });
 
   testWidgets('初始化答题页已读引导后不再展示', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    SharedPreferences.setMockInitialValues({kInitQuizGuideSeenKey: true});
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '严先生祠堂记',
-        questions: questions,
-        isInitPart: true,
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpInitQuiz(tester, seen: true);
 
     expect(find.text('提示'), findsNothing);
     expect(find.text('可回看原文对照'), findsNothing);
   });
 
   testWidgets('showQuizGuide 为 true 时展示第 5 步并写入 seen', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(1);
-    final userCtrl = UserController()..setUser(User.allocate(calloc));
-    addTearDown(userCtrl.dispose);
-
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '严先生祠堂记',
-        questions: questions,
-        isInitPart: true,
-        showQuizGuide: true,
-      ),
-      userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    await _pumpInitQuiz(tester, showGuide: true);
 
     expect(find.text('第 5 步'), findsOneWidget);
     expect(find.text('可回看原文对照'), findsOneWidget);
@@ -875,24 +691,19 @@ void main() {
   });
 
   testWidgets('正式测验答错：结果页提示错题已入复习队列', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker(); // 第 1 题对、第 2 题错
+    final tracker = FakeQuizTracker(); // 第 1 题对、第 2 题错
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
 
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
@@ -910,24 +721,19 @@ void main() {
   });
 
   testWidgets('部分判题失败：跳转结果页，展示已计入题数且不重提', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker()..failFrom = 1; // 第 2 题起失败
+    final tracker = FakeQuizTracker()..failFrom = 1; // 第 2 题起失败
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
 
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
@@ -953,9 +759,6 @@ void main() {
   });
 
   testWidgets('活动阅读进入答题并提交：finishReadingSession 恰好一次并丢弃阅读状态', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
     final readingCtrl = ReadingController(readTracker);
@@ -970,7 +773,7 @@ void main() {
       difficulties: List.filled(10, 0.5),
     ));
     final userCtrl = UserController();
-    final tracker = _FakeQuizTracker();
+    final tracker = FakeQuizTracker();
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
@@ -983,17 +786,15 @@ void main() {
     );
     addTearDown(readingCtrl.dispose);
 
-    await tester.pumpWidget(wrapQuizPage(
-      QuizPage(
-        articleTitle: '岳阳楼记',
-        questions: questions,
-        readingController: readingCtrl,
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
+      readingController: readingCtrl,
       coord: coord,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
+    );
 
     await tester.tap(find.text('选项1释义'));
     await tester.pump();
@@ -1009,9 +810,6 @@ void main() {
   });
 
   testWidgets('活动阅读进入答题后返回：不结算且阅读状态保留', (tester) async {
-    setQuizViewport(tester, height: 1200);
-    final questions = fakeQuestions(2);
-
     final settingsCtrl = SettingsController();
     final readTracker = ReadTracker();
     final readingCtrl = ReadingController(readTracker);
@@ -1026,7 +824,7 @@ void main() {
       difficulties: List.filled(10, 0.5),
     ));
     final userCtrl = UserController();
-    userCtrl.initTracker(_FakeQuizTracker());
+    userCtrl.initTracker(FakeQuizTracker());
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
     final coord = _CountingCoordinator(
@@ -1037,35 +835,16 @@ void main() {
       readTracker: readTracker,
     );
 
-    await tester.pumpWidget(wrapQuizPage(
-      Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: FilledButton(
-              onPressed: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (_) => QuizPage(
-                      articleTitle: '岳阳楼记',
-                      questions: questions,
-                      readingController: readingCtrl,
-                    ),
-                  ),
-                );
-              },
-              child: const Text('打开答题'),
-            ),
-          ),
-        ),
-      ),
+    await _pumpQuiz(
+      tester,
+      n: 2,
+      height: 1200,
+      inHost: true,
+      readingController: readingCtrl,
       coord: coord,
       settingsCtrl: settingsCtrl,
       userCtrl: userCtrl,
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('打开答题'));
-    await tester.pumpAndSettle();
+    );
     expect(find.text('第 1/2 题'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.arrow_back));
@@ -1075,5 +854,99 @@ void main() {
     expect(coord.finishCount, 0);
     expect(readingCtrl.isReading, isTrue);
     readingCtrl.dispose();
+  });
+
+  // 系统返回（Android 手势/导航键）走 PopScope 的真实触发路径：
+  // `tester.binding.handlePopRoute()` → WidgetsApp.didPopRoute → Navigator.maybePop
+  // → Route.popDisposition → PopScope.onPopInvokedWithResult。
+  // 不用 Navigator.pop 绕过，否则测不到拦截逻辑本身。
+  group('系统返回键（PopScope）', () {
+    testWidgets('有未提交答案时系统返回 → 弹轻确认，确认放弃才退出', (tester) async {
+      await _pumpQuiz(tester, n: 2, height: 1200, inHost: true);
+
+      await tester.tap(find.text('选项1释义'));
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // 系统返回与 AppBar 返回箭头等价：先弹确认，未确认不 pop
+      expect(find.text('放弃本次作答？'), findsOneWidget);
+      expect(find.text('第 1/2 题'), findsOneWidget);
+      expect(find.text('打开答题'), findsNothing);
+
+      await tester.tap(find.text('继续作答'));
+      await tester.pumpAndSettle();
+      expect(find.text('第 1/2 题'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('放弃'));
+      await tester.pumpAndSettle();
+      expect(find.text('打开答题'), findsOneWidget);
+    });
+
+    testWidgets('无未提交答案时系统返回 → 不弹确认，直接退出', (tester) async {
+      await _pumpQuiz(tester, n: 2, height: 1200, inHost: true);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('放弃本次作答？'), findsNothing);
+      expect(find.text('打开答题'), findsOneWidget);
+    });
+
+    testWidgets('初始化按篇模式系统返回不弹确认（进度在共享答案表里）', (tester) async {
+      final answers = <int, int?>{100: null, 101: null};
+      await _pumpInitQuiz(
+        tester,
+        n: 2,
+        seen: true,
+        answers: answers,
+        inHost: true,
+      );
+
+      await tester.tap(find.text('选项1释义'));
+      await tester.pump();
+      expect(answers[100], 0);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // isInitPart 免确认语义不变：已选答案仍写进共享答案表后直接退出
+      expect(find.text('放弃本次作答？'), findsNothing);
+      expect(find.text('打开答题'), findsOneWidget);
+      expect(answers[100], 0);
+    });
+
+    testWidgets('原文视图系统返回 → 回题目视图且不弹确认（AppBar 返回同语义）', (tester) async {
+      await _pumpQuiz(tester, height: 1200, preview: true, inHost: true);
+
+      // 先选一个答案：若返回弹确认说明走了退出路径，直接暴露语义错误
+      await tester.tap(find.text('选项1释义'));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.article_outlined));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('庆历四年春', findRichText: true), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // 只读原文不是路由级退出：系统返回回题目视图，不弹确认、不离开路由
+      expect(find.text('放弃本次作答？'), findsNothing);
+      expect(find.text('第 1/1 题'), findsOneWidget);
+      expect(find.text('选项1释义'), findsOneWidget);
+      expect(find.text('打开答题'), findsNothing);
+
+      // AppBar 返回箭头与系统返回同语义：再看原文后点它，同样回题目
+      await tester.tap(find.byIcon(Icons.article_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+      expect(find.text('放弃本次作答？'), findsNothing);
+      expect(find.text('第 1/1 题'), findsOneWidget);
+      expect(find.textContaining('庆历四年春', findRichText: true), findsNothing);
+    });
   });
 }

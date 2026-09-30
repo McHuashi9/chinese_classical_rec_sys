@@ -21,7 +21,7 @@ import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
-import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
+import 'package:chinese_classical_rec_sys/engine/one_shot_guide.dart';
 
 class _FakeCoordinator extends AppCoordinator {
   _FakeCoordinator({
@@ -689,6 +689,43 @@ void main() {
       expect(iconAfter.color, isNot(iconBefore.color));
       // 引导仍应保持打开。
       expect(find.text('点击这里对照译文'), findsOneWidget);
+    });
+  });
+
+  // 系统返回（Android 手势/导航键）必须真实触发 PopScope 回调：
+  // `tester.binding.handlePopRoute()` → WidgetsApp.didPopRoute → Navigator.maybePop。
+  group('系统返回键', () {
+    testWidgets('系统返回不被静默吞键：等价「稍后继续」离开本页，且不绕过门禁', (tester) async {
+      // 教程浮层不参与本用例：seen 后不再插入 Overlay，避免遮罩吃掉返回语义。
+      SharedPreferences.setMockInitialValues({kInitTutorialSeenKey: true});
+      coord.initTexts = [_text(41, '严先生祠堂记'), _text(166, '周郑交质')];
+
+      await tester.pumpWidget(wrap(Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => const InitOnboardingPage()),
+              ),
+              child: const Text('打开初始化'),
+            ),
+          ),
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('打开初始化'));
+      await tester.pumpAndSettle();
+      expect(find.text('初始化引导'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // 不静默吞键：系统返回等价页面既有的「稍后继续」，回到宿主页
+      expect(find.text('初始化引导'), findsNothing);
+      expect(find.text('打开初始化'), findsOneWidget);
+      // 门禁未被绕过：未完成初始化就离开，初始化状态仍为否
+      expect(userCtrl.isInitialized, isFalse);
     });
   });
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chinese_classical_rec_sys/engine/one_shot_guide.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/pages/quiz_result_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
@@ -11,6 +11,7 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
 import 'package:chinese_classical_rec_sys/widgets/original_text_view.dart';
+import 'package:chinese_classical_rec_sys/widgets/spotlight_overlay.dart';
 
 /// 文章题组答题页：一屏一题，末题提交（题组后统一判分，提交前可回改）
 /// [isReview] 错题复习模式：标题区分，提交走复习通道（不产生答题效应）
@@ -59,7 +60,7 @@ class _QuizPageState extends State<QuizPage> {
 
   /// 初始化答题页“回看原文”引导浮层。
   final GlobalKey _originalButtonKey = GlobalKey();
-  OverlayEntry? _quizGuideOverlay;
+  final OneShotGuide _quizGuide = OneShotGuide.initQuiz();
 
   /// 当前视图：0 = 题目，1 = 原文（应用栏单图标互切，不产生新路由）。
   int _viewIndex = 0;
@@ -78,7 +79,7 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   void dispose() {
-    _hideQuizGuide();
+    _quizGuide.dismiss();
     // 初始化按篇模式使用共享答案表和共享题组内存，不由本页释放。
     if (!widget.isInitPart && !_ownershipTransferred) {
       _userCtrl?.disposeQuizQuestions(widget.questions);
@@ -104,47 +105,20 @@ class _QuizPageState extends State<QuizPage> {
 
   Future<void> _maybeShowQuizGuide() async {
     if (!mounted || !widget.isInitPart) return;
-    if (widget.showQuizGuide) {
-      _showQuizGuide(isStep5: true);
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    if (prefs.getBool(kInitQuizGuideSeenKey) ?? false) return;
-    _showQuizGuide(isStep5: false);
-  }
-
-  void _showQuizGuide({required bool isStep5}) {
-    _quizGuideOverlay?.remove();
-    _quizGuideOverlay = OverlayEntry(
+    // 教程第 4 步进入时强制展示第 5 步（不读 seen）；否则按一次性引导处理。
+    await _quizGuide.maybeShow(
+      context,
+      force: widget.showQuizGuide,
       builder: (_) => InitQuizGuideOverlay(
-        targetRect: _rectOf(_originalButtonKey),
-        isStep5: isStep5,
+        targetRect: rectOfKey(_originalButtonKey),
+        isStep5: widget.showQuizGuide,
         onSkip: _finishQuizGuide,
       ),
     );
-    Overlay.of(context).insert(_quizGuideOverlay!);
   }
 
-  Rect? _rectOf(GlobalKey key) {
-    final ctx = key.currentContext;
-    if (ctx == null) return null;
-    final box = ctx.findRenderObject();
-    if (box is! RenderBox) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
-  }
-
-  Future<void> _finishQuizGuide() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kInitQuizGuideSeenKey, true);
-    if (!mounted) return;
-    _hideQuizGuide();
-  }
-
-  void _hideQuizGuide() {
-    _quizGuideOverlay?.remove();
-    _quizGuideOverlay = null;
-  }
+  /// 完成/跳过引导：写 seen 标记并移除浮层。
+  Future<void> _finishQuizGuide() => _quizGuide.finish();
 
   bool get _isLast => _index == widget.questions.length - 1;
   bool get _allowSubmit => _isLast && _choices.every((c) => c != null);
@@ -239,7 +213,7 @@ class _QuizPageState extends State<QuizPage> {
 
   /// 用户点被引导高亮的切换按钮即视为已了解该入口，先结束引导再切视图。
   void _onToggleTap() {
-    if (_quizGuideOverlay != null) _finishQuizGuide();
+    if (_quizGuide.isShowing) _finishQuizGuide();
     _toggleView();
   }
 
@@ -292,6 +266,18 @@ class _QuizPageState extends State<QuizPage> {
     if (await _confirmExitIfNeeded() && mounted) {
       Navigator.of(context).pop();
     }
+  }
+
+  /// 返回入口：AppBar 返回箭头与系统返回（手势/导航键）共用。
+  ///
+  /// 正在看只读原文（[_viewIndex] == 1）时先回题目视图、不弹确认；
+  /// 其余情况与 AppBar 一致，走 [_confirmExitIfNeeded] 轻确认。
+  Future<void> _onBack() async {
+    if (_viewIndex == 1) {
+      _toggleView();
+      return;
+    }
+    await _onExitTap();
   }
 
   /// 答题页正文（栏 1）：题干 + 选项 + 底栏导航区。
@@ -453,57 +439,66 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.appColors.paper,
-      appBar: AppBar(
-        // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          tooltip: '返回',
-          icon: Icon(Icons.arrow_back, color: context.appColors.ink),
-          onPressed: _onExitTap,
-        ),
-        title: Text(
-          widget.isInitPart
-              ? '初始化答题 · ${widget.articleTitle}'
-              : widget.isReview
-                  ? '错题复习 · ${widget.articleTitle}'
-                  : '随堂练习 · ${widget.articleTitle}',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontFamily: AppTheme.fontTitle,
-              ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          // 甲形态：单图标互切，tooltip 显示“将要去”的视图；无新路由，双视图保活。
-          IconButton(
-            key: _originalButtonKey,
-            tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
-            icon: Icon(
-              // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的「阅读」撞车
-              _viewIndex == 0 ? Icons.article_outlined : Icons.quiz_outlined,
-              color: context.appColors.ink,
-            ),
-            onPressed: _onToggleTap,
+    // canPop: false + 共用 _onBack：系统返回与 AppBar 返回箭头等价，
+    // 不会像 v1.3.2 那样直接 pop 丢掉未提交答案。
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _onBack();
+      },
+      child: Scaffold(
+        backgroundColor: context.appColors.paper,
+        appBar: AppBar(
+          // 合法例外：AppBar 透明背景以露出 Scaffold 纸色。
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            tooltip: '返回',
+            icon: Icon(Icons.arrow_back, color: context.appColors.ink),
+            onPressed: _onBack,
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: IndexedStack(
-          index: _viewIndex,
-          children: [
-            _buildQuizView(context),
-            // 首次切换后才挂载：只读快照要读库取全文，启动时不付这笔成本。
-            if (_originalViewOpened)
-              OriginalTextView(
-                textId: _textId,
-                activeController: widget.readingController,
-                onExit: _toggleView,
-              )
-            else
-              const SizedBox.shrink(),
+          title: Text(
+            widget.isInitPart
+                ? '初始化答题 · ${widget.articleTitle}'
+                : widget.isReview
+                    ? '错题复习 · ${widget.articleTitle}'
+                    : '随堂练习 · ${widget.articleTitle}',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontFamily: AppTheme.fontTitle,
+                ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            // 甲形态：单图标互切，tooltip 显示“将要去”的视图；无新路由，双视图保活。
+            IconButton(
+              key: _originalButtonKey,
+              tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
+              icon: Icon(
+                // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的「阅读」撞车
+                _viewIndex == 0 ? Icons.article_outlined : Icons.quiz_outlined,
+                color: context.appColors.ink,
+              ),
+              onPressed: _onToggleTap,
+            ),
           ],
+        ),
+        body: SafeArea(
+          child: IndexedStack(
+            index: _viewIndex,
+            children: [
+              _buildQuizView(context),
+              // 首次切换后才挂载：只读快照要读库取全文，启动时不付这笔成本。
+              if (_originalViewOpened)
+                OriginalTextView(
+                  textId: _textId,
+                  activeController: widget.readingController,
+                  onExit: _toggleView,
+                )
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
         ),
       ),
     );

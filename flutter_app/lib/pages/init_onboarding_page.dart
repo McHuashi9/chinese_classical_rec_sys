@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/reading_view_data.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
@@ -15,12 +14,11 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
 import 'package:chinese_classical_rec_sys/engine/annotation_parser.dart';
+import 'package:chinese_classical_rec_sys/engine/one_shot_guide.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
 import 'package:chinese_classical_rec_sys/widgets/init_tutorial_overlay.dart';
-
-/// 初始化操作引导是否已展示/跳过的 SharedPreferences 标记。
-const String kInitTutorialSeenKey = 'init_tutorial_seen';
+import 'package:chinese_classical_rec_sys/widgets/spotlight_overlay.dart';
 
 /// 初始化门禁按钮文案。
 ///
@@ -119,6 +117,12 @@ class _InitOnboardingPageState extends State<InitOnboardingPage> {
 
     return PopScope(
       canPop: false,
+      // 系统返回不再静默吞键：等价于页面既有的「稍后继续」——离开本页，
+      // 初始化门禁（allRead && allAnswered）不受影响；未初始化时入口会再引导。
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted) return;
+        Navigator.of(context).pop();
+      },
       child: Scaffold(
         backgroundColor: context.appColors.paper,
         appBar: AppBar(
@@ -409,7 +413,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
   final _translationButtonKey = GlobalKey();
   final _nextPageButtonKey = GlobalKey();
   final _quizButtonKey = GlobalKey();
-  OverlayEntry? _tutorialOverlay;
+  final OneShotGuide _tutorialGuide = OneShotGuide.initTutorial();
   int _tutorialStep = 0;
   bool _recorded = false;
 
@@ -430,24 +434,18 @@ class _InitReadingPageState extends State<InitReadingPage> {
 
   @override
   void dispose() {
-    _hideTutorial();
+    _tutorialGuide.dismiss();
     _readingCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _maybeShowTutorial() async {
     if (!mounted || !widget.showTutorial) return;
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    if (prefs.getBool(kInitTutorialSeenKey) ?? false) return;
-    _showTutorial();
-  }
-
-  void _showTutorial() {
     _tutorialStep = 0;
-    _tutorialOverlay?.remove();
-    _tutorialOverlay = OverlayEntry(builder: (_) => _buildTutorialOverlay());
-    Overlay.of(context).insert(_tutorialOverlay!);
+    await _tutorialGuide.maybeShow(
+      context,
+      builder: (_) => _buildTutorialOverlay(),
+    );
   }
 
   Widget _buildTutorialOverlay() {
@@ -455,7 +453,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
       step: _tutorialStep,
       targetRect: _targetRectForStep(_tutorialStep),
       onNext: _nextTutorialStep,
-      onSkip: _skipTutorial,
+      onSkip: _finishTutorial,
       totalSteps: widget.articleQuestions.isEmpty ? 3 : 4,
     );
   }
@@ -464,36 +462,27 @@ class _InitReadingPageState extends State<InitReadingPage> {
     final maxStep = widget.articleQuestions.isEmpty ? 2 : 3;
     if (_tutorialStep < maxStep) {
       setState(() => _tutorialStep++);
-      _tutorialOverlay?.markNeedsBuild();
+      _tutorialGuide.refresh();
     } else {
       _finishTutorial();
     }
   }
 
-  Future<void> _skipTutorial() => _finishTutorial();
-
-  Future<void> _finishTutorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kInitTutorialSeenKey, true);
-    if (!mounted) return;
-    _hideTutorial();
-  }
-
-  void _hideTutorial() {
-    _tutorialOverlay?.remove();
-    _tutorialOverlay = null;
-  }
+  /// 完成/跳过教程：写 seen 标记并移除浮层。
+  Future<void> _finishTutorial() => _tutorialGuide.finish();
 
   Rect? _targetRectForStep(int step) {
     switch (step) {
       case 0:
         return _annotationTargetRect();
       case 1:
-        return _rectOf(_translationButtonKey);
+        return rectOfKey(_translationButtonKey);
       case 2:
-        return _rectOf(_nextPageButtonKey);
+        return rectOfKey(_nextPageButtonKey);
       case 3:
-        return widget.articleQuestions.isEmpty ? null : _rectOf(_quizButtonKey);
+        return widget.articleQuestions.isEmpty
+            ? null
+            : rectOfKey(_quizButtonKey);
     }
     return null;
   }
@@ -512,7 +501,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
         return renderObject.localToGlobal(rect.topLeft) & rect.size;
       }
     }
-    return _rectOf(_textKey);
+    return rectOfKey(_textKey);
   }
 
   int? _firstAnnotationOnPage(String page) {
@@ -524,19 +513,11 @@ class _InitReadingPageState extends State<InitReadingPage> {
     return null;
   }
 
-  Rect? _rectOf(GlobalKey key) {
-    final ctx = key.currentContext;
-    if (ctx == null) return null;
-    final box = ctx.findRenderObject();
-    if (box is! RenderBox) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
-  }
-
   Future<void> _startQuiz() async {
     if (widget.articleQuestions.isEmpty) return;
-    final fromTutorialStep4 = _tutorialOverlay != null && _tutorialStep == 3;
+    final fromTutorialStep4 = _tutorialGuide.isShowing && _tutorialStep == 3;
     // 从教程进入答题时先结束引导，避免浮层盖在答题页上；同时视为已完成“做题”步。
-    if (_tutorialOverlay != null) {
+    if (_tutorialGuide.isShowing) {
       await _finishTutorial();
       if (!mounted) return;
     }
