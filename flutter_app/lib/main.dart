@@ -249,17 +249,27 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       setState(() => _initError = '无法加载核心组件，请尝试重新安装。\n$e');
       return;
     }
-    final (contentPath, userPath, replaced) =
-        await _resolveDbPath(NativeBridge.fromLib(lib));
+    final bridge = NativeBridge.fromLib(lib);
+    // A3：级别下发前移——`coord.init` 里的 `db_open` 会触发 C++ `Logger::init`，
+    // 先把 prefs 里保存的级别下发一次，启动段（DB 打开/内置数据升级/档案加载）
+    // 才受用户级别控制（此前停在默认 INFO，DEBUG 排障拿不到启动段）。
+    final prefs = await SharedPreferences.getInstance();
+    SettingsController.applySavedLogLevel(prefs, bridge);
+    final (contentPath, userPath, replaced) = await _resolveDbPath(bridge);
     bool initOk;
     try {
       initOk = await coord.init(contentPath, userPath, lib);
     } catch (e) {
       AppLogger().error('数据库初始化失败: $e');
+      // 初始化异常多发生在启动段，同样尝试把缓冲日志落盘（桥未就绪则保留）。
+      AppLogger().flushPending();
       if (!mounted) return;
       setState(() => _initError = '无法加载核心组件，请尝试重新安装。\n$e');
       return;
     }
+    // A2：`coord.init` 已跑过 `db_open` → C++ `Logger::init`，旋转文件 sink 就绪，
+    // 此时回放桥未就绪期缓冲的启动日志（回放失败静默，见 flushPending）。
+    AppLogger().flushPending();
     if (!initOk) {
       if (!mounted) return;
       setState(() => _initError = _dbOpenErrorMessage(coord.dbOpenErrorCode));
@@ -271,7 +281,6 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     }
     coord.setContentPathAfterSync(contentPath);
 
-    final prefs = await SharedPreferences.getInstance();
     final dbDir = File(contentPath).parent.path;
     _dbDirPath = dbDir;
     coord.setContentDataVersion(await _readLocalDbVersion());
