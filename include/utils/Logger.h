@@ -29,14 +29,10 @@ public:
               const std::string& logFileName = "app.log");
     
     /**
-     * @brief 获取底层 spdlog logger
-     * @return std::shared_ptr<spdlog::logger> logger 智能指针
-     */
-    std::shared_ptr<spdlog::logger> getLogger() const;
-    
-    /**
      * @brief 设置日志级别
-     * @param level 日志级别（debug/info/warn/error）
+     * @param level 日志级别（debug/info/warn/error）；未知取值忽略
+     *
+     * A3：级别会被记住，供之后才发生的 [init] 使用（避免启动段被默认 INFO 覆盖）。
      */
     void setLevel(const std::string& level);
     
@@ -47,9 +43,15 @@ public:
 private:
     Logger() = default;
     ~Logger() = default;
-    
+
+    /** @brief 同时作用于 spdlog 全局级别与当前 logger */
+    void applyLevel(spdlog::level::level_enum level);
+
     std::shared_ptr<spdlog::logger> logger_;
     bool initialized_ = false;
+    /// A3：init 之前是否已显式下发过级别，以及该级别。
+    bool hasLevelOverride_ = false;
+    spdlog::level::level_enum levelOverride_ = spdlog::level::info;
 };
 
 // 便捷日志宏

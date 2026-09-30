@@ -173,5 +173,106 @@ void main() {
       final result = await readLogTail(logDirectory: tempDir.path);
       expect(result, contains('（读取日志失败'));
     });
+
+    test('轮转文件拼在正文之前，上次会话尾部可被取到', () async {
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
+      // 轮转后的历史文件（旧会话，含崩溃前最后一段）
+      File('${logDir.path}/app.1.log').writeAsStringSync('old1\nold2\nold3');
+      File('${logDir.path}/app.log').writeAsStringSync('new1\nnew2');
+
+      final result = await readLogTail(logDirectory: tempDir.path);
+
+      expect(result, 'old1\nold2\nold3\nnew1\nnew2');
+    });
+
+    test('仅存在轮转文件时也能读到，不再返回空占位', () async {
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
+      File('${logDir.path}/app.1.log').writeAsStringSync('crash line');
+
+      final result = await readLogTail(logDirectory: tempDir.path);
+
+      expect(result, 'crash line');
+      expect(result, isNot(contains('暂无日志文件')));
+    });
+
+    test('maxLines 跨轮转文件统一截尾，保留最新行', () async {
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
+      File('${logDir.path}/app.2.log').writeAsStringSync('a1\na2');
+      File('${logDir.path}/app.1.log').writeAsStringSync('b1\nb2');
+      File('${logDir.path}/app.log').writeAsStringSync('c1\nc2');
+
+      final result = await readLogTail(
+        logDirectory: tempDir.path,
+        maxLines: 3,
+      );
+
+      expect(result, 'b2\nc1\nc2');
+    });
+
+    test('maxChars 跨轮转文件统一截尾', () async {
+      final logDir = Directory('${tempDir.path}/logs')
+        ..createSync(recursive: true);
+      File('${logDir.path}/app.1.log').writeAsStringSync('x' * 150);
+      File('${logDir.path}/app.log').writeAsStringSync('y' * 50);
+
+      final result = await readLogTail(
+        logDirectory: tempDir.path,
+        maxChars: 100,
+      );
+
+      // 拼接后共 150 + 1(\n) + 50 = 201 字符，取末尾 100 字符。
+      expect(result.length, 100);
+      expect(result, '${'x' * 49}\n${'y' * 50}');
+    });
+
+    test('无文件时返回的空占位是唯一常量', () async {
+      final result = await readLogTail(logDirectory: tempDir.path);
+      expect(result, kEmptyLogTailPlaceholder);
+    });
+  });
+
+  group('A4 移动端空日志指引', () {
+    test('isMobileLogPlatform 识别 Android/iOS，大小写不敏感', () {
+      expect(isMobileLogPlatform('android'), isTrue);
+      expect(isMobileLogPlatform('iOS'), isTrue);
+      expect(isMobileLogPlatform('Android'), isTrue);
+      expect(isMobileLogPlatform('linux'), isFalse);
+      expect(isMobileLogPlatform('windows'), isFalse);
+      expect(isMobileLogPlatform('macos'), isFalse);
+    });
+
+    test('isEmptyLogTail 覆盖 null / 空白 / 占位', () {
+      expect(isEmptyLogTail(null), isTrue);
+      expect(isEmptyLogTail(''), isTrue);
+      expect(isEmptyLogTail('   \n'), isTrue);
+      expect(isEmptyLogTail(kEmptyLogTailPlaceholder), isTrue);
+      expect(isEmptyLogTail('（读取日志失败：x）'), isFalse);
+      expect(isEmptyLogTail('line1'), isFalse);
+    });
+
+    test('移动端 + 空占位 → 替换为系统日志事实说明', () {
+      expect(
+        logTailForFeedback(kEmptyLogTailPlaceholder, platformName: 'android'),
+        kMobileSystemLogNotice,
+      );
+      expect(
+        logTailForFeedback('', platformName: 'ios'),
+        kMobileSystemLogNotice,
+      );
+    });
+
+    test('桌面端空占位 / 移动端有日志 → 原样返回，不改写真实内容', () {
+      expect(
+        logTailForFeedback(kEmptyLogTailPlaceholder, platformName: 'linux'),
+        kEmptyLogTailPlaceholder,
+      );
+      expect(
+        logTailForFeedback('real log line', platformName: 'android'),
+        'real log line',
+      );
+    });
   });
 }

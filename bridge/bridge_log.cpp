@@ -19,6 +19,9 @@ extern "C" CHINESE_CORE_EXPORT void log_set_level(const char* level)
 {
     bridge_guard_void(g_mtx, [&] {
     Logger::getInstance().setLevel(level);
-    LOG_INFO("bridge: 日志级别切换为 {}", level);
+    // A3：回执必须不被「刚切到的级别」自己过滤掉——切到 error 时若用 INFO 打，
+    // 这条回执会消失、切换无据可查。用 ERROR 级保证任何合法级别下都可见
+    //（不新增导出符号；级别值域仍是 debug/info/warn/error 四档）。
+    LOG_ERROR("bridge: 日志级别切换为 {}", level);
     });
 }

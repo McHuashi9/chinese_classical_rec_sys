@@ -11,6 +11,12 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <filesystem>
 #include <chrono>
+
+namespace {
+// A8：轮转参数提具名常量，取值与拆分前完全一致（100 KiB × 3）。
+constexpr std::size_t kRotateMaxBytes = 100 * 1024;  // 单文件轮转阈值
+constexpr std::size_t kRotateMaxFiles = 3;           // 保留的历史文件数
+}  // namespace
 #endif
 
 Logger& Logger::getInstance() {
@@ -48,8 +54,8 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             logFilePath,
-            100 * 1024,       // 100 KiB 轮转阈值
-            3                  // 保留 3 个历史文件
+            kRotateMaxBytes,
+            kRotateMaxFiles
         );
         file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %s(%#) %v");
         logger_ = std::make_shared<spdlog::logger>("app", file_sink);
@@ -58,8 +64,9 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
         // 设置为默认 logger
         spdlog::set_default_logger(logger_);
         
-        // 设置默认日志级别为 INFO
-        spdlog::set_level(spdlog::level::info);
+        // 设置默认日志级别为 INFO；A3：若 init 之前已显式下发过级别（UI prefs 前移），
+        // 则沿用该级别，避免启动段被这里的默认 INFO 覆盖。
+        applyLevel(hasLevelOverride_ ? levelOverride_ : spdlog::level::info);
         
         // 启用调试宏
         spdlog::flush_on(spdlog::level::warn);
@@ -92,18 +99,30 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
     }
 }
 
-std::shared_ptr<spdlog::logger> Logger::getLogger() const {
-    return logger_;
+void Logger::applyLevel(spdlog::level::level_enum level) {
+    spdlog::set_level(level);
+    if (logger_) {
+        logger_->set_level(level);
+    }
 }
 
 void Logger::setLevel(const std::string& level) {
+    spdlog::level::level_enum target;
     if (level == "debug") {
-        spdlog::set_level(spdlog::level::debug);
+        target = spdlog::level::debug;
     } else if (level == "info") {
-        spdlog::set_level(spdlog::level::info);
+        target = spdlog::level::info;
     } else if (level == "warn") {
-        spdlog::set_level(spdlog::level::warn);
+        target = spdlog::level::warn;
     } else if (level == "error") {
-        spdlog::set_level(spdlog::level::err);
+        target = spdlog::level::err;
+    } else {
+        // 未知取值忽略（Dart 侧白名单归一属 A5，不在此处理）
+        return;
     }
+
+    // A3：记住显式级别，供之后才发生的 init 使用（P2-7「init 覆盖」）。
+    levelOverride_ = target;
+    hasLevelOverride_ = true;
+    applyLevel(target);
 }
