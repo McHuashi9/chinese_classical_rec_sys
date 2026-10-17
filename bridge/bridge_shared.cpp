@@ -118,10 +118,15 @@ bool loadUserForActive(int userId)
 }
 
 // 强制初始化闸门：未初始化时返回 BRIDGE_ERR_INIT_INCOMPLETE（调用方负责持锁）
-int requireInitialized()
+int requireInitialized(const char* caller)
 {
-    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!S().initialized) {
+        LOG_WARN("bridge: {} 早退 — 引擎未初始化", caller ? caller : "unknown");
+        return BRIDGE_ERR_NOT_INIT;
+    }
     if (!S().userRepo || !S().userRepo->isInitialized(S().activeUserId)) {
+        LOG_WARN("bridge: {} 早退 — 当前档案未完成强制初始化 active_user_id={}",
+                 caller ? caller : "unknown", S().activeUserId);
         return BRIDGE_ERR_INIT_INCOMPLETE;
     }
     return BRIDGE_OK;

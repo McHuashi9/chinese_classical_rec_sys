@@ -5,6 +5,8 @@
 // 与验收口径「残留 6 处 = 生命周期 5 + 共享事务 helper 1」对应。
 
 #include "bridge_internal.h"
+
+#include "log_redact.h"
 #include "user_tables.h"
 
 #include <filesystem>
@@ -101,7 +103,7 @@ int validateContentConnection(sqlite3* db, const std::string& schema = "")
 int validateContentFile(const std::string& path)
 {
     if (!std::filesystem::exists(path)) {
-        LOG_ERROR("bridge: 内容库文件不存在: {}", path);
+        LOG_ERROR("bridge: 内容库文件不存在: {}", bridge_log::redactPath(path));
         return BRIDGE_ERR_DB_CONTENT;
     }
     DatabaseManager tmp;
@@ -133,7 +135,7 @@ static int openDatabase(const char* content_path, const char* user_path)
     S() = {};
     if (!content_path || !user_path) return BRIDGE_ERR_GENERIC;
     if (samePath(content_path, user_path)) {
-        LOG_ERROR("bridge: user.db 与 classical.db 同路径: {}", content_path);
+        LOG_ERROR("bridge: user.db 与 classical.db 同路径: {}", bridge_log::redactPath(content_path));
         return BRIDGE_ERR_DB_SAME_PATH;
     }
 
@@ -223,7 +225,8 @@ static int openDatabase(const char* content_path, const char* user_path)
     }
 
     LOG_INFO("bridge: 数据库已打开 — {} 篇文本已加载, user.db={}, content.db={}",
-             S().texts->size(), user_path, content_path);
+             S().texts->size(), bridge_log::redactPath(user_path),
+             bridge_log::redactPath(content_path));
     return BRIDGE_OK;
 }
 
@@ -232,8 +235,12 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* content_path, const char*
     return bridge_guard(g_mtx, [&]() -> int {
     // 日志目录跟随用户库所在目录（App 数据目录），避免随 cwd 漂移
     const std::filesystem::path dbDir = std::filesystem::path(user_path).parent_path();
-    Logger::getInstance().init((dbDir / "logs").string());
-    LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
+    const bool logReady = Logger::getInstance().init((dbDir / "logs").string());
+    if (logReady) {
+        LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
+    } else {
+        LOG_WARN("bridge: 日志文件 sink 初始化失败，已降级到 stderr/系统日志");
+    }
 
     return openDatabase(content_path, user_path);
     });
@@ -276,7 +283,10 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
     return bridge_guard(g_mtx, [&]() -> int {
     if (!new_db_path || !cur_db_path) return BRIDGE_ERR_GENERIC;
     const std::filesystem::path dbDir = std::filesystem::path(cur_db_path).parent_path();
-    Logger::getInstance().init((dbDir / "logs").string());
+    const bool logReady = Logger::getInstance().init((dbDir / "logs").string());
+    if (!logReady) {
+        LOG_WARN("db_replace: 日志文件 sink 初始化失败，已降级到 stderr/系统日志");
+    }
 
     // 1. 校验新内容包（只读，不动任何现有文件）
     const int validateRc = validateContentFile(new_db_path);

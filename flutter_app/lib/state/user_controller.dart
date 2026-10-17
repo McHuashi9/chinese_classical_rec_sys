@@ -107,22 +107,45 @@ class UserController extends ChangeNotifier {
   /// 新建档案；成功后刷新列表并返回新 id
   int? createProfile(String name) {
     final repo = _profileRepo;
+    if (repo == null) {
+      AppLogger().warn('createProfile 失败: 档案仓库未注入');
+      return null;
+    }
     final normalized = normalizeProfileName(name);
-    if (repo == null || normalized == null) return null;
+    if (normalized == null) {
+      AppLogger().warn('createProfile 失败: 档案名无效');
+      return null;
+    }
     final id = repo.createProfile(normalized);
-    if (id == null) return null;
+    if (id == null) {
+      AppLogger().error('createProfile 失败: 仓库返回空 id');
+      return null;
+    }
     refreshProfiles();
+    AppLogger().info('createProfile 成功 id=$id');
     return id;
   }
 
   /// 新建档案并继承已有档案能力与历史；成功后刷新列表并返回新 id
   int? createInheritedProfile(String name, int sourceId) {
     final repo = _profileRepo;
+    if (repo == null) {
+      AppLogger().warn('createInheritedProfile 失败: 档案仓库未注入');
+      return null;
+    }
     final normalized = normalizeProfileName(name);
-    if (repo == null || normalized == null) return null;
+    if (normalized == null) {
+      AppLogger().warn('createInheritedProfile 失败: 档案名无效 source_id=$sourceId');
+      return null;
+    }
     final id = repo.createProfileInherit(normalized, sourceId);
-    if (id == null) return null;
+    if (id == null) {
+      AppLogger()
+          .error('createInheritedProfile 失败: 仓库返回空 id source_id=$sourceId');
+      return null;
+    }
     refreshProfiles();
+    AppLogger().info('createInheritedProfile 成功 id=$id source_id=$sourceId');
     return id;
   }
 
@@ -150,13 +173,24 @@ class UserController extends ChangeNotifier {
   /// 不自动释放题组：结果页/路由销毁时统一释放。
   bool applyInit(List<int> qids, List<int> choices) {
     final repo = _initRepo;
-    if (repo == null || _user == null) return false;
-    if (qids.length != choices.length || qids.isEmpty) return false;
+    if (repo == null || _user == null) {
+      AppLogger().warn('applyInit 失败: 初始化仓库或用户未就绪');
+      return false;
+    }
+    if (qids.length != choices.length || qids.isEmpty) {
+      AppLogger().warn(
+          'applyInit 失败: 答案数量不合法 questions=${qids.length} choices=${choices.length}');
+      return false;
+    }
     final updated = repo.applyInit(qids, choices);
-    if (updated == null) return false;
+    if (updated == null) {
+      AppLogger().error('applyInit 失败: 仓库返回空结果 count=${qids.length}');
+      return false;
+    }
     _isInitialized = true;
     _updateUser(updated);
     _afterQuizSubmit();
+    AppLogger().info('applyInit 成功 count=${qids.length}');
     return true;
   }
 
@@ -176,19 +210,37 @@ class UserController extends ChangeNotifier {
   /// 重命名档案；成功后刷新列表
   bool renameProfile(int id, String name) {
     final repo = _profileRepo;
+    if (repo == null) {
+      AppLogger().warn('renameProfile 失败: 档案仓库未注入 id=$id');
+      return false;
+    }
     final normalized = normalizeProfileName(name);
-    if (repo == null || normalized == null) return false;
-    if (!repo.renameProfile(id, normalized)) return false;
+    if (normalized == null) {
+      AppLogger().warn('renameProfile 失败: 档案名无效 id=$id');
+      return false;
+    }
+    if (!repo.renameProfile(id, normalized)) {
+      AppLogger().error('renameProfile 失败: 仓库拒绝 id=$id');
+      return false;
+    }
     refreshProfiles();
+    AppLogger().info('renameProfile 成功 id=$id');
     return true;
   }
 
   /// 软删档案；成功后刷新列表
   bool deleteProfile(int id) {
     final repo = _profileRepo;
-    if (repo == null) return false;
-    if (!repo.deleteProfile(id)) return false;
+    if (repo == null) {
+      AppLogger().warn('deleteProfile 失败: 档案仓库未注入 id=$id');
+      return false;
+    }
+    if (!repo.deleteProfile(id)) {
+      AppLogger().error('deleteProfile 失败: 仓库拒绝 id=$id');
+      return false;
+    }
     refreshProfiles();
+    AppLogger().info('deleteProfile 成功 id=$id');
     return true;
   }
 
@@ -330,27 +382,45 @@ class UserController extends ChangeNotifier {
   /// 且 C++ 事务保证整批回滚——不存在「前几题已生效」的部分成功返回值。
   List<QuizAnswer>? submitQuiz(List<Question> questions, List<int> choices,
       {bool isReview = false}) {
-    if (_user == null || _tracker == null) return null;
-    if (questions.length != choices.length) return null;
-    if (questions.isEmpty) return const [];
+    if (_user == null || _tracker == null) {
+      AppLogger().warn('submitQuiz 失败: 用户或 tracker 未就绪 is_review=$isReview');
+      return null;
+    }
+    if (questions.length != choices.length) {
+      AppLogger().warn(
+          'submitQuiz 失败: 题目/答案数量不匹配 questions=${questions.length} choices=${choices.length}');
+      return null;
+    }
+    if (questions.isEmpty) {
+      AppLogger().debug('submitQuiz 跳过: 空题组');
+      return const [];
+    }
 
-    final result = _tracker!.applyQuizBatch(
-      _user!,
-      [for (final q in questions) q.id],
-      choices,
-      isReview: isReview,
-    );
-    _updateUser(result.user);
-    _afterQuizSubmit();
-    return [
-      for (int i = 0; i < questions.length; i++)
-        QuizAnswer(
-          questionId: questions[i].id,
-          selected: choices[i],
-          correct: result.correct[i],
-          abilityBefore: result.abilityBefore[i],
-        ),
-    ];
+    try {
+      final result = _tracker!.applyQuizBatch(
+        _user!,
+        [for (final q in questions) q.id],
+        choices,
+        isReview: isReview,
+      );
+      _updateUser(result.user);
+      _afterQuizSubmit();
+      AppLogger()
+          .info('submitQuiz 完成 count=${questions.length} is_review=$isReview');
+      return [
+        for (int i = 0; i < questions.length; i++)
+          QuizAnswer(
+            questionId: questions[i].id,
+            selected: choices[i],
+            correct: result.correct[i],
+            abilityBefore: result.abilityBefore[i],
+          ),
+      ];
+    } catch (e) {
+      AppLogger().error(
+          'submitQuiz 失败 count=${questions.length} is_review=$isReview: $e');
+      rethrow;
+    }
   }
 
   /// 提交后的收尾：复习状态可能已变（错题入队/移除），置脏错题数。

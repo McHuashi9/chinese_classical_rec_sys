@@ -16,6 +16,7 @@ set(TEST_SOURCES
     test_models.cpp
     test_statement.cpp
     test_review_scheduler.cpp
+    test_logger.cpp
     ${CMAKE_SOURCE_DIR}/bridge/bridge_shared.cpp
     ${CMAKE_SOURCE_DIR}/bridge/bridge_lifecycle.cpp
     ${CMAKE_SOURCE_DIR}/bridge/bridge_user.cpp

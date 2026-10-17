@@ -52,7 +52,10 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
 
       _saveUser(b, 0.6);
@@ -70,7 +73,10 @@ void main() {
       File('${work.path}/db_version.txt').writeAsStringSync('unknown');
 
       // 恢复后的库可正常打开，数据完好
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
@@ -80,9 +86,11 @@ void main() {
       // 方向判断：asset 版本比 unknown 新 → 内置数据升级（db_replace 合并用户数据）
       final tmp = '${work.path}/classical.db.tmp';
       _copyAssetDb(tmp);
-      expect(b.dbReplace(tmp.toNativeUtf8(allocator: calloc),
-          db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(b.dbReplaceUtf8(tmp, db), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
@@ -97,7 +105,10 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
       _saveUser(b, 0.5);
       expect(b.historyAddRecord(3, 90.0, 1700000000), BridgeError.ok);
@@ -113,9 +124,12 @@ void main() {
       // 启动：.bak → 正式位，版本 unknown，随后 asset 更新方向判定走 db_replace
       File('${work.path}/classical.db.bak').renameSync(db);
       File('${work.path}/db_version.txt').writeAsStringSync('unknown');
-      expect(b.dbReplace('${work.path}/classical.db.tmp'.toNativeUtf8(allocator: calloc),
-          db.toNativeUtf8(allocator: calloc)), BridgeError.ok);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbReplaceUtf8('${work.path}/classical.db.tmp', db), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
 
       expect(b.textGetCount(), 270);
@@ -129,7 +143,10 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
       _saveUser(b, 0.8);
       expect(b.historyAddRecord(4, 45.0, 1700000000), BridgeError.ok);
@@ -138,10 +155,10 @@ void main() {
 
       // 伪造损坏的新库（非 SQLite 内容）
       final tmp = '${work.path}/classical.db.tmp';
-      File(tmp).writeAsBytesSync('this is not a sqlite database at all....'.codeUnits);
+      File(tmp).writeAsBytesSync(
+          'this is not a sqlite database at all....'.codeUnits);
 
-      final rc = b.dbReplace(tmp.toNativeUtf8(allocator: calloc),
-          db.toNativeUtf8(allocator: calloc));
+      final rc = b.dbReplaceUtf8(tmp, db);
       expect(rc, isNot(BridgeError.ok));
 
       // 旧库字节级不变，且未产生 .bak（失败发生在文件层替换之前）
@@ -151,7 +168,10 @@ void main() {
       File(tmp).deleteSync();
 
       // 引擎可重开（H2 恢复路径），数据完好
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
       expect(b.textGetCount(), 270);
       expect(b.historyGetTotalCount(), 1);
@@ -186,7 +206,10 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
 
       final out = calloc<Uint8>(65536);
@@ -206,7 +229,10 @@ void main() {
       final b = bridge!;
       final db = '${work.path}/classical.db';
       _copyAssetDb(db);
-      expect(b.dbOpen(db.toNativeUtf8(allocator: calloc), '${work.path}/user.db'.toNativeUtf8(allocator: calloc)), BridgeError.ok);
+      expect(
+          b.dbOpen(db.toNativeUtf8(allocator: calloc),
+              '${work.path}/user.db'.toNativeUtf8(allocator: calloc)),
+          BridgeError.ok);
       _initDefaultProfile(b);
 
       final out = calloc<Uint8>(1024);
@@ -228,15 +254,17 @@ NativeBridge? _tryLoadBridge() {
   for (final p in candidates) {
     final f = File(p);
     if (f.existsSync()) {
-      return NativeBridge.fromLib(
-          DynamicLibrary.open(f.absolute.path));
+      return NativeBridge.fromLib(DynamicLibrary.open(f.absolute.path));
     }
   }
   return null;
 }
 
 String _assetDbPath() {
-  for (final p in ['assets/data/classical.db', '../flutter_app/assets/data/classical.db']) {
+  for (final p in [
+    'assets/data/classical.db',
+    '../flutter_app/assets/data/classical.db'
+  ]) {
     if (File(p).existsSync()) return p;
   }
   throw StateError('找不到资产 DB（assets/data/classical.db）');
@@ -244,8 +272,7 @@ String _assetDbPath() {
 
 void _copyAssetDb(String dest) {
   final script = _fixtureScriptPath();
-  final result = Process.runSync(
-      'python3', [script, _assetDbPath(), dest]);
+  final result = Process.runSync('python3', [script, _assetDbPath(), dest]);
   if (result.exitCode != 0) {
     throw StateError('生成纯内容 fixture 失败: ${result.stderr}');
   }

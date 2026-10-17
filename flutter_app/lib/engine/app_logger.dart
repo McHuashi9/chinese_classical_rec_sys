@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import '../bridge/ffi_bindings.dart';
+import 'log_redaction.dart';
 
 /// 底层日志写入通道：level 取值 0=DEBUG / 1=INFO / 2=WARN / 3=ERROR。
 typedef AppLogSink = void Function(int level, String message);
@@ -38,12 +39,13 @@ class AppLogger {
   void _log(int level, String message) {
     // A1：日志自身任何失败都不得外抛（会打断业务调用），
     // 且 `toNativeUtf8` 分配的内存必须释放（见 [_tryDeliver] 的 finally）。
+    final safeMessage = redactLogText(message);
     try {
-      if (_tryDeliver(level, message)) return;
-      _enqueue(level, message);
-      debugPrint('[${_levelTag(level)}] $message');
+      if (_tryDeliver(level, safeMessage)) return;
+      _enqueue(level, safeMessage);
+      debugPrint('[${_levelTag(level)}] $safeMessage');
     } catch (e) {
-      debugPrint('[${_levelTag(level)}] (日志写入失败: $e) $message');
+      debugPrint('[${_levelTag(level)}] (日志写入失败: $e) $safeMessage');
     }
   }
 
@@ -99,17 +101,22 @@ class AppLogger {
   }
 
   void debug(String msg) => _log(0, msg);
-  void info(String msg)  => _log(1, msg);
-  void warn(String msg)  => _log(2, msg);
+  void info(String msg) => _log(1, msg);
+  void warn(String msg) => _log(2, msg);
   void error(String msg) => _log(3, msg);
 
   static String _levelTag(int level) {
     switch (level) {
-      case 0: return 'DEBUG';
-      case 1: return 'INFO';
-      case 2: return 'WARN';
-      case 3: return 'ERROR';
-      default: return 'INFO';
+      case 0:
+        return 'DEBUG';
+      case 1:
+        return 'INFO';
+      case 2:
+        return 'WARN';
+      case 3:
+        return 'ERROR';
+      default:
+        return 'INFO';
     }
   }
 }

@@ -95,7 +95,7 @@ void c_to_user(const UserData* src, User& dst);
 bool loadUserForActive(int userId);
 
 /** 强制初始化闸门：未初始化/未完成初始化分别返回对应错误码（调用方负责持锁） */
-int requireInitialized();
+int requireInitialized(const char* caller);
 
 // ─── 事务 RAII ─────────────────────────────────────────────────────────────────
 

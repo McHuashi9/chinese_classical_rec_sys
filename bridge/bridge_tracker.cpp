@@ -14,7 +14,7 @@ extern "C" CHINESE_CORE_EXPORT int recommend(const UserData* user, int top_k,
                            int out_ids_capacity, int out_probs_capacity)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("recommend");
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !out_ids || !out_probs) return BRIDGE_ERR_GENERIC;
 
@@ -40,9 +40,12 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_read(const UserData* user, int 
                                    UserData* out_user, int skip_effect)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!S().initialized) {
+        LOG_WARN("bridge: tracker_apply_read 早退 — 引擎未初始化");
+        return BRIDGE_ERR_NOT_INIT;
+    }
     if (skip_effect == 0) {
-        const int initRc = requireInitialized();
+        const int initRc = requireInitialized("tracker_apply_read");
         if (initRc != BRIDGE_OK) return initRc;
     }
     if (!user || !out_user) return BRIDGE_ERR_GENERIC;
@@ -96,7 +99,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user
                                          UserData* out_user)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("tracker_apply_forgetting");
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
@@ -112,7 +115,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_forgetting(const UserData* user
 extern "C" CHINESE_CORE_EXPORT int tracker_prune(const UserData* user, int64_t now, UserData* out_user)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("tracker_prune");
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 

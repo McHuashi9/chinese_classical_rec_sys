@@ -325,10 +325,10 @@ extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
     }
     int newId = 0;
     if (!S().userRepo->createProfile(name, newId)) {
-        LOG_ERROR("bridge: user_create 失败 name={}", name);
+        LOG_ERROR("bridge: user_create 失败（档案名已脱敏）");
         return BRIDGE_ERR_GENERIC;
     }
-    LOG_INFO("bridge: 已创建档案 id={} name={}", newId, name);
+    LOG_INFO("bridge: 已创建档案 id={}", newId);
     return newId;
     });
 }
@@ -343,10 +343,10 @@ extern "C" CHINESE_CORE_EXPORT int user_create_inherit(const char* name, int sou
     }
     int newId = 0;
     if (!S().userRepo->createProfileInherit(name, source_id, newId)) {
-        LOG_ERROR("bridge: user_create_inherit 失败 name={} source_id={}", name, source_id);
+        LOG_ERROR("bridge: user_create_inherit 失败 source_id={}", source_id);
         return BRIDGE_ERR_GENERIC;
     }
-    LOG_INFO("bridge: 已创建继承档案 id={} name={} source_id={}", newId, name, source_id);
+    LOG_INFO("bridge: 已创建继承档案 id={} source_id={}", newId, source_id);
     return newId;
     });
 }

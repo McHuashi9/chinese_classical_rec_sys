@@ -28,7 +28,7 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
                                                         int max_count, int* answered_all)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("question_get_by_text");
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
     if (S().textIndex->find(text_id) == S().textIndex->end()) {
@@ -205,7 +205,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
                                       UserData* out_user, int* out_correct, int is_review)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("tracker_apply_quiz");
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !out_user) return BRIDGE_ERR_GENERIC;
 
@@ -262,7 +262,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz_batch(
     int is_review)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("tracker_apply_quiz_batch");
     if (initRc != BRIDGE_OK) return initRc;
     if (!user || !question_ids || !user_choices || !out_user || count <= 0) {
         return BRIDGE_ERR_GENERIC;
@@ -336,7 +336,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
                                                          int max_count)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("quiz_get_review_items");
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -367,7 +367,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
 extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("quiz_get_due_review_count");
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
     int count = 0;
@@ -384,7 +384,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("quiz_get_review_count");
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
     int count = 0;
@@ -402,7 +402,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
                                                              QuestionData* out, int max_count)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("quiz_get_questions_by_ids");
     if (initRc != BRIDGE_OK) return initRc;
     if (!ids || !out || count <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -423,7 +423,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* to
                                                             int* answered, int* wrong)
 {
     return bridge_guard(g_mtx, [&]() -> int {
-    const int initRc = requireInitialized();
+    const int initRc = requireInitialized("quiz_get_attempt_summary");
     if (initRc != BRIDGE_OK) return initRc;
     if (S().textIndex->find(text_id) == S().textIndex->end()) return BRIDGE_ERR_TEXT;
 

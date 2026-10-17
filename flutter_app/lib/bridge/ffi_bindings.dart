@@ -14,6 +14,22 @@ final class NativeBridge {
   late final void Function() dbClose;
   late final int Function(Pointer<Utf8> newPath, Pointer<Utf8> curPath)
       dbReplace;
+
+  /// 用 Dart String 调用 db_replace，内部负责 UTF-8 指针的分配与释放。
+  ///
+  /// 不改变 C ABI；供启动升级与远程同步共用，避免各自复制
+  /// `toNativeUtf8 + calloc.free` 样板。
+  int dbReplaceUtf8(String newPath, String currentPath) {
+    final np = newPath.toNativeUtf8(allocator: calloc);
+    final cp = currentPath.toNativeUtf8(allocator: calloc);
+    try {
+      return dbReplace(np, cp);
+    } finally {
+      calloc.free(np);
+      calloc.free(cp);
+    }
+  }
+
   late final int Function(Pointer<Utf8> destPath) userExport;
   late final int Function(
           Pointer<Int32> userVersion, Pointer<Int32> contentVersion)

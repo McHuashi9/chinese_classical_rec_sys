@@ -124,6 +124,8 @@ class AppCoordinator {
 
       if (rc != BridgeError.ok) {
         _dbOpenErrorCode = rc;
+        AppLogger().error(
+            'coordinator.init 数据库打开失败 rc=${BridgeError.nameOf(rc)} content=$contentPath user=$userPath');
         settingsCtrl.setError('数据库打开失败: $contentPath / $userPath');
         return false;
       }
@@ -148,7 +150,8 @@ class AppCoordinator {
       initialized.value = true;
       settingsCtrl.clearError();
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger().error('coordinator.init 异常: $e\n$st');
       settingsCtrl.setError('初始化失败: $e');
       return false;
     }
@@ -333,27 +336,43 @@ class AppCoordinator {
 
   void applyReadingEffect() {
     // 替换窗口内引擎关闭：跳过阅读效应（防静默失败；当前窗口为原子段，正常不可达）
-    if (syncing.value) return;
+    if (syncing.value) {
+      AppLogger().debug('applyReadingEffect 跳过: 数据同步窗口');
+      return;
+    }
     final textId = readingCtrl.readingTextId;
     final seconds = readingCtrl.elapsedSeconds;
     final text = readingCtrl.readingText;
-    if (textId != null &&
-        userCtrl.user != null &&
-        text != null &&
-        !readTracker.isTextRead(textId) &&
-        seconds >= minReadTimeSeconds(text.charCount)) {
-      // 按写库返回码决定是否标记已读（与 recordInitRead 同口径）：先标记后写库
-      // 会在写库失败时把内存置为已读，本会话内守卫不再补记、界面误报已读。
-      try {
-        if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
-          readTracker.markEffectApplied(textId);
-          _statsGeneration++;
-          settingsCtrl.clearError();
-        }
-      } on FfiException catch (e) {
-        AppLogger().warn('阅读效应写入失败，保留未读状态待下次重试: $e');
-        settingsCtrl.setError('阅读记录写入失败，请稍后重试');
+    if (textId == null || userCtrl.user == null || text == null) {
+      AppLogger().debug(
+          'applyReadingEffect 跳过: 阅读状态不完整 text_id=$textId has_user=${userCtrl.user != null} has_text=${text != null}');
+      return;
+    }
+    if (readTracker.isTextRead(textId)) {
+      AppLogger().debug('applyReadingEffect 跳过: 已应用 text_id=$textId');
+      return;
+    }
+    final threshold = minReadTimeSeconds(text.charCount);
+    if (seconds < threshold) {
+      AppLogger().debug(
+          'applyReadingEffect 跳过: 未达最低时长 text_id=$textId seconds=$seconds threshold=$threshold');
+      return;
+    }
+    // 按写库返回码决定是否标记已读（与 recordInitRead 同口径）：先标记后写库
+    // 会在写库失败时把内存置为已读，本会话内守卫不再补记、界面误报已读。
+    try {
+      if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
+        readTracker.markEffectApplied(textId);
+        _statsGeneration++;
+        settingsCtrl.clearError();
+        AppLogger()
+            .info('applyReadingEffect 成功 text_id=$textId seconds=$seconds');
+      } else {
+        AppLogger().warn('applyReadingEffect 失败: 用户状态更新被拒绝 text_id=$textId');
       }
+    } on FfiException catch (e) {
+      AppLogger().warn('阅读效应写入失败，保留未读状态待下次重试: $e');
+      settingsCtrl.setError('阅读记录写入失败，请稍后重试');
     }
   }
 
@@ -417,15 +436,26 @@ class AppCoordinator {
 
   Future<void> remoteSyncDb(
       {String? remoteVersion, String? downloadUrl}) async {
-    if (remoteVersion == null || downloadUrl == null) return;
-    if (_remoteDbSync == null) return;
+    if (remoteVersion == null || downloadUrl == null) {
+      AppLogger().warn('remoteSyncDb 跳过: 远端版本或下载地址为空');
+      return;
+    }
+    if (_remoteDbSync == null) {
+      AppLogger().warn('remoteSyncDb 跳过: 远程同步器未初始化');
+      return;
+    }
 
     final tmpPath = await _remoteDbSync!.trySyncFromRelease(
       remoteVersion: remoteVersion,
       downloadUrl: downloadUrl,
     );
-    if (tmpPath == null) return;
+    if (tmpPath == null) {
+      AppLogger().debug('remoteSyncDb 跳过: 下载阶段未产生待替换文件');
+      return;
+    }
     if (_bridge == null || !isInitialized || _contentPathAfterSync == null) {
+      AppLogger().error('remoteSyncDb 失败: 引擎/内容路径未就绪 bridge=${_bridge != null} '
+          'initialized=$isInitialized has_path=${_contentPathAfterSync != null}');
       _deleteFile(tmpPath);
       return;
     }
@@ -464,12 +494,7 @@ class AppCoordinator {
 
   int _replaceDb(String newPath, String curPath) {
     if (_bridge == null) return -1;
-    final np = newPath.toNativeUtf8(allocator: calloc);
-    final cp = curPath.toNativeUtf8(allocator: calloc);
-    final rc = _bridge!.dbReplace(np, cp);
-    calloc.free(np);
-    calloc.free(cp);
-    return rc;
+    return _bridge!.dbReplaceUtf8(newPath, curPath);
   }
 
   void _deleteFile(String path) {
