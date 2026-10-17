@@ -15,6 +15,7 @@ on:
       - 'CMakeLists.txt'
       - 'flutter_app/**'
       - 'scripts/subset_fonts.py'
+      - 'scripts/project/sync_announcement.sh'
       - 'scripts/test_coverage_cpp.sh'
       - 'scripts/summarize_cov.py'
       - 'packaging/**'
@@ -57,6 +58,9 @@ jobs:
             flutter_app/.dart_tool
             ~/.pub-cache
           key: ${{ runner.os }}-flutter-${{ hashFiles('flutter_app/pubspec.yaml') }}
+
+      - name: Announcement sync regression test
+        run: python3 tests/python/test_sync_announcement.py
 
       - name: Flutter pub get
         run: flutter pub get

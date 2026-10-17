@@ -59,6 +59,7 @@ git add flutter_app/assets/data/classical.db flutter_app/assets/data/db_version.
 1. 新增文章后必跑 `python3 scripts/subset_fonts.py`（需 `fonttools`；字体原文件来自 `fonts-v1` Release tag，勿删）。
 2. 如需随文答题，先 `python3 scripts/project/generate_questions.py --json`，再跑 `init_data.py`。
 3. 题库重建必须按上面的顺序先导出旧库 id 映射，避免老用户复习数据漂移。
+4. 题干、答案等 q_key 输入字段即使只做引号/空白等外观性编辑，也会改变题目身份；不要直接改文案了事，必须按题库重建流程导出旧映射并随内容库一起发布新版本。
 
 ## 发布数据包
 
@@ -85,7 +86,8 @@ bash scripts/project/publish_data.sh
 - 版本号唯一源：`flutter_app/pubspec.yaml`。
 - 格式 `major.minor.patch`，Git tag 加 `v` 前缀。
 - 发版入口：`bash scripts/project/bump_version.sh X.Y.Z`（自动同步版本号、CHANGELOG 与 `flutter_app/assets/data/announcement.md` 的 id/版本改动）。
-- 公告作者的话维护在 `flutter_app/assets/data/announcement.md`；发版脚本只自动同步“版本改动”段，作者的话需维护者手动更新。若整理 CHANGELOG 后需要重新同步，可执行 `bash scripts/project/sync_announcement.sh X.Y.Z`。
+- 公告作者的话维护在 `flutter_app/assets/data/announcement.md`；发版脚本只自动同步“版本改动”段，作者的话需维护者手动更新。若整理 CHANGELOG 后需要重新同步，先执行 `bash scripts/project/sync_announcement.sh X.Y.Z --dry-run` 检查 unified diff，确认后再去掉 `--dry-run` 正式写入。
+- 公告同步脚本的保护测试：`python3 tests/python/test_sync_announcement.py`（验证作者的话不被覆盖、dry-run 不写盘、失败不改文件）。
 - 数据独立发布用 `publish_data.sh`（tag `data-*` 预发布 + gz），**先于 App 发布**。
 - 每次功能变更同时更新 `CHANGELOG.md`。
 
@@ -96,7 +98,7 @@ bash scripts/project/publish_data.sh
    - 自动更新 `flutter_app/pubspec.yaml`、`flutter_app/lib/state/coordinator.dart`、`packaging/nsis/installer.nsi`
    - 在 CHANGELOG 生成 `[X.Y.Z]` 头部和版本链接
    - 自动把最新 CHANGELOG 的 Added / Changed / Fixed 同步到 `flutter_app/assets/data/announcement.md` 的“版本改动”，并更新 front matter `id`
-3. 人工检查/整理 CHANGELOG 的发布描述；若改动过 CHANGELOG 文案，重跑 `bash scripts/project/sync_announcement.sh X.Y.Z`。
+3. 人工检查/整理 CHANGELOG 的发布描述；若改动过 CHANGELOG 文案，先跑 `bash scripts/project/sync_announcement.sh X.Y.Z --dry-run` 核对 diff，再重跑 `bash scripts/project/sync_announcement.sh X.Y.Z`。
    - 注意公告“版本改动”按 `### Added|Changed|Fixed` 下的 `- ` 条目逐条抓取，**引用块（`>`）不会进公告**；条目写太长会原样显示在 App 内公告里，压到一两句为宜。
 4. **改完版本号要重新 configure**：根 `CMakeLists.txt` 与 `flutter_app/android/app/CMakeLists.txt` 都在 CMake configure 期读 `pubspec.yaml`，而 CMake / Gradle `.cxx` 并不把 pubspec 当依赖。只跑增量构建会得到**内嵌旧版本号**的原生库（表现为启动横幅 `===== vX.Y.Z 启动 =====` 与 APK 版本不一致）。本地构建/验收前执行：
 
