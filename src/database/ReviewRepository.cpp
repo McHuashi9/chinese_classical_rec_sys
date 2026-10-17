@@ -32,10 +32,11 @@ std::string ReviewRepository::danglingSuffix() const
     return " AND question_id IN (SELECT id FROM questions)";
 }
 
-std::vector<ReviewItem> ReviewRepository::listDue(int userId, int textId, int64_t now, int maxCount)
+bool ReviewRepository::listDue(int userId, int textId, int64_t now, int maxCount,
+                               std::vector<ReviewItem>& out)
 {
-    std::vector<ReviewItem> items;
-    if (!db || !db->getConnection() || maxCount <= 0) return items;
+    out.clear();
+    if (!db || !db->getConnection() || maxCount <= 0) return false;
 
     const std::string sql = std::string("SELECT question_id, text_id, correct_streak, wrong_count, "
                                         "next_review_at") +
@@ -45,10 +46,10 @@ std::vector<ReviewItem> ReviewRepository::listDue(int userId, int textId, int64_
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId, now, textId, textId, maxCount}, rows)) {
         LOG_ERROR("bridge: quiz_get_review_items 查询失败: {}", db->getLastError());
-        return items;
+        return false;
     }
 
-    items.reserve(rows.size());
+    out.reserve(rows.size());
     for (const Row& row : rows) {
         ReviewItem item;
         item.questionId = static_cast<int>(row.integer("question_id"));
@@ -56,14 +57,15 @@ std::vector<ReviewItem> ReviewRepository::listDue(int userId, int textId, int64_
         item.correctStreak = static_cast<int>(row.integer("correct_streak"));
         item.wrongCount = static_cast<int>(row.integer("wrong_count"));
         item.nextReviewAt = row.integer("next_review_at");
-        items.push_back(item);
+        out.push_back(item);
     }
-    return items;
+    return true;
 }
 
-int ReviewRepository::dueCount(int userId, int textId, int64_t now)
+bool ReviewRepository::dueCount(int userId, int textId, int64_t now, int& out)
 {
-    if (!db || !db->getConnection()) return 0;
+    out = 0;
+    if (!db || !db->getConnection()) return false;
 
     const std::string sql =
         std::string("SELECT COUNT(*) AS cnt") + kReviewWhereBase + kReviewWhereDue +
@@ -72,14 +74,16 @@ int ReviewRepository::dueCount(int userId, int textId, int64_t now)
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId, now, textId, textId}, rows) || rows.empty()) {
         LOG_ERROR("bridge: quiz_get_due_review_count 查询失败: {}", db->getLastError());
-        return 0;
+        return false;
     }
-    return static_cast<int>(rows[0].integer("cnt"));
+    out = static_cast<int>(rows[0].integer("cnt"));
+    return true;
 }
 
-int ReviewRepository::totalCount(int userId, int textId)
+bool ReviewRepository::totalCount(int userId, int textId, int& out)
 {
-    if (!db || !db->getConnection()) return 0;
+    out = 0;
+    if (!db || !db->getConnection()) return false;
 
     const std::string sql =
         std::string("SELECT COUNT(*) AS cnt") + kReviewWhereBase + kReviewWhereText + danglingSuffix();
@@ -87,23 +91,28 @@ int ReviewRepository::totalCount(int userId, int textId)
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId, textId, textId}, rows) || rows.empty()) {
         LOG_ERROR("bridge: quiz_get_review_count 查询失败: {}", db->getLastError());
-        return 0;
+        return false;
     }
-    return static_cast<int>(rows[0].integer("cnt"));
+    out = static_cast<int>(rows[0].integer("cnt"));
+    return true;
 }
 
-int ReviewRepository::itemCountForText(int userId, int textId)
+bool ReviewRepository::itemCountForText(int userId, int textId, int& out)
 {
-    if (!db || !db->getConnection()) return 0;
+    out = 0;
+    if (!db || !db->getConnection()) return false;
 
     // 与原 quiz_get_attempt_summary 的 wrong 通道一致：按 text_id + user_id，不加悬空过滤/到期过滤
     std::vector<Row> rows;
     if (!db->queryRows("SELECT COUNT(*) AS cnt FROM review_items WHERE text_id = ? AND user_id = ?",
                        std::vector<SqlParam>{textId, userId}, rows) ||
         rows.empty()) {
-        return 0;
+        LOG_ERROR("bridge: quiz_get_attempt_summary wrong 查询失败: {}",
+                  db ? db->getLastError() : "db unavailable");
+        return false;
     }
-    return static_cast<int>(rows[0].integer("cnt"));
+    out = static_cast<int>(rows[0].integer("cnt"));
+    return true;
 }
 
 bool ReviewRepository::upsertWrong(int userId, int questionId, int textId, int64_t nextReviewAt)

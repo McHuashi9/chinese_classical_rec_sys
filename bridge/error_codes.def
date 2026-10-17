@@ -1,0 +1,26 @@
+/*
+ * FFI 错误码单一权威源（X-macro）。
+ *
+ * 用法：定义 BRIDGE_ERROR(name, value, description) 后 include 本文件。
+ * C/C++ 端见 bridge/c_types.h 的 enum 展开；Dart 常量由
+ * scripts/project/generate_bridge_error_codes.py 生成。
+ *
+ * 新增/修改错误码只改这里，勿在 Dart 手工维护第二张表。
+ */
+#ifndef BRIDGE_ERROR
+#error "bridge/error_codes.def: 请先定义 BRIDGE_ERROR(name, value, description)"
+#endif
+
+BRIDGE_ERROR(OK, 0, "成功")
+BRIDGE_ERROR(ERR_GENERIC, -1, "通用错误")
+BRIDGE_ERROR(ERR_NOT_INIT, -2, "未初始化（未调用 db_open）")
+BRIDGE_ERROR(ERR_USER, -3, "用户/档案不存在或不可用")
+BRIDGE_ERROR(ERR_TEXT, -4, "文本/题目不存在")
+BRIDGE_ERROR(ERR_INIT, -5, "初始化失败")
+BRIDGE_ERROR(ERR_DB_CONTENT, -6, "内容库缺失/损坏/缺表/含旧用户表")
+BRIDGE_ERROR(ERR_DB_USER, -7, "用户库缺失/损坏")
+BRIDGE_ERROR(ERR_DB_VERSION, -8, "db_version 不兼容（0 或 >1）")
+BRIDGE_ERROR(ERR_DB_SAME_PATH, -9, "user.db 与 classical.db 同路径")
+BRIDGE_ERROR(ERR_INIT_INCOMPLETE, -10, "强制初始化未完成")
+
+#undef BRIDGE_ERROR

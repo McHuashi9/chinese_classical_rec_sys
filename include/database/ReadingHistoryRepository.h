@@ -42,16 +42,18 @@ public:
      * @brief 获取最近阅读记录
      * @param userId 用户ID
      * @param limit 记录数量限制
-     * @return 阅读记录列表
+     * @param out 成功时写入阅读记录列表
+     * @return false = 查询失败；true = 成功（out 可为空）
      */
-    std::vector<ReadingRecord> getRecentRecords(int userId, int limit = 10);
+    bool getRecentRecords(int userId, int limit, std::vector<ReadingRecord>& out);
     
     /**
      * @brief 获取用户总阅读次数
      * @param userId 用户ID
-     * @return 阅读次数
+     * @param out 成功时写入阅读次数
+     * @return false = 查询失败；true = 成功（out 可为 0）
      */
-    int getTotalReadCount(int userId);
+    bool getTotalReadCount(int userId, int& out);
 
     /**
      * @brief 标记文章已追踪（INSERT OR IGNORE）
@@ -64,9 +66,10 @@ public:
     /**
      * @brief 获取已追踪的文章ID列表
      * @param userId 用户ID
-     * @return 文章ID列表
+     * @param out 成功时写入文章ID列表
+     * @return false = 查询失败；true = 成功（out 可为空）
      */
-    std::vector<int> getTrackedTextIds(int userId);
+    bool getTrackedTextIds(int userId, std::vector<int>& out);
     
 private:
     DatabaseManager* db;

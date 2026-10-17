@@ -85,13 +85,11 @@ bool ReadingHistoryRepository::addRecord(int userId, int textId, double readTime
     );
 }
 
-std::vector<ReadingRecord> ReadingHistoryRepository::getRecentRecords(int userId, int limit) {
-    std::vector<ReadingRecord> records;
-    
-    if (!db || !db->getConnection()) {
-        return records;
-    }
-    
+bool ReadingHistoryRepository::getRecentRecords(int userId, int limit,
+                                                std::vector<ReadingRecord>& out) {
+    out.clear();
+    if (!db || !db->getConnection()) return false;
+
     const char* sql = "SELECT id, text_id, read_time, read_timestamp "
                       "FROM reading_history "
                       "WHERE user_id = ? "
@@ -100,36 +98,35 @@ std::vector<ReadingRecord> ReadingHistoryRepository::getRecentRecords(int userId
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId, limit}, rows)) {
         LOG_ERROR("查询阅读历史失败: {}", db->getLastError());
-        return records;
+        return false;
     }
 
-    records.reserve(rows.size());
+    out.reserve(rows.size());
     for (const Row& row : rows) {
         ReadingRecord record;
         record.id = static_cast<int>(row.integer("id"));
         record.textId = static_cast<int>(row.integer("text_id"));
         record.readTime = row.real("read_time");
         record.timestamp = static_cast<time_t>(row.integer("read_timestamp"));
-        records.push_back(record);
+        out.push_back(record);
     }
-
-    return records;
+    return true;
 }
 
-int ReadingHistoryRepository::getTotalReadCount(int userId) {
-    if (!db || !db->getConnection()) {
-        return 0;
-    }
-    
+bool ReadingHistoryRepository::getTotalReadCount(int userId, int& out) {
+    out = 0;
+    if (!db || !db->getConnection()) return false;
+
     const char* sql = "SELECT COUNT(*) FROM reading_history WHERE user_id = ?;";
 
-    // 出错与空结果都返回 0（与旧实现一致：prepare 失败/无行均静默 0）
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows) || rows.empty()) {
-        return 0;
+        LOG_ERROR("查询阅读总数失败: {}", db ? db->getLastError() : "db unavailable");
+        return false;
     }
 
-    return static_cast<int>(rows[0].integer(0));
+    out = static_cast<int>(rows[0].integer(0));
+    return true;
 }
 
 bool ReadingHistoryRepository::markAsTracked(int userId, int textId) {
@@ -141,24 +138,21 @@ bool ReadingHistoryRepository::markAsTracked(int userId, int textId) {
     );
 }
 
-std::vector<int> ReadingHistoryRepository::getTrackedTextIds(int userId) {
-    std::vector<int> ids;
-    if (!db || !db->getConnection()) {
-        return ids;
-    }
+bool ReadingHistoryRepository::getTrackedTextIds(int userId, std::vector<int>& out) {
+    out.clear();
+    if (!db || !db->getConnection()) return false;
 
     const char* sql = "SELECT text_id FROM text_tracking WHERE user_id = ?;";
 
     std::vector<Row> rows;
     if (!db->queryRows(sql, std::vector<SqlParam>{userId}, rows)) {
         LOG_ERROR("查询已追踪文本失败: {}", db->getLastError());
-        return ids;
+        return false;
     }
 
-    ids.reserve(rows.size());
+    out.reserve(rows.size());
     for (const Row& row : rows) {
-        ids.push_back(static_cast<int>(row.integer("text_id")));
+        out.push_back(static_cast<int>(row.integer("text_id")));
     }
-
-    return ids;
+    return true;
 }

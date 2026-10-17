@@ -95,15 +95,10 @@ class _ReviewCountTracker implements QuizTracker {
   _ReviewCountTracker({required this.due, required this.total});
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-          {bool isReview = false}) =>
-      (null, null);
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
@@ -124,6 +119,12 @@ class _ReviewCountTracker implements QuizTracker {
   QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
+  QuizBatchResult applyQuizBatch(
+          User user, List<int> questionIds, List<int> choices,
+          {bool isReview = false}) =>
+      throw UnimplementedError();
+
+  @override
   void disposeQuestions(List<Question> questions) {}
 }
 
@@ -132,15 +133,10 @@ class _F9QuizTracker implements QuizTracker {
   _F9QuizTracker(this.questions);
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-          {bool isReview = false}) =>
-      (null, null);
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch(questions);
@@ -160,6 +156,12 @@ class _F9QuizTracker implements QuizTracker {
   @override
   QuizAttemptSummary? getAttemptSummary(int textId) =>
       questions.isEmpty ? null : QuizAttemptSummary(questions.length, 0, 0);
+
+  @override
+  QuizBatchResult applyQuizBatch(
+          User user, List<int> questionIds, List<int> choices,
+          {bool isReview = false}) =>
+      throw UnimplementedError();
 
   @override
   void disposeQuestions(List<Question> questions) {}

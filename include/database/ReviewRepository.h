@@ -35,17 +35,18 @@ public:
     void setDanglingFilter(bool enabled) { danglingFilter_ = enabled; }
     bool danglingFilter() const { return danglingFilter_; }
 
-    /** @brief 到期错题列表：next_review_at <= now，按到期时间升序，上限 maxCount */
-    std::vector<ReviewItem> listDue(int userId, int textId, int64_t now, int maxCount);
+    /** @brief 到期错题列表；true=成功（out 可为空），false=查询失败 */
+    bool listDue(int userId, int textId, int64_t now, int maxCount,
+                 std::vector<ReviewItem>& out);
 
-    /** @brief 到期错题总数（COUNT 聚合，不受列表上限截断；与 listDue 同过滤条件） */
-    int dueCount(int userId, int textId, int64_t now);
+    /** @brief 到期错题总数；true=成功（out 可为 0），false=查询失败 */
+    bool dueCount(int userId, int textId, int64_t now, int& out);
 
-    /** @brief 当前用户错题总数（含未到期） */
-    int totalCount(int userId, int textId);
+    /** @brief 当前用户错题总数（含未到期）；true=成功（out 可为 0），false=查询失败 */
+    bool totalCount(int userId, int textId, int& out);
 
-    /** @brief 指定文章的现役错题数（quiz_get_attempt_summary 的 wrong 通道） */
-    int itemCountForText(int userId, int textId);
+    /** @brief 指定文章现役错题数；true=成功（out 可为 0），false=查询失败 */
+    bool itemCountForText(int userId, int textId, int& out);
 
     /**
      * @brief 答错入队/累计：streak 清零、wrong_count+1、next_review_at = nextReviewAt

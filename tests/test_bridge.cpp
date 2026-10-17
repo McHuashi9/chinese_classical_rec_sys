@@ -73,6 +73,7 @@ extern "C" {
     int user_init_questions(QuestionData* out, int max_count);
     int user_init_apply(const int* qids, const int* choices, int count, int64_t timestamp, UserData* out_user);
     int text_get_count();
+    int text_get_all(TextInfo* out, int max_count);
     int text_get_detail(int id, TextDetail* out);
     int text_get_translation(int id, char* out, int max_len);
     int text_get_annotations(int id, char* out, int max_len);
@@ -82,6 +83,10 @@ extern "C" {
     int tracker_prune(const UserData* user, int64_t now, UserData* out_user);
     int tracker_apply_quiz(const UserData* user, int question_id, int user_choice,
                            int64_t timestamp, UserData* out_user, int* out_correct, int is_review);
+    int tracker_apply_quiz_batch(const UserData* user, const int* question_ids,
+                                 const int* user_choices, int count, int64_t timestamp,
+                                 UserData* out_user, int* out_correct,
+                                 double* out_ability_before, int is_review);
     int question_get_by_text(int text_id, QuestionData* out, int max_count, int* answered_all);
     int quiz_get_review_items(int text_id, ReviewItemData* out, int max_count);
     int quiz_get_due_review_count(int text_id);
@@ -90,6 +95,8 @@ extern "C" {
     int quiz_get_attempt_summary(int text_id, int* total, int* answered, int* wrong);
     int history_add_record(int text_id, double read_time, int64_t timestamp);
     int history_get_recent(int limit, ReadingRecordData* out, int max_count);
+    int user_list(ProfileData* out, int max_count);
+    int user_active_id();
     int history_get_total_count();
     int history_get_tracked_text_ids(int* out, int max_count);
 }
@@ -112,6 +119,9 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
     db_close();
 
     REQUIRE(text_get_count() == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(text_get_all(nullptr, 1) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(user_active_id() == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(user_list(nullptr, 1) == BRIDGE_ERR_NOT_INIT);
 
     char buf[16];
     REQUIRE(text_get_translation(1, buf, sizeof(buf)) == BRIDGE_ERR_NOT_INIT);
@@ -131,6 +141,11 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
     REQUIRE(tracker_apply_forgetting(&user, now, &out) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(tracker_prune(&user, now, &out) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(tracker_apply_quiz(&user, 1, 0, now, &out, nullptr, 0) == BRIDGE_ERR_NOT_INIT);
+    int batchIds[1] = {1};
+    int batchChoices[1] = {0};
+    double batchBefore[10];
+    REQUIRE(tracker_apply_quiz_batch(&user, batchIds, batchChoices, 1, now, &out, nullptr,
+                                     batchBefore, 0) == BRIDGE_ERR_NOT_INIT);
     ReviewItemData ritems[2];
     int qids[2] = {1, 2};
     QuestionData qout[2];
@@ -142,8 +157,8 @@ TEST_CASE("bridge - 未初始化时返回错误码", "[bridge][smoke]") {
     REQUIRE(quiz_get_attempt_summary(1, &t, &a, &w) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(history_add_record(1, 30.0, now) == BRIDGE_ERR_NOT_INIT);
     REQUIRE(history_get_recent(10, records, 5) == BRIDGE_ERR_NOT_INIT);
-    REQUIRE(history_get_total_count() == 0);
-    REQUIRE(history_get_tracked_text_ids(out_ids, 5) == 0);
+    REQUIRE(history_get_total_count() == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(history_get_tracked_text_ids(out_ids, 5) == BRIDGE_ERR_NOT_INIT);
 }
 
 TEST_CASE("bridge - db_open 无效路径返回错误", "[bridge][smoke]") {
@@ -701,6 +716,125 @@ TEST_CASE("bridge - 流水事务失败时答题效应一并回滚（防双计）
     db_close();
 }
 
+TEST_CASE("bridge - tracker_apply_quiz_batch 单事务成功并输出逐题快照", "[bridge][smoke]") {
+    db_close();
+    const auto [work, userPath] = quizWorkDb("quiz_batch_ok");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
+
+    QuestionData qs[2];
+    const int n = question_get_by_text(1, qs, 2, nullptr);
+    REQUIRE(n == 2);
+    int ids[2] = {qs[0].id, qs[1].id};
+    int choices[2] = {0, 1};
+    int correct[2] = {-1, -1};
+    double before[20];
+    for (double& v : before) v = -1.0;
+    UserData user;
+    REQUIRE(user_load(&user) == BRIDGE_OK);
+    UserData out;
+    std::memset(&out, 0, sizeof(out));
+
+    REQUIRE(tracker_apply_quiz_batch(&user, ids, choices, 2, 1700000100LL, &out,
+                                     correct, before, 0) == BRIDGE_OK);
+    REQUIRE((correct[0] == 0 || correct[0] == 1));
+    REQUIRE((correct[1] == 0 || correct[1] == 1));
+    // 第 1 题作答前快照必须等于入参用户能力；第 2 题来自第 1 题效应之后。
+    for (int d = 0; d < 10; d++) {
+        REQUIRE(before[d] == Catch::Approx(user.abilities[d]));
+    }
+    // 用户状态已更新且持久化
+    UserData reloaded;
+    REQUIRE(user_load(&reloaded) == BRIDGE_OK);
+    for (int d = 0; d < 10; d++) {
+        REQUIRE(reloaded.abilities[d] == Catch::Approx(out.abilities[d]));
+    }
+    // 初始化 6 条 + 批量 2 条
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(userPath.c_str(), &db) == SQLITE_OK);
+    sqlite3_stmt* stmt = nullptr;
+    int attempts = -1;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM quiz_attempts", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) attempts = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    REQUIRE(attempts == 8);
+    db_close();
+}
+
+TEST_CASE("bridge - tracker_apply_quiz_batch 第 N 题失败时整批回滚", "[bridge][smoke]") {
+    db_close();
+    const auto [work, userPath] = quizWorkDb("quiz_batch_rollback");
+    REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    initDefaultProfile();
+
+    QuestionData qs[2];
+    REQUIRE(question_get_by_text(1, qs, 2, nullptr) == 2);
+    const int ids[2] = {qs[0].id, qs[1].id};
+    const int choices[2] = {0, 1};
+    const int secondId = ids[1];
+    UserData user;
+    REQUIRE(user_load(&user) == BRIDGE_OK);
+    const double abilityBefore[10] = {
+        user.abilities[0], user.abilities[1], user.abilities[2], user.abilities[3],
+        user.abilities[4], user.abilities[5], user.abilities[6], user.abilities[7],
+        user.abilities[8], user.abilities[9],
+    };
+    const int qcBefore = user.quiz_counts[0];
+
+    // 第 2 题写 quiz_attempts 时强制 ABORT：第 1 题已写库也必须随事务回滚。
+    {
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open(userPath.c_str(), &db) == SQLITE_OK);
+        char* err = nullptr;
+        const std::string sql =
+            "CREATE TRIGGER fail_second_attempt BEFORE INSERT ON quiz_attempts "
+            "WHEN NEW.question_id = " + std::to_string(secondId) +
+            " BEGIN SELECT RAISE(ABORT, 'test: force batch txn failure'); END";
+        REQUIRE(sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err) == SQLITE_OK);
+        sqlite3_free(err);
+        sqlite3_close(db);
+    }
+
+    int correct[2] = {-1, -1};
+    double before[20];
+    for (double& v : before) v = -1.0;
+    UserData out;
+    std::memset(&out, 0x7f, sizeof(out));
+    REQUIRE(tracker_apply_quiz_batch(&user, ids, choices, 2, 1700000100LL, &out,
+                                     correct, before, 0) == BRIDGE_ERR_GENERIC);
+    // 失败不写出参
+    REQUIRE(correct[0] == -1);
+    REQUIRE(correct[1] == -1);
+    REQUIRE(before[0] == -1.0);
+
+    UserData reloaded;
+    REQUIRE(user_load(&reloaded) == BRIDGE_OK);
+    for (int d = 0; d < 10; d++) {
+        REQUIRE(reloaded.abilities[d] == Catch::Approx(abilityBefore[d]));
+    }
+    REQUIRE(reloaded.quiz_counts[0] == qcBefore);
+
+    sqlite3* db = nullptr;
+    REQUIRE(sqlite3_open(userPath.c_str(), &db) == SQLITE_OK);
+    sqlite3_stmt* stmt = nullptr;
+    int attempts = -1;
+    int reviews = -1;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM quiz_attempts", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) attempts = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM review_items", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) reviews = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    REQUIRE(attempts == 6);  // 仅初始化题
+    REQUIRE(reviews == 0);
+    db_close();
+}
+
 TEST_CASE("bridge - 内容库缺 questions 表：db_open 拒绝", "[bridge][smoke]") {
     db_close();
     const auto [work, userPath] = quizWorkDb("no_questions");
@@ -785,6 +919,11 @@ TEST_CASE("bridge - history 真实链路：阅读落库 → 查询倒序/截断/
 
     const auto [work, userPath] = quizWorkDb("hist");
     REQUIRE(db_open(work.c_str(), userPath.c_str()) == BRIDGE_OK);
+    // 参数错误与未初始化必须是不同错误码
+    ReadingRecordData bad[1];
+    REQUIRE(history_get_recent(0, bad, 1) == BRIDGE_ERR_GENERIC);
+    REQUIRE(history_get_recent(1, nullptr, 1) == BRIDGE_ERR_GENERIC);
+    REQUIRE(history_get_tracked_text_ids(nullptr, 1) == BRIDGE_ERR_GENERIC);
     initDefaultProfile();
 
     // 3 次阅读（文章 1 两次 + 文章 2 一次），时间戳刻意乱序
@@ -813,7 +952,7 @@ TEST_CASE("bridge - history 真实链路：阅读落库 → 查询倒序/截断/
     // 输出容量截断
     REQUIRE(history_get_recent(10, recs, 1) == 1);
     // out 为 null → 桥约定返回 NOT_INIT
-    REQUIRE(history_get_recent(10, nullptr, 8) == BRIDGE_ERR_NOT_INIT);
+    REQUIRE(history_get_recent(10, nullptr, 8) == BRIDGE_ERR_GENERIC);
 
     // 独立 add_record 也可入链
     REQUIRE(history_add_record(5, 90.0, 4000) == BRIDGE_OK);

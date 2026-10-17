@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
@@ -131,33 +132,20 @@ Widget wrapQuizPage(
 class FakeQuizTracker implements QuizTracker {
   FakeQuizTracker();
 
-  int _calls = 0;
-
-  /// 第 N 次起判题失败（0 表示全成功）。
+  /// 非 0 时批量提交抛 FFI 失败（0 表示成功）。批量事务语义下不存在部分成功。
   int failFrom = 0;
+
+  /// 批量 FFI 调用次数。
+  int batchCalls = 0;
 
   /// [disposeQuestions] 调用次数（验证题目内存恰好释放一次）。
   int disposeCount = 0;
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-      {bool isReview = false}) {
-    // 每次必须返回新分配的 User（submitQuiz 会 dispose 中间态）
-    if (failFrom > 0 && _calls >= failFrom) {
-      _calls++;
-      return (null, null);
-    }
-    final out = User.allocate(calloc);
-    final correct = _calls == 0; // 第 1 题对、其余错
-    _calls++;
-    return (out, correct);
-  }
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
@@ -176,6 +164,26 @@ class FakeQuizTracker implements QuizTracker {
 
   @override
   QuizAttemptSummary? getAttemptSummary(int textId) => null;
+
+  @override
+  QuizBatchResult applyQuizBatch(
+      User user, List<int> questionIds, List<int> choices,
+      {bool isReview = false}) {
+    batchCalls++;
+    if (failFrom > 0) {
+      throw const FfiException(
+          operation: 'tracker_apply_quiz_batch', code: BridgeError.errGeneric);
+    }
+    final out = User.allocate(calloc);
+    final correct = <bool>[
+      for (int i = 0; i < questionIds.length; i++) i == 0,
+    ];
+    final before = <List<double>>[
+      for (int i = 0; i < questionIds.length; i++)
+        [for (int d = 0; d < 10; d++) user.getAbility(d)],
+    ];
+    return QuizBatchResult(user: out, correct: correct, abilityBefore: before);
+  }
 
   @override
   void disposeQuestions(List<Question> questions) {

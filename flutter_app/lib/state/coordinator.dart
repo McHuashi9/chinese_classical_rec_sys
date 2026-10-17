@@ -23,6 +23,7 @@ import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
 import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 
 class AppCoordinator {
   static const currentVersion = '1.5.0';
@@ -85,6 +86,9 @@ class AppCoordinator {
     final cv = calloc<Int32>();
     final rc = _bridge!.dbGetSchemaVersions(uv, cv);
     final result = rc == BridgeError.ok ? (uv.value, cv.value) : null;
+    if (rc != BridgeError.ok) {
+      AppLogger().warn('读取 schema 版本失败: ${BridgeError.nameOf(rc)}');
+    }
     calloc.free(uv);
     calloc.free(cv);
     return result;
@@ -105,7 +109,8 @@ class AppCoordinator {
     return _textRepo.texts.where((t) => titles.contains(t.title)).toList();
   }
 
-  Future<bool> init(String contentPath, String userPath, DynamicLibrary lib) async {
+  Future<bool> init(
+      String contentPath, String userPath, DynamicLibrary lib) async {
     if (isInitialized) return true;
 
     try {
@@ -167,7 +172,11 @@ class AppCoordinator {
   }
 
   void _initDefaultUser() {
-    _bridge!.userInitDefault();
+    final rc = _bridge!.userInitDefault();
+    if (rc != BridgeError.ok) {
+      AppLogger().error('初始化默认用户失败: ${BridgeError.nameOf(rc)}');
+      return;
+    }
     _loadUser(allowDefaultInit: false);
   }
 
@@ -253,6 +262,11 @@ class AppCoordinator {
     const maxIds = 500;
     final idsPtr = calloc<Int32>(maxIds);
     final count = _bridge!.historyGetTrackedTextIds(idsPtr, maxIds);
+    if (count < 0) {
+      calloc.free(idsPtr);
+      AppLogger().warn('回填已读文章失败: ${BridgeError.nameOf(count)}，本次按空集合处理');
+      return;
+    }
     final ids = <int>[];
     for (int i = 0; i < count; i++) {
       ids.add(idsPtr[i]);
@@ -330,9 +344,15 @@ class AppCoordinator {
         seconds >= minReadTimeSeconds(text.charCount)) {
       // 按写库返回码决定是否标记已读（与 recordInitRead 同口径）：先标记后写库
       // 会在写库失败时把内存置为已读，本会话内守卫不再补记、界面误报已读。
-      if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
-        readTracker.markEffectApplied(textId);
-        _statsGeneration++;
+      try {
+        if (userCtrl.applyReadEffect(text.id, seconds.toDouble())) {
+          readTracker.markEffectApplied(textId);
+          _statsGeneration++;
+          settingsCtrl.clearError();
+        }
+      } on FfiException catch (e) {
+        AppLogger().warn('阅读效应写入失败，保留未读状态待下次重试: $e');
+        settingsCtrl.setError('阅读记录写入失败，请稍后重试');
       }
     }
   }
@@ -346,7 +366,13 @@ class AppCoordinator {
     final rc = _bridge!.trackerApplyRead(
         userCtrl.user!.ptr, textId, seconds, now, outUser.ptr, 1);
     outUser.dispose();
-    if (rc != BridgeError.ok) return false;
+    if (rc != BridgeError.ok) {
+      try {
+        requireBridgeOk(rc, 'tracker_apply_read(skip_effect)');
+      } on FfiException {
+        return false;
+      }
+    }
     readTracker.markEffectApplied(textId);
     return true;
   }
@@ -356,11 +382,22 @@ class AppCoordinator {
       settingsCtrl.setError('系统尚未初始化');
       return;
     }
+    // 强制初始化未完成时推荐通道按契约返回 BRIDGE_ERR_INIT_INCOMPLETE；
+    // 这不是错误，只是该档案暂时无推荐内容，保持空列表即可。
+    if (!userCtrl.isInitialized) {
+      userCtrl.getRecommendations(_engine, const [], topK);
+      settingsCtrl.clearError();
+      return;
+    }
     try {
       // 已读篇目不进推荐位（达到本文最低阅读时间且效应已应用）；UserController 侧过取+过滤补足 topK
       userCtrl.getRecommendations(_engine, _textRepo.texts, topK,
           excludeTextIds: readTracker.getAllTrackedIds().toSet());
       settingsCtrl.clearError();
+    } on FfiException catch (e) {
+      AppLogger().warn('推荐失败，保留空推荐列表: $e');
+      userCtrl.getRecommendations(_engine, const [], topK);
+      settingsCtrl.setError('推荐失败，请稍后重试');
     } catch (e) {
       settingsCtrl.setError('推荐失败: $e');
     }
@@ -378,7 +415,8 @@ class AppCoordinator {
     return _cachedStats!;
   }
 
-  Future<void> remoteSyncDb({String? remoteVersion, String? downloadUrl}) async {
+  Future<void> remoteSyncDb(
+      {String? remoteVersion, String? downloadUrl}) async {
     if (remoteVersion == null || downloadUrl == null) return;
     if (_remoteDbSync == null) return;
 

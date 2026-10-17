@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:ffi';
 
+export 'bridge_error_codes.g.dart';
+
 /// C UserData struct — matches bridge/c_types.h
 /// 10维能力向量 + 基础能力 + 悟性 η + 累计答题次数 + 最近阅读时间
 @Packed(1)
@@ -160,21 +162,6 @@ final class ReviewItemData extends Struct {
 
   @Int64()
   external int nextReviewAt;
-}
-
-/// C 错误码
-abstract class BridgeError {
-  static const int ok = 0;
-  static const int errGeneric = -1;
-  static const int errNotInit = -2;
-  static const int errUser = -3;
-  static const int errText = -4;
-  static const int errInit = -5;
-  static const int errDbContent = -6;
-  static const int errDbUser = -7;
-  static const int errDbVersion = -8;
-  static const int errDbSamePath = -9;
-  static const int errInitIncomplete = -10;
 }
 
 /// 从 C 的 null-terminated Uint8 array 读取 Dart String

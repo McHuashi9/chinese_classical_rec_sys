@@ -228,23 +228,29 @@ bool QuizRepository::insertAttempt(int userId, int questionId, int textId, int c
         std::vector<SqlParam>{userId, questionId, textId, correct, isReview, isInit, answeredAt});
 }
 
-QuizRepository::AttemptSummary QuizRepository::attemptSummary(int userId, int textId)
+bool QuizRepository::attemptSummary(int userId, int textId, AttemptSummary& out)
 {
-    AttemptSummary summary;
-    if (!db || !db->getConnection()) return summary;
+    out = {};
+    if (!db || !db->getConnection()) return false;
 
-    // 与原 quiz_get_attempt_summary 一致：单条查询失败静默保留 0（"表缺失=优雅降级"协议）
     std::vector<Row> rows;
-    if (db->queryRows("SELECT COUNT(*) AS cnt FROM questions WHERE text_id = ?",
-                      std::vector<SqlParam>{textId}, rows) &&
-        !rows.empty()) {
-        summary.total = static_cast<int>(rows[0].integer("cnt"));
+    if (!db->queryRows("SELECT COUNT(*) AS cnt FROM questions WHERE text_id = ?",
+                       std::vector<SqlParam>{textId}, rows) ||
+        rows.empty()) {
+        LOG_ERROR("bridge: quiz_get_attempt_summary total 查询失败: {}",
+                  db->getLastError());
+        return false;
     }
-    if (db->queryRows("SELECT COUNT(DISTINCT question_id) AS cnt FROM quiz_attempts "
-                      "WHERE text_id = ? AND user_id = ?",
-                      std::vector<SqlParam>{textId, userId}, rows) &&
-        !rows.empty()) {
-        summary.answered = static_cast<int>(rows[0].integer("cnt"));
+    out.total = static_cast<int>(rows[0].integer("cnt"));
+
+    if (!db->queryRows("SELECT COUNT(DISTINCT question_id) AS cnt FROM quiz_attempts "
+                       "WHERE text_id = ? AND user_id = ?",
+                       std::vector<SqlParam>{textId, userId}, rows) ||
+        rows.empty()) {
+        LOG_ERROR("bridge: quiz_get_attempt_summary answered 查询失败: {}",
+                  db->getLastError());
+        return false;
     }
-    return summary;
+    out.answered = static_cast<int>(rows[0].integer("cnt"));
+    return true;
 }

@@ -8,6 +8,9 @@ import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user_profile.dart';
 
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
+
 class UserController extends ChangeNotifier {
   QuizTracker? _tracker;
   ProfileRepository? _profileRepo;
@@ -33,15 +36,25 @@ class UserController extends ChangeNotifier {
   /// 错题总数缓存（-1 = 未加载；答题/复习提交后置脏）
   int _totalReviewCount = -1;
 
+  /// 最近一次错题计数查询的 FFI 失败；null = 上次查询成功。
+  /// getter 为兼容 build 期调用不抛出，但调用方/诊断可据此区分「0 条」与「查询失败」。
+  FfiException? _quizDataError;
+
   UserController();
 
-  void initTracker(QuizTracker tracker) { _tracker = tracker; }
+  void initTracker(QuizTracker tracker) {
+    _tracker = tracker;
+  }
 
   /// 注入档案仓库（生产为 FfiProfileRepository；测试可注入 Fake）
-  void initProfiles(ProfileRepository repo) { _profileRepo = repo; }
+  void initProfiles(ProfileRepository repo) {
+    _profileRepo = repo;
+  }
 
   /// 注入强制初始化仓库（生产为 FfiUserInitRepository；测试可注入 Fake）
-  void initUserInitRepository(UserInitRepository repo) { _initRepo = repo; }
+  void initUserInitRepository(UserInitRepository repo) {
+    _initRepo = repo;
+  }
 
   User? get user => _user;
   double get averageAbility => _user?.averageAbility ?? 0.3;
@@ -179,13 +192,25 @@ class UserController extends ChangeNotifier {
     return true;
   }
 
+  /// 最近一次错题计数查询的 FFI 失败；null = 上次查询成功。
+  FfiException? get quizDataError => _quizDataError;
+
   /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
   /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）
   /// 懒加载可能发生在 build 期，只缓存不通知；置脏与通知走 _afterQuizSubmit。
   /// 这是有意设计：避免每次 build 都触发 FFI，同时保证提交/数据变更后能刷新。
+  /// FFI 失败记录到 [quizDataError] 并返回 0 供旧 UI 继续渲染；0 本身不冒充成功。
   int get reviewCount {
     if (_tracker == null) return 0;
-    if (_reviewCount < 0) _reviewCount = _tracker!.getDueReviewCount(0);
+    if (_reviewCount < 0) {
+      try {
+        _reviewCount = _tracker!.getDueReviewCount(0);
+        _quizDataError = null;
+      } on FfiException catch (e) {
+        _quizDataError = e;
+        return 0;
+      }
+    }
     return _reviewCount;
   }
 
@@ -196,12 +221,19 @@ class UserController extends ChangeNotifier {
   int get totalReviewCount {
     if (_tracker == null) return 0;
     if (_totalReviewCount < 0) {
-      _totalReviewCount = _tracker!.getTotalReviewCount(0);
+      try {
+        _totalReviewCount = _tracker!.getTotalReviewCount(0);
+        _quizDataError = null;
+      } on FfiException catch (e) {
+        _quizDataError = e;
+        return 0;
+      }
     }
     return _totalReviewCount;
   }
 
-  void getRecommendations(RecommendationEngine engine, List<ChineseText> textCache, int topK,
+  void getRecommendations(
+      RecommendationEngine engine, List<ChineseText> textCache, int topK,
       {Set<int>? excludeTextIds}) {
     if (_user == null) {
       _recommendations = [];
@@ -221,25 +253,32 @@ class UserController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 应用阅读效应；FFI 失败抛 [FfiException]（由调用方决定如何提示）。
   bool applyReadEffect(int textId, double seconds) {
     if (_user == null || _tracker == null) return false;
     final updated = _tracker!.applyRead(_user!, textId, seconds);
     return _updateUser(updated);
   }
 
-  bool _updateUser(User? updated) {
-    if (updated == null) return false;
+  /// 采纳新的用户状态并统一通知。
+  ///
+  /// prune 是增量清理的附带步骤：若它失败，主效应已经由 C++ 事务提交，
+  /// 此处记录失败并继续采纳 updated，避免把「主操作成功」误报为失败；
+  /// 其他 FFI 失败仍向上抛，由调用方展示。
+  bool _updateUser(User updated) {
     // 无变化（如空题组）：直接采纳，避免 dispose 后对悬垂指针 prune
     if (identical(updated, _user)) return true;
-    _user!.dispose();
-    final pruned = _tracker!.prune(updated);
-    if (pruned != null) {
-      _user = pruned;
-      updated.dispose();
-    } else {
-      _user = updated;
+    User effective = updated;
+    try {
+      final pruned = _tracker!.prune(updated);
+      effective = pruned;
+      if (!identical(pruned, updated)) updated.dispose();
+    } on FfiException catch (e) {
+      AppLogger().warn('用户状态已更新，但 prune 失败，保留未裁剪状态: $e');
     }
-    // 用户状态变化统一通知：阅读/初始化/答题/部分失败都经此路径，
+    _user!.dispose();
+    _user = effective;
+    // 用户状态变化统一通知：阅读/初始化/答题都经此路径，
     // UI 通过 context.watch/select 能可靠刷新，不依赖祖先巧合重建。
     notifyListeners();
     return true;
@@ -283,51 +322,35 @@ class UserController extends ChangeNotifier {
     return _tracker!.getAttemptSummary(textId);
   }
 
-  /// 提交题组：逐题判分并应用效应（题组后统一判分），更新用户状态
+  /// 提交题组：单次 FFI 批量判分并应用效应，更新用户状态。
   /// [isReview] 错题复习：判题 + 写复习状态，不产生答题效应。
   /// 返回每题结果（对错 + 答前能力）。
-  /// 判题失败时：C++ 侧已逐题落库，失败前已生效的题目不回滚——
-  /// 将已生效部分应用到 _user 并返回部分结果；首题即失败返回 null（无任何生效）
-  List<QuizAnswer>? submitQuiz(
-      List<Question> questions, List<int> choices,
+  ///
+  /// 失败契约：状态前置条件不满足返回 null；C++ FFI 失败抛 [FfiException]，
+  /// 且 C++ 事务保证整批回滚——不存在「前几题已生效」的部分成功返回值。
+  List<QuizAnswer>? submitQuiz(List<Question> questions, List<int> choices,
       {bool isReview = false}) {
     if (_user == null || _tracker == null) return null;
     if (questions.length != choices.length) return null;
+    if (questions.isEmpty) return const [];
 
-    final answers = <QuizAnswer>[];
-    User current = _user!;
-    for (int i = 0; i < questions.length; i++) {
-      final before = List<double>.generate(10, (j) => current.getAbility(j));
-      final result = _tracker!.applyQuiz(
-          current, questions[i].id, choices[i],
-          isReview: isReview);
-      final updated = result.$1;
-      final correct = result.$2;
-      if (updated == null || correct == null) {
-        // 契约外异常（updated 非 null 但 correct 为 null）：释放避免泄漏
-        updated?.dispose();
-        // 首题失败：无生效，保留 _user
-        if (answers.isEmpty) return null;
-        // 部分成功：C++ 已落库前几题，同步内存态避免下次重复生效（与成功路径一致带 prune）
-        if (i > 0) {
-          _updateUser(current);
-        }
-        _afterQuizSubmit();
-        return answers;
-      }
-      answers.add(QuizAnswer(
-        questionId: questions[i].id,
-        selected: choices[i],
-        correct: correct,
-        abilityBefore: before,
-      ));
-      if (i > 0) current.dispose();
-      current = updated;
-    }
-    // 成功路径与阅读链路一致：prune 过期增量（quiz 增量同样会被裁剪合并）
-    _updateUser(current);
+    final result = _tracker!.applyQuizBatch(
+      _user!,
+      [for (final q in questions) q.id],
+      choices,
+      isReview: isReview,
+    );
+    _updateUser(result.user);
     _afterQuizSubmit();
-    return answers;
+    return [
+      for (int i = 0; i < questions.length; i++)
+        QuizAnswer(
+          questionId: questions[i].id,
+          selected: choices[i],
+          correct: result.correct[i],
+          abilityBefore: result.abilityBefore[i],
+        ),
+    ];
   }
 
   /// 提交后的收尾：复习状态可能已变（错题入队/移除），置脏错题数。

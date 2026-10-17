@@ -5,6 +5,8 @@ import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 
+import 'ffi_call.dart';
+
 /// 强制初始化 FFI 抽象：UserController 依赖此接口（生产注入
 /// [FfiUserInitRepository]，测试注入 Fake）。
 abstract class UserInitRepository {
@@ -29,13 +31,21 @@ class FfiUserInitRepository implements UserInitRepository {
   FfiUserInitRepository(this._bridge);
 
   @override
-  bool isInitialized() => _bridge.userIsInitialized() > 0;
+  bool isInitialized() {
+    final rc = _bridge.userIsInitialized();
+    if (rc < 0) requireBridgeCount(rc, 'user_is_initialized');
+    return rc > 0;
+  }
 
   @override
   List<Question> initQuestions() {
     final block = calloc<QuestionData>(initQuestionCap);
     final n = _bridge.userInitQuestions(block, initQuestionCap);
-    if (n <= 0) {
+    if (n < 0) {
+      calloc.free(block);
+      requireBridgeCount(n, 'user_init_questions');
+    }
+    if (n == 0) {
       calloc.free(block);
       return [];
     }
@@ -66,7 +76,7 @@ class FfiUserInitRepository implements UserInitRepository {
     calloc.free(choicesPtr);
     if (rc != BridgeError.ok) {
       outUser.dispose();
-      return null;
+      requireBridgeOk(rc, 'user_init_apply');
     }
     return outUser;
   }

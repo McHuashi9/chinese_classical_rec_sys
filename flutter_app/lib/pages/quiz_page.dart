@@ -7,6 +7,7 @@ import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/reading_controller.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/marked_sentence.dart';
 import 'package:chinese_classical_rec_sys/widgets/init_quiz_guide_overlay.dart';
@@ -164,37 +165,38 @@ class _QuizPageState extends State<QuizPage> {
     // 从活动阅读进入的普通答题：提交时统一结算阅读效应并丢弃阅读状态。
     _settleActiveReadingIfNeeded();
 
-    final answers = userCtrl.submitQuiz(
-      widget.questions,
-      choices,
-      isReview: widget.isReview,
-    );
-    if (!mounted) return;
-    if (answers == null) {
-      // 首题即判题失败：无任何题生效，留在答题页可重试（不会重复计分）
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('提交失败，请重试')),
+    try {
+      final answers = userCtrl.submitQuiz(
+        widget.questions,
+        choices,
+        isReview: widget.isReview,
       );
-      return;
-    }
-    // 部分判题失败时 C++ 逐题落库、成功部分不回滚：结果页只展示已生效的前 N 题，
-    // 不留在答题页——否则再次提交会把已生效题目重复计入能力
-    final credited = answers.length;
-    // 题目内存所有权转移给结果页（结果页销毁时释放），本页 dispose 不再释放
-    _ownershipTransferred = true;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => QuizResultPage(
-          articleTitle: widget.articleTitle,
-          answers: answers,
-          questions: credited < widget.questions.length
-              ? widget.questions.sublist(0, credited)
-              : widget.questions,
-          totalQuestions: widget.questions.length,
-          isReview: widget.isReview,
+      if (!mounted) return;
+      if (answers == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('提交失败，请重试')),
+        );
+        return;
+      }
+      // 批量事务成功才返回 answers；题目内存所有权转移给结果页。
+      _ownershipTransferred = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => QuizResultPage(
+            articleTitle: widget.articleTitle,
+            answers: answers,
+            questions: widget.questions,
+            isReview: widget.isReview,
+          ),
         ),
-      ),
-    );
+      );
+    } on FfiException {
+      if (!mounted) return;
+      // C++ 已整批回滚；留在答题页重试不会重复计分。
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('提交失败，本次作答未保存，请重试')),
+      );
+    }
   }
 
   void _finishPart() {

@@ -115,7 +115,8 @@ public:
         int total = 0;
         int answered = 0;
     };
-    AttemptSummary attemptSummary(int userId, int textId);
+    /** @brief true=两项计数查询均成功；false=查询失败（out 不保证有意义） */
+    bool attemptSummary(int userId, int textId, AttemptSummary& out);
 
 private:
     /** questions 表是否存在（手动替换的旧库/损坏资产 → 优雅降级判据） */

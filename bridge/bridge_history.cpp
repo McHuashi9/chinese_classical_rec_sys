@@ -8,7 +8,7 @@
 
 extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_time, int64_t timestamp)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     bool ok = S().historyRepo->addRecord(S().activeUserId, text_id, read_time,
                                          static_cast<time_t>(timestamp));
@@ -21,12 +21,14 @@ extern "C" CHINESE_CORE_EXPORT int history_add_record(int text_id, double read_t
 
 extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordData* out, int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
-    if (!S().initialized || !out) return BRIDGE_ERR_NOT_INIT;
-    // 钳制：非正 limit/max_count 按"无结果"处理（SQLite LIMIT -1 视为无限制，必须拦下）
-    if (limit <= 0 || max_count <= 0) return 0;
+    return bridge_guard(g_mtx, [&]() -> int {
+    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || limit <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
-    auto records = S().historyRepo->getRecentRecords(S().activeUserId, limit);
+    std::vector<ReadingRecord> records;
+    if (!S().historyRepo->getRecentRecords(S().activeUserId, limit, records)) {
+        return BRIDGE_ERR_GENERIC;
+    }
     int n = std::min(static_cast<int>(records.size()), max_count);
 
     for (int i = 0; i < n; i++) {
@@ -41,18 +43,26 @@ extern "C" CHINESE_CORE_EXPORT int history_get_recent(int limit, ReadingRecordDa
 
 extern "C" CHINESE_CORE_EXPORT int history_get_total_count()
 {
-    return bridge_guard(g_mtx, [&] {
-    if (!S().initialized) return 0;
-    return S().historyRepo->getTotalReadCount(S().activeUserId);
+    return bridge_guard(g_mtx, [&]() -> int {
+    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    int total = 0;
+    if (!S().historyRepo->getTotalReadCount(S().activeUserId, total)) {
+        return BRIDGE_ERR_GENERIC;
+    }
+    return total;
     });
 }
 
 extern "C" CHINESE_CORE_EXPORT int history_get_tracked_text_ids(int* out, int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
-    if (!S().initialized || !out) return 0;
+    return bridge_guard(g_mtx, [&]() -> int {
+    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
-    auto ids = S().historyRepo->getTrackedTextIds(S().activeUserId);
+    std::vector<int> ids;
+    if (!S().historyRepo->getTrackedTextIds(S().activeUserId, ids)) {
+        return BRIDGE_ERR_GENERIC;
+    }
     int n = std::min(static_cast<int>(ids.size()), max_count);
 
     for (int i = 0; i < n; i++) {

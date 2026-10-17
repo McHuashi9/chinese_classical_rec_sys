@@ -77,21 +77,22 @@ class _QuizFakeTracker implements QuizTracker {
   int getTotalReviewCount(int textId) => due.length;
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-          {bool isReview = false}) =>
-      (null, null);
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
 
   @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
+
+  @override
+  QuizBatchResult applyQuizBatch(
+          User user, List<int> questionIds, List<int> choices,
+          {bool isReview = false}) =>
+      throw UnimplementedError();
 
   @override
   void disposeQuestions(List<Question> questions) {}
@@ -147,8 +148,7 @@ void main() {
             accentColor: AppTheme.vermilion),
         darkTheme: AppTheme.darkTheme(ScreenSize.medium, 1.0,
             accentColor: AppTheme.vermilion),
-        themeMode:
-            settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
+        themeMode: settingsCtrl.darkMode ? ThemeMode.dark : ThemeMode.light,
         home: child,
       ),
     );
@@ -407,7 +407,8 @@ void main() {
         body: Center(
           child: FilledButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ArticleDetailPage(textId: 1)),
+              MaterialPageRoute(
+                  builder: (_) => const ArticleDetailPage(textId: 1)),
             ),
             child: const Text('进详情'),
           ),
@@ -449,7 +450,8 @@ void main() {
         body: Center(
           child: FilledButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ArticleDetailPage(textId: 1)),
+              MaterialPageRoute(
+                  builder: (_) => const ArticleDetailPage(textId: 1)),
             ),
             child: const Text('进详情'),
           ),
@@ -494,7 +496,8 @@ void main() {
         body: Center(
           child: FilledButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ArticleDetailPage(textId: 1)),
+              MaterialPageRoute(
+                  builder: (_) => const ArticleDetailPage(textId: 1)),
             ),
             child: const Text('进详情'),
           ),
@@ -531,7 +534,8 @@ void main() {
         body: Center(
           child: FilledButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ArticleDetailPage(textId: 1)),
+              MaterialPageRoute(
+                  builder: (_) => const ArticleDetailPage(textId: 1)),
             ),
             child: const Text('进详情'),
           ),
@@ -562,7 +566,8 @@ void main() {
         body: Center(
           child: FilledButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ArticleDetailPage(textId: 1)),
+              MaterialPageRoute(
+                  builder: (_) => const ArticleDetailPage(textId: 1)),
             ),
             child: const Text('进详情'),
           ),

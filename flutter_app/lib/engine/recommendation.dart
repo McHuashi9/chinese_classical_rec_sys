@@ -5,6 +5,8 @@ import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 
+import 'ffi_call.dart';
+
 /// 从推荐结果中剔除 [excludeTextIds]（如已读篇目）后截断到 [topK]。
 /// 输入须按概率降序；返回仍保序（推荐位不被已读篇目占用）。
 /// 独立函数便于单测（RecommendationEngine 依赖 FFI 无法在单测中构造）。
@@ -24,18 +26,20 @@ class RecommendationEngine {
 
   RecommendationEngine(this._bridge);
 
-  List<RecommendResult> getRecommendations(User user, int topK, List<ChineseText> textCache) {
+  List<RecommendResult> getRecommendations(
+      User user, int topK, List<ChineseText> textCache) {
     if (textCache.isEmpty) return [];
 
     final validTopK = topK.clamp(1, textCache.length);
     final outIds = calloc<Int32>(validTopK);
     final outProbs = calloc<Double>(validTopK);
 
-    final rc = _bridge.recommend(user.ptr, validTopK, outIds, outProbs, validTopK, validTopK);
+    final rc = _bridge.recommend(
+        user.ptr, validTopK, outIds, outProbs, validTopK, validTopK);
     if (rc != BridgeError.ok) {
       calloc.free(outIds);
       calloc.free(outProbs);
-      return [];
+      requireBridgeOk(rc, 'recommend');
     }
 
     final results = <RecommendResult>[];
@@ -43,9 +47,9 @@ class RecommendationEngine {
       final textId = outIds[i];
       final prob = outProbs[i];
       final text = textCache.cast<ChineseText?>().firstWhere(
-        (t) => t?.id == textId,
-        orElse: () => null,
-      );
+            (t) => t?.id == textId,
+            orElse: () => null,
+          );
       if (text == null) continue;
       results.add(RecommendResult(text: text, probability: prob));
     }

@@ -4,6 +4,7 @@ import 'package:chinese_classical_rec_sys/bridge/ffi_bindings.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 
 class ReadingRecord {
   final int textId;
@@ -47,12 +48,17 @@ class HistoryService {
   List<ReadingRecord> getRecent(int limit) {
     final ptr = calloc<ReadingRecordData>(limit);
     final count = _bridge.historyGetRecent(limit, ptr, limit);
+    if (count < 0) {
+      calloc.free(ptr);
+      requireBridgeCount(count, 'history_get_recent');
+    }
     final records = <ReadingRecord>[];
     for (int i = 0; i < count; i++) {
       final r = ptr[i];
       final text = _textRepo.texts.cast<ChineseText?>().firstWhere(
-        (t) => t?.id == r.textId, orElse: () => null,
-      );
+            (t) => t?.id == r.textId,
+            orElse: () => null,
+          );
       records.add(ReadingRecord(
         textId: r.textId,
         title: text?.title ?? '(未知)',
@@ -66,18 +72,25 @@ class HistoryService {
     return records;
   }
 
-  int getTotalCount() => _bridge.historyGetTotalCount();
+  int getTotalCount() {
+    final count = _bridge.historyGetTotalCount();
+    if (count < 0) requireBridgeCount(count, 'history_get_total_count');
+    return count;
+  }
 
   static ReadingStats computeStats(List<ReadingRecord> records) {
     int totalSeconds = 0;
     final dateSet = <int>{};
     for (final r in records) {
       totalSeconds += r.readTime.toInt();
-      dateSet.add(DateTime(r.date.year, r.date.month, r.date.day).millisecondsSinceEpoch);
+      dateSet.add(DateTime(r.date.year, r.date.month, r.date.day)
+          .millisecondsSinceEpoch);
     }
-    final totalTexts = records.isEmpty ? 0 : records.map((r) => r.textId).toSet().length;
+    final totalTexts =
+        records.isEmpty ? 0 : records.map((r) => r.textId).toSet().length;
 
-    final dailyAvgSeconds = dateSet.isEmpty ? 0.0 : totalSeconds / dateSet.length;
+    final dailyAvgSeconds =
+        dateSet.isEmpty ? 0.0 : totalSeconds / dateSet.length;
 
     final sorted = dateSet.toList()..sort();
     int streak = 0, maxStreak = 0;

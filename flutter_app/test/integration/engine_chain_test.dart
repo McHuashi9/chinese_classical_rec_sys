@@ -19,6 +19,8 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/engine/remote_db_sync.dart';
 import 'package:chinese_classical_rec_sys/engine/recommendation.dart';
 import 'package:chinese_classical_rec_sys/engine/text_repository.dart';
+import 'package:chinese_classical_rec_sys/engine/tracker.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/service/history_service.dart';
@@ -210,9 +212,74 @@ void main() {
 
     test('topK 大于文章数时全部返回', () {
       final engine = RecommendationEngine(bridge!);
-      final results =
-          engine.getRecommendations(user, 99999, repo.texts);
+      final results = engine.getRecommendations(user, 99999, repo.texts);
       expect(results.length, repo.textCount);
+    });
+  });
+
+  group('KnowledgeTracker 批量提交（真实 .so + 资产库）', () {
+    late Directory work;
+    late KnowledgeTracker tracker;
+    late User user;
+
+    setUp(() {
+      if (bridge == null) {
+        markTestSkipped('未找到 libchinese_core.so，跳过');
+        return;
+      }
+      if (!pythonAvailable) {
+        markTestSkipped('未找到 python3，无法生成纯内容 fixture');
+        return;
+      }
+      work = Directory.systemTemp.createTempSync('engine_chain_batch');
+      final db = '${work.path}/classical.db';
+      final userDb = '${work.path}/user.db';
+      _copyAssetDb(db);
+      expect(
+        bridge!.dbOpen(db.toNativeUtf8(allocator: calloc),
+            userDb.toNativeUtf8(allocator: calloc)),
+        BridgeError.ok,
+      );
+      _initDefaultProfile(bridge!);
+      tracker = KnowledgeTracker(bridge!);
+      user = User.allocate(calloc);
+      expect(bridge!.userLoad(user.ptr), BridgeError.ok);
+    });
+
+    tearDown(() {
+      user.dispose();
+      bridge?.dbClose();
+      try {
+        work.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('单次 FFI 批量返回逐题判分与作答前快照', () {
+      final batch = tracker.getQuestionsForText(1);
+      expect(batch.questions, isNotEmpty);
+      final ids = batch.questions.map((q) => q.id).toList();
+      final choices = List<int>.filled(ids.length, 0);
+      final result = tracker.applyQuizBatch(user, ids, choices);
+      addTearDown(result.user.dispose);
+
+      expect(result.correct, hasLength(ids.length));
+      expect(result.abilityBefore, hasLength(ids.length));
+      for (final ability in result.abilityBefore) {
+        expect(ability, hasLength(10));
+      }
+      tracker.disposeQuestions(batch.questions);
+    });
+
+    test('批量中任一无効题目 → 整批拒绝且抛 FfiException（不返回空成功）', () {
+      final batch = tracker.getQuestionsForText(1);
+      expect(batch.questions, isNotEmpty);
+      final validId = batch.questions.first.id;
+      expect(
+        () => tracker.applyQuizBatch(user, [validId, 99999999], [0, 0]),
+        throwsA(isA<FfiException>()
+            .having((e) => e.code, 'code', BridgeError.errText)),
+      );
+      tracker.disposeQuestions(batch.questions);
     });
   });
 
@@ -411,7 +478,8 @@ void main() {
         markTestSkipped('未找到 python3，无法生成纯内容 fixture');
         return;
       }
-      final work = Directory.systemTemp.createTempSync('engine_chain_sync_fail');
+      final work =
+          Directory.systemTemp.createTempSync('engine_chain_sync_fail');
       _copyAssetDb('${work.path}/classical.db');
       final dbPath = '${work.path}/classical.db';
       final userPath = '${work.path}/user.db';
@@ -441,7 +509,8 @@ void main() {
 
       // MockClient 下载一个非 SQLite 的 tmp 文件，db_replace 必然失败
       final sync = RemoteDbSync(prefs, work.path,
-          client: MockClient((_) async => http.Response('not a sqlite db', 200)));
+          client:
+              MockClient((_) async => http.Response('not a sqlite db', 200)));
       coord.setContentPathAfterSync(dbPath);
       coord.initRemoteDbSync(prefs, work.path, remoteDbSync: sync);
 
@@ -550,8 +619,7 @@ String _assetDbPath() {
 
 void _copyAssetDb(String dest) {
   final script = _fixtureScriptPath();
-  final result = Process.runSync(
-      'python3', [script, _assetDbPath(), dest]);
+  final result = Process.runSync('python3', [script, _assetDbPath(), dest]);
   if (result.exitCode != 0) {
     throw StateError('生成纯内容 fixture 失败: ${result.stderr}');
   }

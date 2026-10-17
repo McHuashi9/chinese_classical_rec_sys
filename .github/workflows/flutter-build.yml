@@ -62,6 +62,9 @@ jobs:
       - name: Announcement sync regression test
         run: python3 tests/python/test_sync_announcement.py
 
+      - name: Bridge error codes generated-file check
+        run: python3 scripts/project/generate_bridge_error_codes.py --check
+
       - name: Flutter pub get
         run: flutter pub get
         working-directory: flutter_app

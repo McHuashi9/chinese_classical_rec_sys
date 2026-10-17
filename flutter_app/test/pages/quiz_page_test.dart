@@ -278,8 +278,7 @@ void main() {
     expect(find.text('提交失败，请重试'), findsOneWidget);
   });
 
-  testWidgets('未作答时「下一题」为次按钮样式，选中后恢复主按钮（P3 降级样式）',
-      (tester) async {
+  testWidgets('未作答时「下一题」为次按钮样式，选中后恢复主按钮（P3 降级样式）', (tester) async {
     await _pumpQuiz(tester, n: 2);
 
     // 未作答：次按钮，但仍可点（行为不变：不强制作答）
@@ -618,7 +617,8 @@ void main() {
   testWidgets('初始化按篇模式退出不确认（进度在共享答案表里）', (tester) async {
     final answers = <int, int?>{100: 1, 101: null};
     // 本用例验退出确认语义，引导浮层先标记已读以免遮挡返回键
-    await _pumpInitQuiz(tester, n: 2, seen: true, answers: answers, inHost: true);
+    await _pumpInitQuiz(tester,
+        n: 2, seen: true, answers: answers, inHost: true);
 
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
@@ -720,10 +720,10 @@ void main() {
     expect(tracker.disposeCount, 1);
   });
 
-  testWidgets('部分判题失败：跳转结果页，展示已计入题数且不重提', (tester) async {
+  testWidgets('批量提交失败：整批回滚，留在答题页可重试且不转移题目所有权', (tester) async {
     final settingsCtrl = SettingsController();
     final userCtrl = UserController();
-    final tracker = FakeQuizTracker()..failFrom = 1; // 第 2 题起失败
+    final tracker = FakeQuizTracker()..failFrom = 1;
     userCtrl.initTracker(tracker);
     userCtrl.setUser(User.allocate(calloc));
     addTearDown(userCtrl.dispose);
@@ -744,16 +744,10 @@ void main() {
     await tester.tap(find.text('提交'));
     await tester.pumpAndSettle();
 
-    // 进入结果页而非留在答题页（留在答题页重提会重复计分）
-    expect(find.textContaining('仅 1 题计入能力'), findsOneWidget);
-    expect(find.text('答题结果 · 岳阳楼记'), findsOneWidget);
-    // 只展示已生效的第 1 题，第 2 题不展示
-    expect(find.textContaining('第1题解析'), findsOneWidget);
-    expect(find.textContaining('第2题解析'), findsNothing);
-    expect(find.text('你的选择'), findsOneWidget);
-    expect(find.textContaining('你的答案'), findsNothing);
-
-    // 部分失败路径：sublist 共享同一 owner 块，仍恰好释放一次
+    expect(find.textContaining('本次作答未保存'), findsOneWidget);
+    expect(find.text('答题结果 · 岳阳楼记'), findsNothing);
+    expect(tracker.batchCalls, 1);
+    // 未进入结果页，题目所有权仍归答题页，销毁时释放一次。
     await tester.pumpWidget(const SizedBox());
     expect(tracker.disposeCount, 1);
   });

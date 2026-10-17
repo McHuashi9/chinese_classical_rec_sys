@@ -11,16 +11,23 @@ import 'package:chinese_classical_rec_sys/engine/read_tracker.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 
 import '../helpers/quiz_test_support.dart';
 
-/// 阅读写库可控的 tracker：[readOk] 为 false 时 applyRead 返回 null（模拟写库失败）。
+/// 阅读写库可控的 tracker：[readOk] 为 false 时 applyRead 抛 FFI 失败。
 class _ReadEffectTracker extends FakeQuizTracker {
   bool readOk = false;
 
   @override
-  User? applyRead(User user, int textId, double readTime) =>
-      readOk ? User.allocate(calloc) : null;
+  User applyRead(User user, int textId, double readTime) {
+    if (!readOk) {
+      throw const FfiException(
+          operation: 'tracker_apply_read', code: BridgeError.errGeneric);
+    }
+    return User.allocate(calloc);
+  }
 }
 
 void main() {
@@ -50,7 +57,8 @@ void main() {
     tearDown(() => ctrl.dispose());
 
     test('darkMode starts false', () => expect(ctrl.darkMode, false));
-    test('showTranslation starts false', () => expect(ctrl.showTranslation, false));
+    test('showTranslation starts false',
+        () => expect(ctrl.showTranslation, false));
     test('fontScale starts 1.0', () => expect(ctrl.fontScale, 1.0));
     test('logLevel starts INFO', () => expect(ctrl.logLevel, 'INFO'));
     test('error starts null', () => expect(ctrl.error, null));
@@ -124,13 +132,18 @@ void main() {
     test('isReading starts false', () => expect(ctrl.isReading, false));
     test('readingText starts null', () => expect(ctrl.readingText, null));
     test('elapsedSeconds starts 0', () => expect(ctrl.elapsedSeconds, 0));
-    test('formattedReadingTime starts 00:00', () => expect(ctrl.formattedReadingTime, '00:00'));
-    test('currentPageNumberLabel is empty', () => expect(ctrl.currentPageNumberLabel, ''));
-    test('isTextRead returns false for unknown id', () => expect(ctrl.isTextRead(1), false));
-    test('hasUnrecordedReading is false', () => expect(ctrl.hasUnrecordedReading, false));
+    test('formattedReadingTime starts 00:00',
+        () => expect(ctrl.formattedReadingTime, '00:00'));
+    test('currentPageNumberLabel is empty',
+        () => expect(ctrl.currentPageNumberLabel, ''));
+    test('isTextRead returns false for unknown id',
+        () => expect(ctrl.isTextRead(1), false));
+    test('hasUnrecordedReading is false',
+        () => expect(ctrl.hasUnrecordedReading, false));
     test('stopTimer is safe when not reading', () => ctrl.stopTimer());
     test('discardReading is safe', () => ctrl.discardReading());
-    test('showTranslation starts false', () => expect(ctrl.showTranslation, false));
+    test('showTranslation starts false',
+        () => expect(ctrl.showTranslation, false));
     test('setShowTranslation toggles', () {
       ctrl.setShowTranslation(true);
       expect(ctrl.showTranslation, true);
@@ -155,7 +168,10 @@ void main() {
     testWidgets('paginate 空内容返回空页', (tester) async {
       withCleanup(() {
         const text = ChineseText(
-          id: 1, title: 't', author: 'a', dynasty: '唐',
+          id: 1,
+          title: 't',
+          author: 'a',
+          dynasty: '唐',
         );
         ctrl.loadText(text);
         ctrl.paginate(400, 600, ScreenSize.medium, 1.0, false);
@@ -167,7 +183,10 @@ void main() {
     testWidgets('paginate 短内容一页显示', (tester) async {
       withCleanup(() {
         const text = ChineseText(
-          id: 1, title: 't', author: 'a', dynasty: '唐',
+          id: 1,
+          title: 't',
+          author: 'a',
+          dynasty: '唐',
           content: 'Hello World',
         );
         ctrl.loadText(text);
@@ -181,11 +200,15 @@ void main() {
     testWidgets('paginate 长内容分多页', (tester) async {
       withCleanup(() {
         final longContent = 'Hello world, this is a test paragraph that should '
-            'wrap across multiple lines when laid out at a reasonable page width. '
-            'We repeat this several times to ensure enough content for multi-page '
-            'pagination behavior in the reading controller. ' * 30;
+                'wrap across multiple lines when laid out at a reasonable page width. '
+                'We repeat this several times to ensure enough content for multi-page '
+                'pagination behavior in the reading controller. ' *
+            30;
         final text = ChineseText(
-          id: 2, title: 'long', author: 'a', dynasty: '唐',
+          id: 2,
+          title: 'long',
+          author: 'a',
+          dynasty: '唐',
           content: longContent,
         );
         ctrl.loadText(text);
@@ -197,9 +220,13 @@ void main() {
 
     testWidgets('paginate 后翻页/回翻', (tester) async {
       withCleanup(() {
-        final longContent = 'Page test content for navigation verification. ' * 50;
+        final longContent =
+            'Page test content for navigation verification. ' * 50;
         final text = ChineseText(
-          id: 3, title: 'nav', author: 'a', dynasty: '唐',
+          id: 3,
+          title: 'nav',
+          author: 'a',
+          dynasty: '唐',
           content: longContent,
         );
         ctrl.loadText(text);
@@ -224,7 +251,10 @@ void main() {
       withCleanup(() {
         final longContent = 'Boundary test. ' * 30;
         final text = ChineseText(
-          id: 4, title: 'bnd', author: 'a', dynasty: '唐',
+          id: 4,
+          title: 'bnd',
+          author: 'a',
+          dynasty: '唐',
           content: longContent,
         );
         ctrl.loadText(text);
@@ -245,7 +275,10 @@ void main() {
     testWidgets('loadText 无译文时 showTranslation 开关不影响分页内容', (tester) async {
       withCleanup(() {
         const text = ChineseText(
-          id: 5, title: 'no-trans', author: 'a', dynasty: '唐',
+          id: 5,
+          title: 'no-trans',
+          author: 'a',
+          dynasty: '唐',
           content: '原文内容\n\n第二段',
         );
         ctrl.loadText(text);
@@ -257,7 +290,10 @@ void main() {
     testWidgets('loadText 带译文默认不显示，开关后分页源切换为交错文本', (tester) async {
       withCleanup(() {
         const text = ChineseText(
-          id: 6, title: 'trans', author: 'a', dynasty: '唐',
+          id: 6,
+          title: 'trans',
+          author: 'a',
+          dynasty: '唐',
           content: '原文一\n\n原文二',
         );
         ctrl.loadText(
@@ -280,7 +316,10 @@ void main() {
     testWidgets('译文交错分页完整性：多页下所有段不丢、首尾段保持', (tester) async {
       withCleanup(() {
         const text = ChineseText(
-          id: 7, title: 'interleaved', author: 'a', dynasty: '唐',
+          id: 7,
+          title: 'interleaved',
+          author: 'a',
+          dynasty: '唐',
           content: '原文一\n\n原文二\n\n原文三\n\n原文四',
         );
         ctrl.loadText(
@@ -316,7 +355,8 @@ void main() {
     tearDown(() => ctrl.dispose());
 
     test('user starts null', () => expect(ctrl.user, null));
-    test('averageAbility defaults to 0.3', () => expect(ctrl.averageAbility, 0.3));
+    test('averageAbility defaults to 0.3',
+        () => expect(ctrl.averageAbility, 0.3));
     test('applyReadEffect is safe without tracker', () {
       expect(ctrl.applyReadEffect(1, 60), false);
     });

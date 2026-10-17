@@ -15,7 +15,8 @@ final class NativeBridge {
   late final int Function(Pointer<Utf8> newPath, Pointer<Utf8> curPath)
       dbReplace;
   late final int Function(Pointer<Utf8> destPath) userExport;
-  late final int Function(Pointer<Int32> userVersion, Pointer<Int32> contentVersion)
+  late final int Function(
+          Pointer<Int32> userVersion, Pointer<Int32> contentVersion)
       dbGetSchemaVersions;
 
   // ─── 用户 ────────────────────────────────────────────────────
@@ -26,13 +27,12 @@ final class NativeBridge {
   late final int Function(Pointer<QuestionData> out, int maxCount)
       userInitQuestions;
   late final int Function(
-      Pointer<Int32> qids,
-      Pointer<Int32> choices,
-      int count,
-      int timestamp,
-      Pointer<UserData> outUser,
-    )
-      userInitApply;
+    Pointer<Int32> qids,
+    Pointer<Int32> choices,
+    int count,
+    int timestamp,
+    Pointer<UserData> outUser,
+  ) userInitApply;
 
   // ─── 本地多档案 ──────────────────────────────────────────────
   late final int Function(Pointer<ProfileData> out, int maxCount) userList;
@@ -45,10 +45,12 @@ final class NativeBridge {
 
   // ─── 文本 ────────────────────────────────────────────────────
   late final int Function() textGetCount;
-  late final void Function(Pointer<TextInfo> out, int maxCount) textGetAll;
+  late final int Function(Pointer<TextInfo> out, int maxCount) textGetAll;
   late final int Function(int id, Pointer<TextDetail> out) textGetDetail;
-  late final int Function(int id, Pointer<Utf8> out, int maxLen) textGetAnnotations;
-  late final int Function(int id, Pointer<Utf8> out, int maxLen) textGetTranslation;
+  late final int Function(int id, Pointer<Utf8> out, int maxLen)
+      textGetAnnotations;
+  late final int Function(int id, Pointer<Utf8> out, int maxLen)
+      textGetTranslation;
 
   // ─── 推荐 ────────────────────────────────────────────────────
   late final int Function(
@@ -95,6 +97,20 @@ final class NativeBridge {
     int isReview,
   ) trackerApplyQuiz;
 
+  /// 批量答题（v1.6.0）：单次 FFI 调用完成整批判分+学习效应+落库。
+  /// 返回 BRIDGE_OK 时 outCorrect/outAbilityBefore 全量有效；失败时整批回滚。
+  late final int Function(
+    Pointer<UserData> user,
+    Pointer<Int32> questionIds,
+    Pointer<Int32> userChoices,
+    int count,
+    int timestamp,
+    Pointer<UserData> outUser,
+    Pointer<Int32> outCorrect,
+    Pointer<Double> outAbilityBefore,
+    int isReview,
+  ) trackerApplyQuizBatch;
+
   /// 取题: 按文章取题（上限 maxCount，若题量不足返回实际数量；不含 answer_index）
   /// answeredAll 输出：1 = 该篇已无未答题（含复习记录排除）
   late final int Function(
@@ -134,8 +150,8 @@ final class NativeBridge {
   late final int Function(int textId, double readTime, int timestamp)
       historyAddRecord;
 
-  late final int Function(int limit, Pointer<ReadingRecordData> out, int maxCount)
-      historyGetRecent;
+  late final int Function(
+      int limit, Pointer<ReadingRecordData> out, int maxCount) historyGetRecent;
 
   late final int Function() historyGetTotalCount;
 
@@ -149,16 +165,12 @@ final class NativeBridge {
   // ──────────────────────────────────────────────────────────────
 
   NativeBridge.fromLib(DynamicLibrary lib) : _lib = lib {
-    dbOpen = _lib.lookupFunction<
-        Int32 Function(Pointer<Utf8>, Pointer<Utf8>),
+    dbOpen = _lib.lookupFunction<Int32 Function(Pointer<Utf8>, Pointer<Utf8>),
         int Function(Pointer<Utf8>, Pointer<Utf8>)>('db_open');
 
-    dbClose = _lib.lookupFunction<
-        Void Function(),
-        void Function()>('db_close');
+    dbClose = _lib.lookupFunction<Void Function(), void Function()>('db_close');
 
-    userExport = _lib.lookupFunction<
-        Int32 Function(Pointer<Utf8>),
+    userExport = _lib.lookupFunction<Int32 Function(Pointer<Utf8>),
         int Function(Pointer<Utf8>)>('user_export');
 
     dbReplace = _lib.lookupFunction<
@@ -169,21 +181,17 @@ final class NativeBridge {
         Int32 Function(Pointer<Int32>, Pointer<Int32>),
         int Function(Pointer<Int32>, Pointer<Int32>)>('db_get_schema_versions');
 
-    userLoad = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>),
+    userLoad = _lib.lookupFunction<Int32 Function(Pointer<UserData>),
         int Function(Pointer<UserData>)>('user_load');
 
-    userSave = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>),
+    userSave = _lib.lookupFunction<Int32 Function(Pointer<UserData>),
         int Function(Pointer<UserData>)>('user_save');
 
-    userInitDefault = _lib.lookupFunction<
-        Int32 Function(),
-        int Function()>('user_init_default');
+    userInitDefault = _lib
+        .lookupFunction<Int32 Function(), int Function()>('user_init_default');
 
-    userIsInitialized = _lib.lookupFunction<
-        Int32 Function(),
-        int Function()>('user_is_initialized');
+    userIsInitialized = _lib.lookupFunction<Int32 Function(), int Function()>(
+        'user_is_initialized');
 
     userInitQuestions = _lib.lookupFunction<
         Int32 Function(Pointer<QuestionData>, Int32),
@@ -192,44 +200,36 @@ final class NativeBridge {
     userInitApply = _lib.lookupFunction<
         Int32 Function(
             Pointer<Int32>, Pointer<Int32>, Int32, Int64, Pointer<UserData>),
-        int Function(Pointer<Int32>, Pointer<Int32>, int, int, Pointer<UserData>)>(
-            'user_init_apply');
+        int Function(Pointer<Int32>, Pointer<Int32>, int, int,
+            Pointer<UserData>)>('user_init_apply');
 
-    userList = _lib.lookupFunction<
-        Int32 Function(Pointer<ProfileData>, Int32),
+    userList = _lib.lookupFunction<Int32 Function(Pointer<ProfileData>, Int32),
         int Function(Pointer<ProfileData>, int)>('user_list');
 
-    userActiveId = _lib.lookupFunction<
-        Int32 Function(),
-        int Function()>('user_active_id');
+    userActiveId =
+        _lib.lookupFunction<Int32 Function(), int Function()>('user_active_id');
 
-    userCreate = _lib.lookupFunction<
-        Int32 Function(Pointer<Utf8>),
+    userCreate = _lib.lookupFunction<Int32 Function(Pointer<Utf8>),
         int Function(Pointer<Utf8>)>('user_create');
 
     userCreateInherit = _lib.lookupFunction<
         Int32 Function(Pointer<Utf8>, Int32),
         int Function(Pointer<Utf8>, int)>('user_create_inherit');
 
-    userSwitch = _lib.lookupFunction<
-        Int32 Function(Int32),
-        int Function(int)>('user_switch');
+    userSwitch = _lib.lookupFunction<Int32 Function(Int32), int Function(int)>(
+        'user_switch');
 
-    userRename = _lib.lookupFunction<
-        Int32 Function(Int32, Pointer<Utf8>),
+    userRename = _lib.lookupFunction<Int32 Function(Int32, Pointer<Utf8>),
         int Function(int, Pointer<Utf8>)>('user_rename');
 
-    userDelete = _lib.lookupFunction<
-        Int32 Function(Int32),
-        int Function(int)>('user_delete');
+    userDelete = _lib.lookupFunction<Int32 Function(Int32), int Function(int)>(
+        'user_delete');
 
-    textGetCount = _lib.lookupFunction<
-        Int32 Function(),
-        int Function()>('text_get_count');
+    textGetCount =
+        _lib.lookupFunction<Int32 Function(), int Function()>('text_get_count');
 
-    textGetAll = _lib.lookupFunction<
-        Void Function(Pointer<TextInfo>, Int32),
-        void Function(Pointer<TextInfo>, int)>('text_get_all');
+    textGetAll = _lib.lookupFunction<Int32 Function(Pointer<TextInfo>, Int32),
+        int Function(Pointer<TextInfo>, int)>('text_get_all');
 
     textGetDetail = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<TextDetail>),
@@ -244,77 +244,95 @@ final class NativeBridge {
         int Function(int, Pointer<Utf8>, int)>('text_get_translation');
 
     recommend = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>, Pointer<Double>, Int32, Int32),
-        int Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>, int, int)>(
-            'recommend');
+        Int32 Function(Pointer<UserData>, Int32, Pointer<Int32>,
+            Pointer<Double>, Int32, Int32),
+        int Function(Pointer<UserData>, int, Pointer<Int32>, Pointer<Double>,
+            int, int)>('recommend');
 
     trackerApplyRead = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>, Int32, Double, Int64, Pointer<UserData>, Int32),
-        int Function(Pointer<UserData>, int, double, int, Pointer<UserData>, int)>(
-            'tracker_apply_read');
+        Int32 Function(
+            Pointer<UserData>, Int32, Double, Int64, Pointer<UserData>, Int32),
+        int Function(Pointer<UserData>, int, double, int, Pointer<UserData>,
+            int)>('tracker_apply_read');
 
     trackerApplyForgetting = _lib.lookupFunction<
         Int32 Function(Pointer<UserData>, Int64, Pointer<UserData>),
-        int Function(Pointer<UserData>, int, Pointer<UserData>)>(
-            'tracker_apply_forgetting');
+        int Function(Pointer<UserData>, int,
+            Pointer<UserData>)>('tracker_apply_forgetting');
 
     trackerPrune = _lib.lookupFunction<
         Int32 Function(Pointer<UserData>, Int64, Pointer<UserData>),
-        int Function(Pointer<UserData>, int, Pointer<UserData>)>(
-            'tracker_prune');
+        int Function(
+            Pointer<UserData>, int, Pointer<UserData>)>('tracker_prune');
 
     trackerApplyQuiz = _lib.lookupFunction<
-        Int32 Function(Pointer<UserData>, Int32, Int32, Int64, Pointer<UserData>, Pointer<Int32>, Int32),
-        int Function(Pointer<UserData>, int, int, int, Pointer<UserData>, Pointer<Int32>, int)>(
-            'tracker_apply_quiz');
+        Int32 Function(Pointer<UserData>, Int32, Int32, Int64,
+            Pointer<UserData>, Pointer<Int32>, Int32),
+        int Function(Pointer<UserData>, int, int, int, Pointer<UserData>,
+            Pointer<Int32>, int)>('tracker_apply_quiz');
+
+    trackerApplyQuizBatch = _lib.lookupFunction<
+        Int32 Function(Pointer<UserData>, Pointer<Int32>, Pointer<Int32>, Int32,
+            Int64, Pointer<UserData>, Pointer<Int32>, Pointer<Double>, Int32),
+        int Function(
+            Pointer<UserData>,
+            Pointer<Int32>,
+            Pointer<Int32>,
+            int,
+            int,
+            Pointer<UserData>,
+            Pointer<Int32>,
+            Pointer<Double>,
+            int)>('tracker_apply_quiz_batch');
 
     questionGetByText = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<QuestionData>, Int32, Pointer<Int32>),
-        int Function(int, Pointer<QuestionData>, int, Pointer<Int32>)>(
-            'question_get_by_text');
+        int Function(int, Pointer<QuestionData>, int,
+            Pointer<Int32>)>('question_get_by_text');
 
     quizGetReviewItems = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<ReviewItemData>, Int32),
-        int Function(int, Pointer<ReviewItemData>, int)>('quiz_get_review_items');
+        int Function(
+            int, Pointer<ReviewItemData>, int)>('quiz_get_review_items');
 
-    quizGetDueReviewCount = _lib.lookupFunction<
-        Int32 Function(Int32), int Function(int)>('quiz_get_due_review_count');
+    quizGetDueReviewCount =
+        _lib.lookupFunction<Int32 Function(Int32), int Function(int)>(
+            'quiz_get_due_review_count');
 
-    quizGetReviewCount = _lib.lookupFunction<
-        Int32 Function(Int32), int Function(int)>('quiz_get_review_count');
+    quizGetReviewCount =
+        _lib.lookupFunction<Int32 Function(Int32), int Function(int)>(
+            'quiz_get_review_count');
 
     quizGetQuestionsByIds = _lib.lookupFunction<
         Int32 Function(Pointer<Int32>, Int32, Pointer<QuestionData>, Int32),
-        int Function(Pointer<Int32>, int, Pointer<QuestionData>, int)>(
-            'quiz_get_questions_by_ids');
+        int Function(Pointer<Int32>, int, Pointer<QuestionData>,
+            int)>('quiz_get_questions_by_ids');
 
     quizGetAttemptSummary = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>),
-        int Function(int, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>)>(
-            'quiz_get_attempt_summary');
+        int Function(int, Pointer<Int32>, Pointer<Int32>,
+            Pointer<Int32>)>('quiz_get_attempt_summary');
 
-    historyAddRecord = _lib.lookupFunction<
-        Int32 Function(Int32, Double, Int64),
+    historyAddRecord = _lib.lookupFunction<Int32 Function(Int32, Double, Int64),
         int Function(int, double, int)>('history_add_record');
 
     historyGetRecent = _lib.lookupFunction<
         Int32 Function(Int32, Pointer<ReadingRecordData>, Int32),
-        int Function(int, Pointer<ReadingRecordData>, int)>('history_get_recent');
+        int Function(
+            int, Pointer<ReadingRecordData>, int)>('history_get_recent');
 
-    historyGetTotalCount = _lib.lookupFunction<
-        Int32 Function(),
-        int Function()>('history_get_total_count');
+    historyGetTotalCount =
+        _lib.lookupFunction<Int32 Function(), int Function()>(
+            'history_get_total_count');
 
     historyGetTrackedTextIds = _lib.lookupFunction<
         Int32 Function(Pointer<Int32>, Int32),
         int Function(Pointer<Int32>, int)>('history_get_tracked_text_ids');
 
-    logWrite = _lib.lookupFunction<
-        Void Function(Int32, Pointer<Utf8>),
+    logWrite = _lib.lookupFunction<Void Function(Int32, Pointer<Utf8>),
         void Function(int, Pointer<Utf8>)>('log_write');
 
-    logSetLevel = _lib.lookupFunction<
-        Void Function(Pointer<Utf8>),
+    logSetLevel = _lib.lookupFunction<Void Function(Pointer<Utf8>),
         void Function(Pointer<Utf8>)>('log_set_level');
 
     instance = this;

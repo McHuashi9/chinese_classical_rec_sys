@@ -1,6 +1,7 @@
-// 桥层题目与复习域（v1.4.0 工作项 3）：question_get_by_text / tracker_apply_quiz /
-// quiz_get_review_items / quiz_get_due_review_count / quiz_get_review_count /
-// quiz_get_questions_by_ids / quiz_get_attempt_summary，共 7 个导出符号。
+// 桥层题目与复习域（v1.4.0 工作项 3；v1.6.0 增批量提交）：question_get_by_text /
+// tracker_apply_quiz / tracker_apply_quiz_batch / quiz_get_review_items /
+// quiz_get_due_review_count / quiz_get_review_count / quiz_get_questions_by_ids /
+// quiz_get_attempt_summary，共 8 个导出符号。
 //
 // 工作项 2 下沉：取题池过滤 + 固定种子洗牌 → QuizRepository；review_items 读写（含悬空过滤）
 // → ReviewRepository；间隔/掌握/到期边界 → ReviewScheduler。本文件不再直接访问原始连接。
@@ -16,6 +17,7 @@
 #include <ctime>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 // 取题：按 text_id 返回该文题目（排除已答含复习记录 → 固定种子随机轮换，上限 max_count；
@@ -25,7 +27,7 @@
 extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionData* out,
                                                         int max_count, int* answered_all)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
@@ -59,154 +61,270 @@ extern "C" CHINESE_CORE_EXPORT int question_get_by_text(int text_id, QuestionDat
     });
 }
 
-// 答题：按 question_id 查题 → 判题（用户选项 vs answer_index）→ applyQuizEffect（正式测验）
-// + 写作答流水 quiz_attempts + upsert 复习状态 review_items（同锁同事务）
-// is_review=1（错题复习）：跳过 applyQuizEffect（不更新能力/eta/quiz_count，防刷分），
-// 只判题 + 写流水 + 更新复习状态。
-extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int question_id,
-                                      int user_choice, int64_t timestamp,
-                                      UserData* out_user, int* out_correct, int is_review)
-{
-    return bridge_guard(g_mtx, [&] {
-    const int initRc = requireInitialized();
-    if (initRc != BRIDGE_OK) return initRc;
-    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
+namespace {
 
-    // 1. 查询题目（text_id / answer_index / dims CSV）
-    const QuizQuestionInfo info = S().quizRepo->getQuestionInfo(question_id);
+// 已校验的答题条目。批量入口先全量校验，再在同一事务内逐题应用，
+// 确保参数/题目错误不会先写前几题。
+struct PreparedQuizAnswer {
+    int questionId = 0;
+    int textId = 0;
+    int answerIndex = 0;
+    std::vector<int> dims;
+    const Text* text = nullptr;
+};
+
+int prepareQuizAnswer(int questionId, int userChoice, const char* caller,
+                      PreparedQuizAnswer& item)
+{
+    const QuizQuestionInfo info = S().quizRepo->getQuestionInfo(questionId);
     if (info.status == QuizStatus::MissingTable) {
-        LOG_WARN("bridge: tracker_apply_quiz 无 questions 表 question_id={}", question_id);
+        LOG_WARN("bridge: {} 无 questions 表 question_id={}", caller, questionId);
         return BRIDGE_ERR_TEXT;
     }
     if (info.status != QuizStatus::Ok) {
-        LOG_ERROR("bridge: tracker_apply_quiz 题目查询失败: {}", S().db->getLastError());
+        LOG_ERROR("bridge: {} 题目查询失败: {}", caller, S().db->getLastError());
         return BRIDGE_ERR_GENERIC;
     }
     if (!info.found) {
-        LOG_WARN("bridge: 题目不存在 question_id={}", question_id);
+        LOG_WARN("bridge: {} 题目不存在 question_id={}", caller, questionId);
         return BRIDGE_ERR_TEXT;
     }
     if ((info.nullFields & (QuizFieldTextId | QuizFieldAnswerIndex | QuizFieldDims)) != 0) {
-        LOG_WARN("bridge: 题目字段缺失 question_id={}", question_id);
+        LOG_WARN("bridge: {} 题目字段缺失 question_id={}", caller, questionId);
+        return BRIDGE_ERR_TEXT;
+    }
+    if (info.answerIndex < 0 || info.answerIndex > 3) {
+        LOG_WARN("bridge: {} answer_index 越界 question_id={} idx={}", caller, questionId,
+                 info.answerIndex);
+        return BRIDGE_ERR_GENERIC;
+    }
+    if (userChoice < 0 || userChoice > 3) {
+        LOG_WARN("bridge: {} user_choice 越界 question_id={} choice={}", caller, questionId,
+                 userChoice);
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    auto it = S().textIndex->find(info.textId);
+    if (it == S().textIndex->end()) {
+        LOG_WARN("bridge: {} 文章不存在 question_id={} text_id={}", caller, questionId,
+                 info.textId);
         return BRIDGE_ERR_TEXT;
     }
 
-    const int tid = info.textId;
-    const int ans_idx = info.answerIndex;
-    if (ans_idx < 0 || ans_idx > 3) {
-        LOG_WARN("bridge: answer_index 越界 question_id={} idx={}", question_id, ans_idx);
-        return BRIDGE_ERR_GENERIC;
-    }
-    if (user_choice < 0 || user_choice > 3) {
-        LOG_WARN("bridge: user_choice 越界 question_id={} choice={}", question_id, user_choice);
-        return BRIDGE_ERR_GENERIC;
-    }
-
-    auto it = S().textIndex->find(tid);
-    if (it == S().textIndex->end()) return BRIDGE_ERR_TEXT;
-
-    // 2. 解析 dims CSV（如 "3,4,9" 表示 0-based 维度）
-    std::vector<int> dim_list;
+    std::vector<int> dims;
     {
         std::stringstream ss(info.dims);
         std::string tok;
         while (std::getline(ss, tok, ',')) {
-            if (!tok.empty()) dim_list.push_back(std::atoi(tok.c_str()));
+            if (tok.empty()) continue;
+            const int dim = std::atoi(tok.c_str());
+            if (dim < 0 || dim >= 10) {
+                LOG_WARN("bridge: {} 维度越界 question_id={} dim={}", caller, questionId, dim);
+                return BRIDGE_ERR_GENERIC;
+            }
+            dims.push_back(dim);
         }
     }
-    if (dim_list.empty()) {
-        LOG_WARN("bridge: dims 为空 question_id={}", question_id);
+    if (dims.empty()) {
+        LOG_WARN("bridge: {} dims 为空 question_id={}", caller, questionId);
         return BRIDGE_ERR_GENERIC;
     }
 
-    // 3. 判题（答题效应在步骤 4 事务内应用）
-    User cpp_user;
-    c_to_user(user, cpp_user);
+    item.questionId = questionId;
+    item.textId = info.textId;
+    item.answerIndex = info.answerIndex;
+    item.dims = std::move(dims);
+    item.text = &(*S().texts)[it->second];
+    return BRIDGE_OK;
+}
 
-    const int correct = (user_choice == ans_idx) ? 1 : 0;
-    if (out_correct) *out_correct = correct;
-    time_t effective_ts = (timestamp == 0) ? time(nullptr) : static_cast<time_t>(timestamp);
-
-    // 4. 答题效应 + 落库 + 作答流水 + 复习状态（同一事务；失败回滚且返回错误）。
-    // 防双计：若事务失败，能力/quiz_count/eta/增量与流水一起回滚，用户重试同一题不会二次生效
-    SqlTransaction tx(S().db.get(), "BEGIN");
-    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
-    bool ok = true;
-
-    if (!is_review) {
-        S().tracker->applyQuizEffect(cpp_user, (*S().texts)[it->second], dim_list,
-                                     correct, effective_ts);
-        user_to_c(cpp_user, out_user);
-        if (!S().userRepo->saveUser(cpp_user, S().activeUserId)) {
-            LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
-            return BRIDGE_ERR_GENERIC;
-        }
-    } else {
-        // 复习无效应：原样回传（调用方仍按契约接管返回的 user 内存）
-        user_to_c(cpp_user, out_user);
+// 在调用方事务与 g_mtx 内应用一题：能力效应（正式测验）→ 作答流水 → 复习状态。
+// 仅返回 true 才表示该题的全部写库动作成功；调用方负责提交/回滚事务。
+bool applyPreparedQuizAnswer(User& cppUser, const PreparedQuizAnswer& item, int correct,
+                             int64_t answeredAt, bool isReview)
+{
+    if (!isReview) {
+        S().tracker->applyQuizEffect(cppUser, *item.text, item.dims, correct,
+                                     static_cast<time_t>(answeredAt));
     }
 
-    ok = S().quizRepo->insertAttempt(S().activeUserId, question_id, tid, correct,
-                                     is_review ? 1 : 0, 0,
-                                     static_cast<int64_t>(effective_ts));
+    bool ok = S().quizRepo->insertAttempt(
+        S().activeUserId, item.questionId, item.textId, correct, isReview ? 1 : 0, 0,
+        answeredAt);
     if (!ok) {
-        LOG_ERROR("bridge: quiz_attempts 写入失败 question_id={}: {}", question_id,
+        LOG_ERROR("bridge: quiz_attempts 写入失败 question_id={}: {}", item.questionId,
                   S().db->getLastError());
+        return false;
     }
 
-    if (ok && correct == 1) {
-        if (!is_review) {
+    if (correct == 1) {
+        if (!isReview) {
             // 正式测验答对 → 视为已掌握，从复习队列移除
-            ok = S().reviewRepo->removeItem(S().activeUserId, question_id);
+            ok = S().reviewRepo->removeItem(S().activeUserId, item.questionId);
             if (!ok) {
-                LOG_ERROR("bridge: review_items 删除失败 question_id={}: {}", question_id,
+                LOG_ERROR("bridge: review_items 删除失败 question_id={}: {}", item.questionId,
                           S().db->getLastError());
             }
         } else {
             // 复习答对 → streak+1，间隔翻倍；streak≥3 移除（视为掌握）
             int streak = 0;
-            ok = S().reviewRepo->streak(S().activeUserId, question_id, streak);
+            ok = S().reviewRepo->streak(S().activeUserId, item.questionId, streak);
             if (ok) {
                 if (ReviewScheduler::isMasteredAfterCorrect(streak)) {
-                    ok = S().reviewRepo->removeItem(S().activeUserId, question_id);
+                    ok = S().reviewRepo->removeItem(S().activeUserId, item.questionId);
                 } else {
                     ok = S().reviewRepo->bumpStreak(
-                        S().activeUserId, question_id, streak + 1,
-                        static_cast<int64_t>(effective_ts) +
-                            ReviewScheduler::intervalAfter(streak + 1));
+                        S().activeUserId, item.questionId, streak + 1,
+                        answeredAt + ReviewScheduler::intervalAfter(streak + 1));
                 }
             }
             if (!ok) {
-                LOG_ERROR("bridge: review_items 更新失败 question_id={}: {}", question_id,
+                LOG_ERROR("bridge: review_items 更新失败 question_id={}: {}", item.questionId,
                           S().db->getLastError());
             }
         }
-    } else if (ok && correct == 0) {
+    } else {
         // 答错（正式或复习均重置）：streak 清零、wrong_count+1、下次到期 = answered_at + base
         ok = S().reviewRepo->upsertWrong(
-            S().activeUserId, question_id, tid,
-            ReviewScheduler::dueAfterWrong(static_cast<int64_t>(effective_ts)));
+            S().activeUserId, item.questionId, item.textId,
+            ReviewScheduler::dueAfterWrong(answeredAt));
         if (!ok) {
-            LOG_ERROR("bridge: review_items upsert 失败 question_id={}: {}", question_id,
+            LOG_ERROR("bridge: review_items upsert 失败 question_id={}: {}", item.questionId,
                       S().db->getLastError());
         }
     }
+    return ok;
+}
 
-    if (ok) ok = tx.commit();
-    if (!ok) {
+}  // namespace
+
+// 单题答题（保留既有 ABI）：按 question_id 查题 → 判题 → 答题效应 + 作答流水 +
+// 复习状态在同一事务内完成。失败时不写出参，且不产生半应用状态。
+extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int question_id,
+                                      int user_choice, int64_t timestamp,
+                                      UserData* out_user, int* out_correct, int is_review)
+{
+    return bridge_guard(g_mtx, [&]() -> int {
+    const int initRc = requireInitialized();
+    if (initRc != BRIDGE_OK) return initRc;
+    if (!user || !out_user) return BRIDGE_ERR_GENERIC;
+
+    PreparedQuizAnswer item;
+    const int prepRc = prepareQuizAnswer(question_id, user_choice, "tracker_apply_quiz", item);
+    if (prepRc != BRIDGE_OK) return prepRc;
+
+    const bool review = is_review != 0;
+    const int correct = (user_choice == item.answerIndex) ? 1 : 0;
+    const int64_t effectiveTs =
+        timestamp == 0 ? static_cast<int64_t>(time(nullptr)) : timestamp;
+
+    User cppUser;
+    c_to_user(user, cppUser);
+
+    SqlTransaction tx(S().db.get(), "BEGIN");
+    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
+    if (!applyPreparedQuizAnswer(cppUser, item, correct, effectiveTs, review)) {
         LOG_ERROR("bridge: tracker_apply_quiz 事务失败 question_id={}", question_id);
         return BRIDGE_ERR_GENERIC;
     }
+    if (!review && !S().userRepo->saveUser(cppUser, S().activeUserId)) {
+        LOG_ERROR("bridge: 答题效应落库失败 question_id={}", question_id);
+        return BRIDGE_ERR_GENERIC;
+    }
+    if (!tx.commit()) {
+        LOG_ERROR("bridge: tracker_apply_quiz 事务提交失败 question_id={}", question_id);
+        return BRIDGE_ERR_GENERIC;
+    }
 
-    // 事务成功后才更新内存态（与磁盘一致；失败时保持旧值，重试不会双计）
-    if (!is_review) {
-        const double avg_before = S().user->getAverageAbility();
-        S().user = std::make_unique<User>(cpp_user);
+    if (out_correct) *out_correct = correct;
+    user_to_c(cppUser, out_user);
+
+    if (!review) {
+        const double avgBefore = S().user ? S().user->getAverageAbility() : 0.0;
+        S().user = std::make_unique<User>(cppUser);
         LOG_INFO("bridge: 答题效应完成 — question_id={}, correct={}, avg_ability={:.3f}→{:.3f}",
-                 question_id, correct, avg_before, cpp_user.getAverageAbility());
+                 question_id, correct, avgBefore, cppUser.getAverageAbility());
     } else {
         LOG_INFO("bridge: 复习作答完成 — question_id={}, correct={}（无答题效应）",
                  question_id, correct);
+    }
+    return BRIDGE_OK;
+    });
+}
+
+// 批量答题（v1.6.0）：Dart submitQuiz 的唯一 FFI 入口。
+// 先校验全部题目/选项，再在一个 BEGIN IMMEDIATE 事务内逐题应用判分、能力效应、
+// 作答流水与复习状态；任一题失败整批回滚，出参只在 COMMIT 成功后写入。
+// out_ability_before 为可选扁平数组 count*10（每题作答前 10 维能力，行优先）。
+extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz_batch(
+    const UserData* user, const int* question_ids, const int* user_choices, int count,
+    int64_t timestamp, UserData* out_user, int* out_correct, double* out_ability_before,
+    int is_review)
+{
+    return bridge_guard(g_mtx, [&]() -> int {
+    const int initRc = requireInitialized();
+    if (initRc != BRIDGE_OK) return initRc;
+    if (!user || !question_ids || !user_choices || !out_user || count <= 0) {
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    const bool review = is_review != 0;
+    const int64_t effectiveTs =
+        timestamp == 0 ? static_cast<int64_t>(time(nullptr)) : timestamp;
+
+    std::vector<PreparedQuizAnswer> items(static_cast<size_t>(count));
+    for (int i = 0; i < count; i++) {
+        const int rc = prepareQuizAnswer(question_ids[i], user_choices[i],
+                                         "tracker_apply_quiz_batch", items[i]);
+        if (rc != BRIDGE_OK) return rc;
+    }
+
+    User cppUser;
+    c_to_user(user, cppUser);
+    std::vector<int> correct(static_cast<size_t>(count), 0);
+    std::vector<double> abilityBefore(static_cast<size_t>(count) * 10, 0.0);
+
+    SqlTransaction tx(S().db.get(), "BEGIN IMMEDIATE");
+    if (!tx.ok()) return BRIDGE_ERR_GENERIC;
+    bool ok = true;
+    for (int i = 0; i < count && ok; i++) {
+        for (int dim = 0; dim < 10; dim++) {
+            abilityBefore[static_cast<size_t>(i) * 10 + dim] = cppUser.getAbility(dim);
+        }
+        correct[static_cast<size_t>(i)] =
+            (user_choices[i] == items[static_cast<size_t>(i)].answerIndex) ? 1 : 0;
+        ok = applyPreparedQuizAnswer(cppUser, items[static_cast<size_t>(i)],
+                                     correct[static_cast<size_t>(i)], effectiveTs, review);
+        if (!ok) {
+            LOG_ERROR("bridge: tracker_apply_quiz_batch 第 {} 题失败 question_id={}", i,
+                      question_ids[i]);
+        }
+    }
+    if (ok && !review && !S().userRepo->saveUser(cppUser, S().activeUserId)) {
+        LOG_ERROR("bridge: tracker_apply_quiz_batch 用户落库失败");
+        ok = false;
+    }
+    if (ok) ok = tx.commit();
+    if (!ok) {
+        LOG_ERROR("bridge: tracker_apply_quiz_batch 事务失败，整批回滚 count={}", count);
+        return BRIDGE_ERR_GENERIC;
+    }
+
+    user_to_c(cppUser, out_user);
+    if (out_correct) {
+        for (int i = 0; i < count; i++) out_correct[i] = correct[static_cast<size_t>(i)];
+    }
+    if (out_ability_before) {
+        for (size_t i = 0; i < abilityBefore.size(); i++) out_ability_before[i] = abilityBefore[i];
+    }
+
+    if (!review) {
+        const double avgBefore = S().user ? S().user->getAverageAbility() : 0.0;
+        S().user = std::make_unique<User>(cppUser);
+        LOG_INFO("bridge: 批量答题完成 — {} 题, avg_ability={:.3f}→{:.3f}", count, avgBefore,
+                 cppUser.getAverageAbility());
+    } else {
+        LOG_INFO("bridge: 批量复习作答完成 — {} 题（无答题效应）", count);
     }
     return BRIDGE_OK;
     });
@@ -217,15 +335,18 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
 extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItemData* out,
                                                          int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
     // 悬空过滤（内容库删题后 review_items 引用已不存在 question_id）由 ReviewRepository
     // 单源负责，默认开启；见 include/database/ReviewRepository.h
-    const auto items = S().reviewRepo->listDue(S().activeUserId, text_id,
-                                               static_cast<int64_t>(time(nullptr)), max_count);
+    std::vector<ReviewItem> items;
+    if (!S().reviewRepo->listDue(S().activeUserId, text_id,
+                                 static_cast<int64_t>(time(nullptr)), max_count, items)) {
+        return BRIDGE_ERR_GENERIC;
+    }
     const int n = std::min(max_count, static_cast<int>(items.size()));
     for (int i = 0; i < n; i++) {
         ReviewItemData& r = out[i];
@@ -245,12 +366,16 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
 // "总数"与"明细"语义分离，reviewCount 走此通道，列表仍走 quiz_get_review_items）
 extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
-    return S().reviewRepo->dueCount(S().activeUserId, text_id,
-                                    static_cast<int64_t>(time(nullptr)));
+    int count = 0;
+    if (!S().reviewRepo->dueCount(S().activeUserId, text_id,
+                                  static_cast<int64_t>(time(nullptr)), count)) {
+        return BRIDGE_ERR_GENERIC;
+    }
+    return count;
     });
 }
 
@@ -258,11 +383,15 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 // 与到期数分离，MyPage“错题总数 Y 题”用此通道。
 extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (text_id < 0) return BRIDGE_ERR_GENERIC;
-    return S().reviewRepo->totalCount(S().activeUserId, text_id);
+    int count = 0;
+    if (!S().reviewRepo->totalCount(S().activeUserId, text_id, count)) {
+        return BRIDGE_ERR_GENERIC;
+    }
+    return count;
     });
 }
 
@@ -272,7 +401,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_count(int text_id)
 extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int count,
                                                              QuestionData* out, int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (!ids || !out || count <= 0 || max_count <= 0) return BRIDGE_ERR_GENERIC;
@@ -293,7 +422,7 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_questions_by_ids(const int* ids, int
 extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* total,
                                                             int* answered, int* wrong)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     const int initRc = requireInitialized();
     if (initRc != BRIDGE_OK) return initRc;
     if (S().textIndex->find(text_id) == S().textIndex->end()) return BRIDGE_ERR_TEXT;
@@ -304,11 +433,17 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_attempt_summary(int text_id, int* to
     if (answered) *answered = 0;
     if (wrong) *wrong = 0;
 
-    const QuizRepository::AttemptSummary summary =
-        S().quizRepo->attemptSummary(S().activeUserId, text_id);
+    QuizRepository::AttemptSummary summary;
+    if (!S().quizRepo->attemptSummary(S().activeUserId, text_id, summary)) {
+        return BRIDGE_ERR_GENERIC;
+    }
+    int wrongCount = 0;
+    if (wrong && !S().reviewRepo->itemCountForText(S().activeUserId, text_id, wrongCount)) {
+        return BRIDGE_ERR_GENERIC;
+    }
     if (total) *total = summary.total;
     if (answered) *answered = summary.answered;
-    if (wrong) *wrong = S().reviewRepo->itemCountForText(S().activeUserId, text_id);
+    if (wrong) *wrong = wrongCount;
     return BRIDGE_OK;
     });
 }

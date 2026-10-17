@@ -11,17 +11,18 @@
 
 extern "C" CHINESE_CORE_EXPORT int text_get_count()
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     return static_cast<int>(S().texts->size());
     });
 }
 
-extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
+extern "C" CHINESE_CORE_EXPORT int text_get_all(TextInfo* out, int max_count)
 {
-    bridge_guard_void(g_mtx, [&] {
-    if (!S().initialized || !out) return;
-    int n = std::min(max_count, static_cast<int>(S().texts->size()));
+    return bridge_guard(g_mtx, [&]() -> int {
+    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
+    if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
+    const int n = std::min(max_count, static_cast<int>(S().texts->size()));
     for (int i = 0; i < n; i++) {
         const auto& t = (*S().texts)[i];
         out[i].id = t.getId();
@@ -34,12 +35,13 @@ extern "C" CHINESE_CORE_EXPORT void text_get_all(TextInfo* out, int max_count)
         std::strncpy(out[i].source, t.getSource().c_str(), 63);
         out[i].source[63] = '\0';
     }
+    return n;
     });
 }
 
 extern "C" CHINESE_CORE_EXPORT int text_get_detail(int id, TextDetail* out)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
 
@@ -96,7 +98,7 @@ static int copyTextColumn(int id, char* out, int max_len, const std::string& val
 
 extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int max_len)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -108,7 +110,7 @@ extern "C" CHINESE_CORE_EXPORT int text_get_annotations(int id, char* out, int m
 
 extern "C" CHINESE_CORE_EXPORT int text_get_translation(int id, char* out, int max_len)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_len <= 0) return BRIDGE_ERR_GENERIC;
 

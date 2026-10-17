@@ -124,11 +124,11 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 
 ## 项目架构
 
-**C++ 核心** — 编译产物 `libchinese_core.so`，通过 40 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
+**C++ 核心** — 编译产物 `libchinese_core.so`，通过 41 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
 - `include/` 头文件（引擎 · 知识追踪 · 数据访问抽象与仓储）
-- `bridge/` C 跨语言函数接口（FFI）导出函数，v1.4.0 起按域拆分为 8 个文件（`bridge_internal.h` 承载 `EngineState`/`S()`/共享 helper/事务 RAII）：`bridge_shared` · `bridge_lifecycle` · `bridge_user` · `bridge_text` · `bridge_tracker` · `bridge_quiz` · `bridge_history` · `bridge_log`
+- `bridge/` C 跨语言函数接口（FFI）导出函数，v1.4.0 起按域拆分为 8 个文件（`bridge_internal.h` 承载 `EngineState`/`S()`/共享 helper/事务 RAII）：`bridge_shared` · `bridge_lifecycle` · `bridge_user` · `bridge_text` · `bridge_tracker` · `bridge_quiz` · `bridge_history` · `bridge_log`；错误码唯一源为 `bridge/error_codes.def`，答题提交走 `tracker_apply_quiz_batch` 单事务
 - `src/core/` 推荐引擎 · 知识追踪 · 复习调度（`ReviewScheduler`，纯逻辑无数据库依赖）
 - `src/database/` SQLite 访问封装（RAII `Statement`/`Row`/`queryRows` + `User`/`Text`/`ReadingHistory`/`LearningIncrement`/`Quiz`/`Review` 仓储）
 - `tests/` Catch2 单元测试（`tests/python/` 为数据管线端到端测试，`venv/bin/python3` 直接运行）
@@ -143,8 +143,8 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 **Flutter 应用** — `flutter_app/`
 
 - `lib/main.dart` 入口 · MainShell（NavigationRail + IndexedStack）
-- `lib/bridge/` dart:ffi 绑定（ffi_bindings · c_types）
-- `lib/engine/` 跨语言函数接口（FFI）封装（tracker · recommendation · read_tracker · profile_repository · user_init_repository · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · one_shot_guide · algorithm_constants · chinese_festivals · lunar_calendar · github_config · announcement · feedback_mailto · feedback_submit）
+- `lib/bridge/` dart:ffi 绑定（ffi_bindings · c_types · 由 `error_codes.def` 生成的 bridge_error_codes.g.dart）
+- `lib/engine/` 跨语言函数接口（FFI）封装（tracker · recommendation · read_tracker · profile_repository · user_init_repository · text_repository · annotation_parser · translation_builder · update_checker · remote_db_sync · db_version · app_logger · ffi_call · one_shot_guide · algorithm_constants · chinese_festivals · lunar_calendar · github_config · announcement · feedback_mailto · feedback_submit）；FFI 负返回码统一抛 `FfiException`，空结果与失败不混用
 - `lib/models/` user · user_profile · text · question · version · reading_view_data
 - `lib/state/` 6 个控制器（coordinator · navigation · reading · settings · user · screenshot）
 - `lib/service/` history_service · app_screenshot

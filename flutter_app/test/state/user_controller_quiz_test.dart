@@ -7,17 +7,26 @@ import 'package:chinese_classical_rec_sys/engine/tracker.dart';
 import 'package:chinese_classical_rec_sys/models/question.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
+import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 
-/// 可编排的 Fake：applyQuiz 按预设序列返回（null → 判题失败）
-/// 内存契约：每次 applyQuiz 必须返回新分配的 User（submitQuiz 会 dispose）
+/// 可编排的 Fake：批量提交按预设用户/判分序列返回；[fail]=true 时抛 FFI 失败。
+/// 内存契约：最终 user 所有权转移给 UserController。
 class _ScriptedQuizTracker implements QuizTracker {
-  final List<(User?, bool?)> results = [];
+  /// 每题作答后的用户；最后一项为批量结果 user（所有权交给调用方）。
+  final List<User> users = [];
+  List<bool>? correctness;
 
-  /// prune 返回值：null = 不裁剪（直接采纳传入 user）；非 null = 裁剪后的 user
+  /// true 时批量 FFI 调用失败（模拟 C++ 事务失败/整批回滚）。
+  bool fail = false;
+
+  /// prune 返回值：null = 原样返回传入 user；非 null = 裁剪后的 user
   User? pruneResult;
 
-  /// 记录最近一次 applyQuiz 收到的 isReview（复习通道断言用）
+  /// 记录最近一次批量提交的 isReview（复习通道断言用）
   bool lastIsReview = false;
+
+  /// 批量 FFI 调用次数。
+  int batchCalls = 0;
 
   /// getDueReviews 的替代实现（reviewCount 测试用）；null 走默认空列表
   List<ReviewItem> Function()? dueReviewOverride;
@@ -29,37 +38,46 @@ class _ScriptedQuizTracker implements QuizTracker {
   /// getTotalReviewCount 的替代实现；null 走默认 0
   int Function()? totalReviewCountOverride;
 
-  /// applyRead 的返回结果（阅读效应用例）；null 走默认失败
+  /// applyRead 的返回结果（阅读效应用例）；
   User? readResult;
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
+  QuizBatchResult applyQuizBatch(
+      User user, List<int> questionIds, List<int> choices,
       {bool isReview = false}) {
+    batchCalls++;
     lastIsReview = isReview;
-    if (results.isEmpty) return (null, null);
-    return results.removeAt(0);
+    if (fail || users.isEmpty) {
+      throw const FfiException(
+          operation: 'tracker_apply_quiz_batch', code: BridgeError.errGeneric);
+    }
+    final before = <List<double>>[];
+    User cursor = user;
+    for (int i = 0; i < questionIds.length; i++) {
+      before.add([for (int d = 0; d < 10; d++) cursor.getAbility(d)]);
+      cursor = users[i];
+    }
+    return QuizBatchResult(
+      user: users.last,
+      correct: correctness ?? List<bool>.filled(questionIds.length, true),
+      abilityBefore: before,
+    );
   }
 
   @override
-  User? applyRead(User user, int textId, double readTime) => readResult;
-
-  @override
-  void disposeQuestions(List<Question> questions) {}
+  User applyRead(User user, int textId, double readTime) => readResult!;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
 
   @override
-  List<ReviewItem> getDueReviews(int textId) =>
-      dueReviewOverride?.call() ?? [];
+  List<ReviewItem> getDueReviews(int textId) => dueReviewOverride?.call() ?? [];
 
   @override
-  int getDueReviewCount(int textId) =>
-      dueReviewCountOverride?.call() ?? 0;
+  int getDueReviewCount(int textId) => dueReviewCountOverride?.call() ?? 0;
 
   @override
-  int getTotalReviewCount(int textId) =>
-      totalReviewCountOverride?.call() ?? 0;
+  int getTotalReviewCount(int textId) => totalReviewCountOverride?.call() ?? 0;
 
   @override
   List<Question> getQuestionsByIds(List<int> ids) => [];
@@ -68,7 +86,10 @@ class _ScriptedQuizTracker implements QuizTracker {
   QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
-  User? prune(User user) => pruneResult;
+  User prune(User user) => pruneResult ?? user;
+
+  @override
+  void disposeQuestions(List<Question> questions) {}
 }
 
 void main() {
@@ -113,10 +134,13 @@ void main() {
       expect(identical(ctrl.user, before), isTrue);
     });
 
-    test('首题判题失败：返回 null，无任何生效', () {
+    test('批量 FFI 失败：抛异常，无任何生效，UI 可重试', () {
       final before = freshUser();
-      tracker.results.add((null, null));
-      expect(ctrl.submitQuiz(questions(2), [0, 1]), isNull);
+      tracker.fail = true;
+      expect(
+        () => ctrl.submitQuiz(questions(2), [0, 1]),
+        throwsA(isA<FfiException>()),
+      );
       expect(identical(ctrl.user, before), isTrue);
     });
 
@@ -124,7 +148,8 @@ void main() {
       final initial = freshUser();
       final u1 = User.allocate(calloc);
       final u2 = User.allocate(calloc);
-      tracker.results.addAll([(u1, true), (u2, true)]);
+      tracker.users.addAll([u1, u2]);
+      tracker.correctness = [true, true];
 
       final answers = ctrl.submitQuiz(questions(2), [0, 1]);
 
@@ -150,7 +175,8 @@ void main() {
       for (int j = 0; j < 10; j++) {
         u2.ptr.ref.abilities[j] = 0.6;
       }
-      tracker.results.addAll([(u1, true), (u2, false)]);
+      tracker.users.addAll([u1, u2]);
+      tracker.correctness = [true, false];
 
       final answers = ctrl.submitQuiz(questions(2), [0, 1])!;
 
@@ -160,29 +186,19 @@ void main() {
       }
     });
 
-    test('第 2 题起判题失败：部分生效，内存态同步为已生效部分', () {
+    test('单次 FFI 批量提交：两题只调用一次 tracker', () {
       freshUser();
-      final u1 = User.allocate(calloc);
-      for (int j = 0; j < 10; j++) {
-        u1.ptr.ref.abilities[j] = 0.4;
-      }
-      tracker.results.addAll([(u1, true), (null, null)]);
+      tracker.users.addAll([User.allocate(calloc), User.allocate(calloc)]);
 
-      var notified = 0;
-      ctrl.addListener(() => notified++);
-      final answers = ctrl.submitQuiz(questions(2), [0, 1]);
+      ctrl.submitQuiz(questions(2), [0, 1]);
 
-      expect(answers, isNotNull);
-      expect(answers!.length, 1);
-      expect(answers[0].correct, isTrue);
-      // 内存态 = 第 1 题答后用户（避免下次重复生效）
-      expect(identical(ctrl.user, u1), isTrue);
-      expect(notified, 1);
+      expect(tracker.batchCalls, 1);
     });
 
     test('成功提交触发 notifyListeners 且每题结果齐全', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), false)]);
+      tracker.users.addAll([User.allocate(calloc), User.allocate(calloc)]);
+      tracker.correctness = [true, false];
 
       var notified = 0;
       ctrl.addListener(() => notified++);
@@ -195,7 +211,7 @@ void main() {
 
     test('提交成功后 prune 生效（与阅读链路一致，quiz 增量也被裁剪）', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), true)]);
+      tracker.users.addAll([User.allocate(calloc), User.allocate(calloc)]);
       final pruned = User.allocate(calloc);
       tracker.pruneResult = pruned;
 
@@ -210,22 +226,22 @@ void main() {
       expect(notified, 1);
     });
 
-    test('部分失败路径同样 prune（已生效部分与成功路径行为一致）', () {
+    test('批量事务成功后统一 prune 一次', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true), (null, null)]);
+      tracker.users.addAll([User.allocate(calloc), User.allocate(calloc)]);
       final pruned = User.allocate(calloc);
       tracker.pruneResult = pruned;
 
       final answers = ctrl.submitQuiz(questions(2), [0, 1]);
 
       expect(answers, isNotNull);
-      expect(answers!.length, 1);
+      expect(answers!.length, 2);
       expect(identical(ctrl.user, pruned), isTrue);
     });
 
     test('isReview 透传：复习提交逐题带 isReview=true', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true), (User.allocate(calloc), true)]);
+      tracker.users.addAll([User.allocate(calloc), User.allocate(calloc)]);
 
       final answers = ctrl.submitQuiz(questions(2), [0, 1], isReview: true);
 
@@ -235,7 +251,7 @@ void main() {
 
     test('isReview 默认 false：正式测验不带复习标记', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true)]);
+      tracker.users.add(User.allocate(calloc));
 
       ctrl.submitQuiz(questions(1), [0]);
 
@@ -244,7 +260,7 @@ void main() {
 
     test('提交后 reviewCount 置脏重查（复习状态可能已变；走 count 通道）', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true)]);
+      tracker.users.add(User.allocate(calloc));
       var reviewQueries = 0;
       tracker.dueReviewCountOverride = () {
         reviewQueries++;
@@ -268,7 +284,7 @@ void main() {
 
     test('totalReviewCount 懒查并随提交置脏重查', () {
       freshUser();
-      tracker.results.addAll([(User.allocate(calloc), true)]);
+      tracker.users.add(User.allocate(calloc));
       var totalQueries = 0;
       tracker.totalReviewCountOverride = () {
         totalQueries++;

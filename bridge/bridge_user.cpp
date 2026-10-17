@@ -57,7 +57,7 @@ double initPosteriorMean(const std::vector<std::pair<double, int>>& observations
 
 extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out) return BRIDGE_ERR_GENERIC;
     user_to_c(*S().user, out);
@@ -67,7 +67,7 @@ extern "C" CHINESE_CORE_EXPORT int user_load(UserData* out)
 
 extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!in) return BRIDGE_ERR_GENERIC;
     c_to_user(in, *S().user);
@@ -81,7 +81,7 @@ extern "C" CHINESE_CORE_EXPORT int user_save(const UserData* in)
 
 extern "C" CHINESE_CORE_EXPORT int user_init_default()
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     S().user->initializeDefault();
     if (S().userRepo->saveUser(*S().user, S().activeUserId)) {
@@ -95,7 +95,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_default()
 
 extern "C" CHINESE_CORE_EXPORT int user_is_initialized()
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     return S().userRepo->isInitialized(S().activeUserId) ? 1 : 0;
     });
@@ -103,7 +103,7 @@ extern "C" CHINESE_CORE_EXPORT int user_is_initialized()
 
 extern "C" CHINESE_CORE_EXPORT int user_init_questions(QuestionData* out, int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
@@ -130,7 +130,7 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
                                                    int count, int64_t timestamp,
                                                    UserData* out_user)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (S().userRepo->isInitialized(S().activeUserId)) {
         LOG_WARN("bridge: user_init_apply 拒绝：当前档案已完成初始化，无补测");
@@ -285,12 +285,12 @@ extern "C" CHINESE_CORE_EXPORT int user_init_apply(const int* qids, const int* c
 
 // ─── user profiles（本地多档案） ───────────────────────────────────────────────
 
-// 未删除档案列表（按 id 升序）。返回条数；out 为空/容量不足按 0 处理（无错误码）。
+// 未删除档案列表（按 id 升序）。返回条数（≥0）；失败返回负错误码。
 extern "C" CHINESE_CORE_EXPORT int user_list(ProfileData* out, int max_count)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
-    if (!out || max_count <= 0) return 0;
+    if (!out || max_count <= 0) return BRIDGE_ERR_GENERIC;
 
     const auto profiles = S().userRepo->listProfiles();
     const int n = std::min(max_count, static_cast<int>(profiles.size()));
@@ -309,15 +309,15 @@ extern "C" CHINESE_CORE_EXPORT int user_list(ProfileData* out, int max_count)
 
 extern "C" CHINESE_CORE_EXPORT int user_active_id()
 {
-    return bridge_guard(g_mtx, [&] {
-    if (!S().initialized) return 0;
+    return bridge_guard(g_mtx, [&]() -> int {
+    if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     return S().activeUserId;
     });
 }
 
 extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_create 非法档案名（空或超 63 字节）");
@@ -335,7 +335,7 @@ extern "C" CHINESE_CORE_EXPORT int user_create(const char* name)
 
 extern "C" CHINESE_CORE_EXPORT int user_create_inherit(const char* name, int source_id)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_create_inherit 非法档案名（空或超 63 字节）");
@@ -353,7 +353,7 @@ extern "C" CHINESE_CORE_EXPORT int user_create_inherit(const char* name, int sou
 
 extern "C" CHINESE_CORE_EXPORT int user_switch(int id)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (id <= 0 || !S().userRepo->isProfileActive(id)) {
         LOG_WARN("bridge: user_switch 档案不存在或已删除 id={}", id);
@@ -372,7 +372,7 @@ extern "C" CHINESE_CORE_EXPORT int user_switch(int id)
 
 extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (!name || std::strlen(name) == 0 || std::strlen(name) > 63) {
         LOG_WARN("bridge: user_rename 非法档案名（空或超 63 字节）");
@@ -388,7 +388,7 @@ extern "C" CHINESE_CORE_EXPORT int user_rename(int id, const char* name)
 
 extern "C" CHINESE_CORE_EXPORT int user_delete(int id)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized) return BRIDGE_ERR_NOT_INIT;
     if (id == S().activeUserId) {
         LOG_WARN("bridge: user_delete 拒绝删除当前档案 id={}", id);

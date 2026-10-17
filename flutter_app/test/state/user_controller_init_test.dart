@@ -40,12 +40,13 @@ class _FakeInitRepo implements UserInitRepository {
 
 class _NoopTracker implements QuizTracker {
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-      {bool isReview = false}) =>
-      (null, null);
+  QuizBatchResult applyQuizBatch(
+          User user, List<int> questionIds, List<int> choices,
+          {bool isReview = false}) =>
+      throw UnimplementedError();
 
   @override
   void disposeQuestions(List<Question> questions) {}
@@ -69,7 +70,7 @@ class _NoopTracker implements QuizTracker {
   QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 }
 
 void main() {

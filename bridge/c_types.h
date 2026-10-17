@@ -99,19 +99,15 @@ typedef struct {
 } ReviewItemData;
 
 /**
- * @brief 错误码
+ * @brief 错误码（单一权威源 = bridge/error_codes.def）
+ *
+ * 用 X-macro 展开为 C 枚举；Dart 侧由 scripts/project/generate_bridge_error_codes.py
+ * 从同一 .def 生成，禁止手工维护第二张表。
  */
-#define BRIDGE_OK              0   ///< 成功
-#define BRIDGE_ERR_GENERIC    -1   ///< 通用错误
-#define BRIDGE_ERR_NOT_INIT   -2   ///< 未初始化 (未调用 db_open)
-#define BRIDGE_ERR_USER       -3   ///< 用户不存在
-#define BRIDGE_ERR_TEXT       -4   ///< 文本不存在
-#define BRIDGE_ERR_INIT       -5   ///< 初始化失败 (initTable 等)
-#define BRIDGE_ERR_DB_CONTENT -6   ///< 内容库缺失/损坏/缺表/含旧用户表
-#define BRIDGE_ERR_DB_USER    -7   ///< 用户库缺失/损坏
-#define BRIDGE_ERR_DB_VERSION -8   ///< db_version 不兼容（0 或 >1）
-#define BRIDGE_ERR_DB_SAME_PATH -9 ///< user.db 与 classical.db 同路径
-#define BRIDGE_ERR_INIT_INCOMPLETE -10 ///< 强制初始化未完成时使用被禁止的功能
+enum BridgeErrorCode {
+#define BRIDGE_ERROR(name, value, description) BRIDGE_##name = value,
+#include "error_codes.def"
+};
 
 #pragma pack(pop)
 

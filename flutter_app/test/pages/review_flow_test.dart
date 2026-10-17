@@ -53,15 +53,10 @@ class _FakeReviewTracker implements QuizTracker {
   _FakeReviewTracker(this.due);
 
   @override
-  (User?, bool?) applyQuiz(User user, int questionId, int choice,
-          {bool isReview = false}) =>
-      (User.allocate(calloc), true);
+  User applyRead(User user, int textId, double readTime) => user;
 
   @override
-  User? applyRead(User user, int textId, double readTime) => null;
-
-  @override
-  User? prune(User user) => null;
+  User prune(User user) => user;
 
   @override
   QuizBatch getQuestionsForText(int textId) => QuizBatch([]);
@@ -86,6 +81,12 @@ class _FakeReviewTracker implements QuizTracker {
   QuizAttemptSummary? getAttemptSummary(int textId) => null;
 
   @override
+  QuizBatchResult applyQuizBatch(
+          User user, List<int> questionIds, List<int> choices,
+          {bool isReview = false}) =>
+      throw UnimplementedError();
+
+  @override
   void disposeQuestions(List<Question> questions) {
     disposedCount++;
   }
@@ -106,9 +107,17 @@ void main() {
     final userCtrl = UserController();
     final tracker = _FakeReviewTracker([
       ReviewItem(
-          questionId: 11, textId: 1, correctStreak: 0, wrongCount: 1, nextReviewAt: 0),
+          questionId: 11,
+          textId: 1,
+          correctStreak: 0,
+          wrongCount: 1,
+          nextReviewAt: 0),
       ReviewItem(
-          questionId: 12, textId: 1, correctStreak: 1, wrongCount: 2, nextReviewAt: 0),
+          questionId: 12,
+          textId: 1,
+          correctStreak: 1,
+          wrongCount: 2,
+          nextReviewAt: 0),
     ]);
     // 复习取题通道返回两题（内存块由页面链释放）
     final block = calloc<QuestionData>(2);
@@ -194,10 +203,12 @@ void main() {
   group('formatNextReviewTime', () {
     test('使用注入 now 判断今天/明天/更远日期', () {
       final now = DateTime(2026, 8, 19, 23, 30);
-      final todayTs = DateTime(2026, 8, 19, 8, 5).millisecondsSinceEpoch ~/ 1000;
+      final todayTs =
+          DateTime(2026, 8, 19, 8, 5).millisecondsSinceEpoch ~/ 1000;
       final tomorrowTs =
           DateTime(2026, 8, 20, 9, 10).millisecondsSinceEpoch ~/ 1000;
-      final laterTs = DateTime(2026, 8, 30, 12, 0).millisecondsSinceEpoch ~/ 1000;
+      final laterTs =
+          DateTime(2026, 8, 30, 12, 0).millisecondsSinceEpoch ~/ 1000;
 
       expect(formatNextReviewTime(todayTs, now), '今天 08:05');
       expect(formatNextReviewTime(tomorrowTs, now), '明天 09:10');
@@ -207,7 +218,8 @@ void main() {
     test('跨午夜后仍按注入 now 判断，不依赖调用时刻', () {
       final ts = DateTime(2026, 8, 19, 23, 59).millisecondsSinceEpoch ~/ 1000;
       expect(formatNextReviewTime(ts, DateTime(2026, 8, 19, 0, 1)), '今天 23:59');
-      expect(formatNextReviewTime(ts, DateTime(2026, 8, 20, 0, 1)), '8月19日 23:59');
+      expect(
+          formatNextReviewTime(ts, DateTime(2026, 8, 20, 0, 1)), '8月19日 23:59');
     });
   });
 }

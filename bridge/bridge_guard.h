@@ -10,7 +10,7 @@
 
 // 统一 FFI 出口门卫：加锁 + 异常防线。
 // 目的：防止 C++ 异常穿越 extern "C" 边界造成 UB/进程崩溃。
-// 各函数原有的 init 检查暂时保留在业务体内；后续拆桥/错误码单源重构时再统一。
+// 各函数在业务体内先返回明确的业务错误码；ffi 层错误码单一权威源见 bridge/error_codes.def。
 template <typename Fn>
 int bridge_guard(std::mutex& mtx, Fn&& fn)
 {

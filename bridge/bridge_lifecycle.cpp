@@ -229,7 +229,7 @@ static int openDatabase(const char* content_path, const char* user_path)
 
 extern "C" CHINESE_CORE_EXPORT int db_open(const char* content_path, const char* user_path)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     // 日志目录跟随用户库所在目录（App 数据目录），避免随 cwd 漂移
     const std::filesystem::path dbDir = std::filesystem::path(user_path).parent_path();
     Logger::getInstance().init((dbDir / "logs").string());
@@ -250,7 +250,7 @@ extern "C" CHINESE_CORE_EXPORT void db_close()
 // 整库快照（sqlite3_backup 编排下沉至 DatabaseManager::backupTo；v1.4.0 工作项 2）
 extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized || !S().db) return BRIDGE_ERR_NOT_INIT;
     if (!dest_path || !*dest_path) return BRIDGE_ERR_GENERIC;
 
@@ -273,7 +273,7 @@ extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
 // 引擎未打开（启动前替换）时只做文件层替换，由调用方稍后 db_open 校验。
 extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const char* cur_db_path)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!new_db_path || !cur_db_path) return BRIDGE_ERR_GENERIC;
     const std::filesystem::path dbDir = std::filesystem::path(cur_db_path).parent_path();
     Logger::getInstance().init((dbDir / "logs").string());
@@ -358,7 +358,7 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
 extern "C" CHINESE_CORE_EXPORT int db_get_schema_versions(int* user_version,
                                                           int* content_version)
 {
-    return bridge_guard(g_mtx, [&] {
+    return bridge_guard(g_mtx, [&]() -> int {
     if (!S().initialized || !S().db || !S().db->getConnection()) {
         return BRIDGE_ERR_NOT_INIT;
     }
