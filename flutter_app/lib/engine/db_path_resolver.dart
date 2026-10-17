@@ -56,12 +56,24 @@ class DbPathResolver {
   final AppLogger Function() _logger;
 
   Future<DbPathResolution> resolve() async {
-    var replaced = false;
+    final Directory dir;
     try {
-      final dir = await supportDirectoryProvider();
-      final dbPath = '${dir.path}/classical.db';
-      final userPath = '${dir.path}/user.db';
-      final verPath = '${dir.path}/db_version.txt';
+      dir = await supportDirectoryProvider();
+    } catch (e) {
+      _logger().warn('DB 支持目录获取失败: $e，回退到相对路径');
+      return const DbPathResolution(
+        contentPath: '../data/classical.db',
+        userPath: '../data/user.db',
+        replaced: false,
+      );
+    }
+
+    final dbPath = '${dir.path}/classical.db';
+    final userPath = '${dir.path}/user.db';
+    final verPath = '${dir.path}/db_version.txt';
+    var replaced = false;
+
+    try {
       final dbFile = File(dbPath);
       final bakFile = File('${dir.path}/classical.db.bak');
 
@@ -110,8 +122,13 @@ class DbPathResolver {
           await tmp.writeAsBytes(data);
           final rc = dbReplace(tmp.path, dbPath);
           if (rc == BridgeError.ok) {
-            await File(verPath).writeAsString(assetVer);
+            // 内容库已成功替换后立即置位；版本回写失败不能把本次替换降级成失败。
             replaced = true;
+            try {
+              await File(verPath).writeAsString(assetVer);
+            } catch (e) {
+              _logger().warn('DB 版本回写失败，保留已替换内容: $e');
+            }
             _logger().info('DB 已升级: $localVer → $assetVer（用户数据已保留）');
           } else {
             if (await tmp.exists()) await tmp.delete();
@@ -125,19 +142,17 @@ class DbPathResolver {
           } catch (_) {}
         }
       }
-      return DbPathResolution(
-        contentPath: dbPath,
-        userPath: userPath,
-        replaced: replaced,
-      );
     } catch (e) {
-      _logger().warn('DB 路径解析失败: $e，回退到相对路径');
-      return const DbPathResolution(
-        contentPath: '../data/classical.db',
-        userPath: '../data/user.db',
-        replaced: false,
-      );
+      // 支持目录已确定，不能再回退相对路径：否则会把“已写入/已替换后的
+      // 版本回写失败”伪装成路径解析失败，导致 db_open 打开错误位置。
+      _logger().warn('DB 路径准备失败，使用已解析的真实路径继续启动: $e');
     }
+
+    return DbPathResolution(
+      contentPath: dbPath,
+      userPath: userPath,
+      replaced: replaced,
+    );
   }
 
   Future<String> _readAssetDbVersion() async {

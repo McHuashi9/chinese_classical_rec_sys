@@ -135,6 +135,48 @@ void main() {
     expect(bak.existsSync(), isFalse);
   });
 
+  test('资产读取失败时仍返回已解析的真实支持目录路径', () async {
+    final resolution = await buildResolver(
+      assetBytesLoader: (_) async =>
+          throw const FileSystemException('asset load failed'),
+    ).resolve();
+
+    expect(resolution.contentPath, '${temp.path}/classical.db');
+    expect(resolution.userPath, '${temp.path}/user.db');
+    expect(resolution.replaced, isFalse);
+    expect(File(resolution.contentPath).existsSync(), isFalse);
+  });
+
+  test('DB 已写入但版本文件写失败时仍返回真实路径', () async {
+    // 把版本路径占成目录，使首次安装后的版本回写抛错。
+    Directory('${temp.path}/db_version.txt').createSync();
+
+    final resolution = await buildResolver().resolve();
+
+    expect(resolution.contentPath, '${temp.path}/classical.db');
+    expect(resolution.userPath, '${temp.path}/user.db');
+    expect(File(resolution.contentPath).readAsBytesSync(), assetDb);
+  });
+
+  test('替换成功后版本回写失败：replaced 仍为 true 且返回真实路径', () async {
+    File('${temp.path}/classical.db').writeAsBytesSync(<int>[1, 2]);
+    Directory('${temp.path}/db_version.txt').createSync();
+    Uint8List? seenTmpBytes;
+
+    final resolution = await buildResolver(
+      dbReplace: (newPath, currentPath) {
+        seenTmpBytes = File(newPath).readAsBytesSync();
+        File(newPath).deleteSync();
+        return BridgeError.ok;
+      },
+    ).resolve();
+
+    expect(resolution.contentPath, '${temp.path}/classical.db');
+    expect(resolution.userPath, '${temp.path}/user.db');
+    expect(resolution.replaced, isTrue);
+    expect(seenTmpBytes, assetDb);
+  });
+
   test('支持目录异常时回退到相对路径且不抛出', () async {
     final resolution = await buildResolver(
       supportDirectoryProvider: () async =>

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 
 /// 启动主链阶段。UI 只据此渲染加载/错误/主壳，不自行编排业务步骤。
 enum StartupPhase {
@@ -129,9 +129,10 @@ class StartupController extends ChangeNotifier {
 
       driver.postInit();
       _setState(const StartupState(phase: StartupPhase.ready));
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger().error('StartupController 启动异常: $e\n$st');
       if (_disposed) return;
-      _fail('启动失败，请重启应用。\n$e');
+      _fail('启动失败，请重启应用。');
     }
   }
 
@@ -149,21 +150,5 @@ class StartupController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     super.dispose();
-  }
-}
-
-/// DB 打开失败码 → 用户可见文案。启动编排与 UI 共用这一处映射。
-String dbOpenErrorMessage(int? code) {
-  switch (code) {
-    case BridgeError.errDbContent:
-      return '内容库缺失或损坏，请重启应用。\n若持续出现，请重新安装。';
-    case BridgeError.errDbUser:
-      return '用户库缺失或损坏，请重启应用。\n若持续出现，请重新安装。';
-    case BridgeError.errDbVersion:
-      return '数据库版本不兼容，请更新应用或重新安装。';
-    case BridgeError.errDbSamePath:
-      return '内容库与用户库路径相同，请重启应用。';
-    default:
-      return '数据库打开失败，请重启应用。\n若持续出现，请重新安装。';
   }
 }

@@ -15,6 +15,7 @@ import '../engine/app_logger.dart';
 import '../engine/announcement.dart';
 import '../engine/chinese_festivals.dart';
 import '../engine/data_update_service.dart';
+import '../engine/db_open_error_message.dart';
 import '../engine/db_path_resolver.dart';
 import '../state/coordinator.dart';
 import '../state/settings_controller.dart';
@@ -540,7 +541,7 @@ class _MainShellStartupDriver implements StartupDriver {
       lib = _loadCoreLibrary();
     } catch (e) {
       AppLogger().error('FFI load failed: $e');
-      return StartupPrepareResult.failure('无法加载核心组件，请尝试重新安装。\n$e');
+      return const StartupPrepareResult.failure('无法加载核心组件，请尝试重新安装。');
     }
     final bridge = NativeBridge.fromLib(lib);
     // A3：级别下发前移——`coord.init` 里的 `db_open` 会触发 C++ `Logger::init`，
@@ -563,7 +564,7 @@ class _MainShellStartupDriver implements StartupDriver {
     } catch (e) {
       AppLogger().error('数据库初始化失败: $e');
       AppLogger().flushPending();
-      return StartupPrepareResult.failure('无法加载核心组件，请尝试重新安装。\n$e');
+      return const StartupPrepareResult.failure('数据库初始化失败，请重启应用。');
     }
     // A2：`coord.init` 已触发 C++ 日志 sink 初始化，此时回放桥未就绪期缓冲。
     AppLogger().flushPending();

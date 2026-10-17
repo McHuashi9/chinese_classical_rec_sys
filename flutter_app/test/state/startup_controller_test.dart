@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chinese_classical_rec_sys/bridge/c_types.dart';
+import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
+import 'package:chinese_classical_rec_sys/engine/db_open_error_message.dart';
 import 'package:chinese_classical_rec_sys/state/startup_controller.dart';
 
 class FakeStartupDriver implements StartupDriver {
@@ -119,15 +121,23 @@ void main() {
     expect(controller.state.errorMessage, '数据库打开失败');
   });
 
-  test('prepare 抛错：进入 fatal 且不泄漏后续 UI', () async {
-    final driver = FakeStartupDriver()..prepareError = StateError('ffi load');
+  test('prepare 抛错：用户态只显示通用文案，原始异常进日志', () async {
+    final logs = <String>[];
+    AppLogger().sinkOverride = (level, message) => logs.add('$level:$message');
+    addTearDown(() => AppLogger().sinkOverride = null);
+    final driver = FakeStartupDriver()
+      ..prepareError = StateError('ffi load /home/alice/libchinese_core.so');
     final controller = StartupController(driver: driver);
 
     await controller.start();
 
     expect(driver.calls, <String>['prepare']);
     expect(controller.state.phase, StartupPhase.fatal);
-    expect(controller.state.errorMessage, contains('ffi load'));
+    expect(controller.state.errorMessage, '启动失败，请重启应用。');
+    expect(controller.state.errorMessage, isNot(contains('ffi load')));
+    expect(logs.join('\n'), contains('StartupController 启动异常'));
+    expect(logs.join('\n'), contains('<appdata>/libchinese_core.so'));
+    expect(logs.join('\n'), isNot(contains('/home/alice')));
   });
 
   test('公告步骤抛错：停止后续步骤并进入 fatal', () async {
