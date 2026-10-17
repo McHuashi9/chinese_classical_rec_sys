@@ -26,7 +26,7 @@ import 'package:chinese_classical_rec_sys/engine/app_logger.dart';
 import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 
 class AppCoordinator {
-  static const currentVersion = '1.5.0';
+  static const currentVersion = '1.6.0';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-18
+
 ### Fixed
 
 - **答题提交失败不再留下「只保存了前几题」的半截记录**：现在整次作答在一个事务里提交；中途任一步失败会整批回滚，页面提示本次作答未保存并允许重试，不会重复计分。
@@ -621,3 +623,4 @@ C++ CLI 原型。
 [1.4.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.0
 [1.4.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.1
 [1.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.5.0
+[1.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.6.0
