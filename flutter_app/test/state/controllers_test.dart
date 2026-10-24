@@ -56,12 +56,17 @@ void main() {
     setUp(() => ctrl = SettingsController());
     tearDown(() => ctrl.dispose());
 
-    test('darkMode starts false', () => expect(ctrl.darkMode, false));
-    test('showTranslation starts false',
-        () => expect(ctrl.showTranslation, false));
-    test('fontScale starts 1.0', () => expect(ctrl.fontScale, 1.0));
-    test('logLevel starts INFO', () => expect(ctrl.logLevel, 'INFO'));
-    test('error starts null', () => expect(ctrl.error, null));
+    test('初始默认值', () {
+      expect(ctrl.darkMode, false, reason: '深色模式默认关闭');
+      expect(ctrl.showTranslation, false, reason: '默认不显示译文');
+      expect(ctrl.fontScale, 1.0, reason: '字号默认 1.0');
+      expect(ctrl.logLevel, 'INFO', reason: '日志级别默认 INFO');
+      expect(ctrl.error, null, reason: '初始无错误');
+      expect(ctrl.updateCheckError, null, reason: '初始无更新检查错误');
+      expect(SettingsController.fontScaleSteps, isNotEmpty, reason: '字号档位列表非空');
+      expect(ctrl.accentColorValue, AppTheme.vermilion.toARGB32(),
+          reason: '强调色默认朱红');
+    });
     test('setDarkMode toggles', () {
       ctrl.setDarkMode(true);
       expect(ctrl.darkMode, true);
@@ -81,15 +86,6 @@ void main() {
       expect(ctrl.error, 'test');
       ctrl.clearError();
       expect(ctrl.error, null);
-    });
-    test('updateCheckError starts null', () {
-      expect(ctrl.updateCheckError, null);
-    });
-    test('non-null fontScaleSteps', () {
-      expect(SettingsController.fontScaleSteps, isNotEmpty);
-    });
-    test('accentColorValue starts at vermilion', () {
-      expect(ctrl.accentColorValue, AppTheme.vermilion.toARGB32());
     });
     test('setAccentColor updates and notifies', () {
       var notified = 0;
@@ -129,32 +125,30 @@ void main() {
       ctrl.dispose();
     });
 
-    test('isReading starts false', () => expect(ctrl.isReading, false));
-    test('readingText starts null', () => expect(ctrl.readingText, null));
-    test('elapsedSeconds starts 0', () => expect(ctrl.elapsedSeconds, 0));
-    test('formattedReadingTime starts 00:00',
-        () => expect(ctrl.formattedReadingTime, '00:00'));
-    test('currentPageNumberLabel is empty',
-        () => expect(ctrl.currentPageNumberLabel, ''));
-    test('isTextRead returns false for unknown id',
-        () => expect(ctrl.isTextRead(1), false));
-    test('hasUnrecordedReading is false',
-        () => expect(ctrl.hasUnrecordedReading, false));
-    test('stopTimer is safe when not reading', () => ctrl.stopTimer());
-    test('discardReading is safe', () => ctrl.discardReading());
-    test('showTranslation starts false',
-        () => expect(ctrl.showTranslation, false));
+    test('初始状态', () {
+      expect(ctrl.isReading, false, reason: '初始未在阅读');
+      expect(ctrl.readingText, null, reason: '初始无阅读文本');
+      expect(ctrl.elapsedSeconds, 0, reason: '计时从 0 开始');
+      expect(ctrl.formattedReadingTime, '00:00', reason: '计时格式化从 00:00 开始');
+      expect(ctrl.currentPageNumberLabel, '', reason: '无分页时页码标签为空');
+      expect(ctrl.isTextRead(1), false, reason: '未知篇目不算已读');
+      expect(ctrl.hasUnrecordedReading, false, reason: '初始无未记录阅读');
+      expect(ctrl.showTranslation, false, reason: '默认不显示译文');
+    });
     test('setShowTranslation toggles', () {
       ctrl.setShowTranslation(true);
       expect(ctrl.showTranslation, true);
       ctrl.setShowTranslation(false);
       expect(ctrl.showTranslation, false);
     });
-    test('startTimer/stopTimer/pauseTimer/resumeTimer are safe', () {
-      ctrl.startTimer();
-      ctrl.pauseTimer();
-      ctrl.resumeTimer();
-      ctrl.stopTimer();
+    test('空闲态计时/丢弃调用不抛错', () {
+      expect(ctrl.stopTimer, returnsNormally, reason: '未开始阅读时 stopTimer 不应抛错');
+      expect(ctrl.discardReading, returnsNormally,
+          reason: '未开始阅读时 discardReading 不应抛错');
+      expect(ctrl.startTimer, returnsNormally, reason: '空闲态 startTimer 不应抛错');
+      expect(ctrl.pauseTimer, returnsNormally, reason: '空闲态 pauseTimer 不应抛错');
+      expect(ctrl.resumeTimer, returnsNormally, reason: '空闲态 resumeTimer 不应抛错');
+      expect(ctrl.stopTimer, returnsNormally, reason: '结束计时不应抛错');
     });
 
     void withCleanup(VoidCallback fn) {
@@ -354,11 +348,13 @@ void main() {
     });
     tearDown(() => ctrl.dispose());
 
-    test('user starts null', () => expect(ctrl.user, null));
-    test('averageAbility defaults to 0.3',
-        () => expect(ctrl.averageAbility, 0.3));
-    test('applyReadEffect is safe without tracker', () {
-      expect(ctrl.applyReadEffect(1, 60), false);
+    test('初始状态与无 tracker 调用安全', () {
+      expect(ctrl.user, null, reason: '新建控制器无当前用户');
+      expect(ctrl.averageAbility, 0.3, reason: '无用户时能力均值兜底 0.3');
+      expect(() => ctrl.applyReadEffect(1, 60), returnsNormally,
+          reason: '无 tracker 时调用不应抛错');
+      expect(ctrl.applyReadEffect(1, 60), false,
+          reason: '无 tracker 时安全返回 false，不产生半成功');
     });
     test('setUser updates user（真实 User 对象，旧用户被释放）', () {
       final u1 = User.allocate(calloc);
