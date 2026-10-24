@@ -418,6 +418,7 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
 
     // 文章 1（库中必有题）：最多取 5 题
     QuestionData qs[8];
+    int checked = 0;  // 真正执行了“题干引号内词 vs 划线区间”比较的题数
     int n = question_get_by_text(1, qs, 5, nullptr);
     REQUIRE(n >= 1);
     REQUIRE(n <= 5);
@@ -432,7 +433,7 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
         REQUIRE(qs[i].difficulty >= 0.0);
         REQUIRE(qs[i].difficulty <= 1.0);
         // 划线语境一致性：无 context 时区间必须为空；有 context 时区间在界内
-        // 且划出的字串与题干「X」中的词一致
+        // 且划出的字串与题干“X”中的词一致
         const std::string ctx(qs[i].context);
         if (ctx.empty()) {
             REQUIRE(qs[i].mark_start == -1);
@@ -442,17 +443,22 @@ TEST_CASE("bridge - question_get_by_text 取题", "[bridge][smoke]") {
             REQUIRE(qs[i].mark_len > 0);
             REQUIRE(qs[i].mark_start + qs[i].mark_len <= static_cast<int>(ctx.size()));
             const std::string stem(qs[i].stem);
-            const size_t b = stem.find("「"), e = stem.find("」");
+            const size_t b = stem.find("“"), e = stem.find("”");
             if (b != std::string::npos && e != std::string::npos && e > b) {
-                // 「」各占 3 字节 UTF-8，跳过括号取词
+                // “”各占 3 字节 UTF-8，跳过括号取词
                 const std::string word = stem.substr(b + 3, e - b - 3);
                 const size_t sB = cpToBytes(ctx, qs[i].mark_start);
                 const size_t eB = cpToBytes(ctx, qs[i].mark_start + qs[i].mark_len);
                 REQUIRE(ctx.substr(sB, eB - sB) == word);
+                ++checked;
             }
         }
         // 每题 id 都可通过 tracker_apply_quiz 判题
     }
+
+    // 防回归：题干引号格式若再次漂移（如改回角引号），上面的 if 会静默跳过。
+    // 文章 1 含带 context 的划线词题，本用例必须至少真正比较过一次。
+    REQUIRE(checked > 0);
 
     // 第二题数量能被上限截断且与第一题同源
     REQUIRE(question_get_by_text(1, qs, n, nullptr) >= 1);
