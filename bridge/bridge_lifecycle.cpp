@@ -237,9 +237,13 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* content_path, const char*
     const std::filesystem::path dbDir = std::filesystem::path(user_path).parent_path();
     const bool logReady = Logger::getInstance().init((dbDir / "logs").string());
     if (logReady) {
+#if defined(__ANDROID__) || defined(__APPLE__)
+        LOG_INFO("bridge: 日志系统已初始化，输出到系统日志");
+#else
         LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
+#endif
     } else {
-        LOG_WARN("bridge: 日志文件 sink 初始化失败，已降级到 stderr/系统日志");
+        LOG_WARN("bridge: 日志系统初始化失败，已降级到 stderr/系统日志");
     }
 
     return openDatabase(content_path, user_path);
@@ -285,7 +289,7 @@ extern "C" CHINESE_CORE_EXPORT int db_replace(const char* new_db_path, const cha
     const std::filesystem::path dbDir = std::filesystem::path(cur_db_path).parent_path();
     const bool logReady = Logger::getInstance().init((dbDir / "logs").string());
     if (!logReady) {
-        LOG_WARN("db_replace: 日志文件 sink 初始化失败，已降级到 stderr/系统日志");
+        LOG_WARN("db_replace: 日志系统初始化失败，已降级到 stderr/系统日志");
     }
 
     // 1. 校验新内容包（只读，不动任何现有文件）
