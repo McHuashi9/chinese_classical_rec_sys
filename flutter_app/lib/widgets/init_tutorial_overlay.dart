@@ -80,10 +80,6 @@ class InitTutorialOverlay extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: context.accent,
-                foregroundColor: context.appColors.onAccent,
-              ),
               onPressed: onNext,
               child: Text(isLast ? '完成' : '下一步'),
             ),

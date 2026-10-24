@@ -62,10 +62,6 @@ class InitQuizGuideOverlay extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: context.accent,
-                foregroundColor: context.appColors.onAccent,
-              ),
               onPressed: onSkip,
               child: const Text('知道了'),
             ),

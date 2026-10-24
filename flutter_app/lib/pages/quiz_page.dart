@@ -406,12 +406,7 @@ class _QuizPageState extends State<QuizPage> {
                           )
                         : FilledButton(
                             style: FilledButton.styleFrom(
-                              backgroundColor: context.accent,
-                              foregroundColor: context.appColors.onAccent,
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
                             ),
                             onPressed: _isLast
                                 ? (_allowSubmit ? _submit : null)

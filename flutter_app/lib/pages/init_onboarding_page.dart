@@ -186,12 +186,7 @@ class _InitOnboardingPageState extends State<InitOnboardingPage> {
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: context.accent,
-                    foregroundColor: context.appColors.onAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
                   ),
                   onPressed: allRead && allAnswered ? _submitAllInit : null,
                   child: Text(initGateButtonLabel(

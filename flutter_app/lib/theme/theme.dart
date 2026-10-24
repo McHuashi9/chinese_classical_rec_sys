@@ -100,6 +100,73 @@ class AppTheme {
         height: 1.8,
       );
 
+  // ─── 组件主题 ─────────────────────────────────────────────────
+
+  /// 主按钮统一由主题控制：4px 圆角、加粗标签、accent 填充。
+  /// 禁用态仍使用 Material 3 默认的 onSurface 透明度，不硬编码用户色。
+  static FilledButtonThemeData _filledButtonTheme({
+    required Color accentColor,
+    required Color onAccent,
+    required ColorScheme scheme,
+    required double fontScale,
+  }) {
+    return FilledButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return scheme.onSurface.withValues(alpha: 0.12);
+          }
+          return accentColor;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return scheme.onSurface.withValues(alpha: 0.38);
+          }
+          return onAccent;
+        }),
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed) ||
+              states.contains(WidgetState.focused)) {
+            return onAccent.withValues(alpha: 0.10);
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return onAccent.withValues(alpha: 0.08);
+          }
+          return null;
+        }),
+        shape: const WidgetStatePropertyAll<OutlinedBorder>(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(4)),
+          ),
+        ),
+        textStyle: WidgetStatePropertyAll<TextStyle>(
+          TextStyle(
+            fontFamily: fontUI,
+            fontSize: 14 * fontScale,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 所有 AlertDialog 共用的暖卡片外观：无阴影、无 M3 色染、1px 边框、8px 圆角。
+  static DialogThemeData _dialogTheme({
+    required Color backgroundColor,
+    required Color borderColor,
+  }) {
+    return DialogThemeData(
+      backgroundColor: backgroundColor,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        side: BorderSide(color: borderColor, width: 1),
+      ),
+    );
+  }
+
   // ─── Light Theme ──────────────────────────────────────────────
 
   static ThemeData lightTheme(ScreenSize size, double fontScale,
@@ -115,6 +182,16 @@ class AppTheme {
       colorScheme: scheme,
       extensions: [AppColors.light.copyWith(error: scheme.error)],
       scaffoldBackgroundColor: paper,
+      filledButtonTheme: _filledButtonTheme(
+        accentColor: accentColor,
+        onAccent: cardBg,
+        scheme: scheme,
+        fontScale: fontScale,
+      ),
+      dialogTheme: _dialogTheme(
+        backgroundColor: cardBg,
+        borderColor: border,
+      ),
       cardTheme: CardThemeData(
         color: cardBg,
         elevation: 0,
@@ -180,6 +257,16 @@ class AppTheme {
       colorScheme: scheme,
       extensions: [AppColors.dark.copyWith(error: scheme.error)],
       scaffoldBackgroundColor: darkPaper,
+      filledButtonTheme: _filledButtonTheme(
+        accentColor: accentColor,
+        onAccent: cardBg,
+        scheme: scheme,
+        fontScale: fontScale,
+      ),
+      dialogTheme: _dialogTheme(
+        backgroundColor: darkCard,
+        borderColor: borderLight,
+      ),
       cardTheme: CardThemeData(
         color: darkCard,
         elevation: 0,

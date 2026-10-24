@@ -10,6 +10,7 @@ import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/models/text.dart';
 import 'package:chinese_classical_rec_sys/models/user.dart';
+import 'package:chinese_classical_rec_sys/widgets/dimension_bar.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/dialogs.dart';
 import 'package:chinese_classical_rec_sys/engine/algorithm_constants.dart';
@@ -159,12 +160,7 @@ class ArticleDetailPage extends StatelessWidget {
               width: double.infinity,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: context.accent,
-                  foregroundColor: context.appColors.onAccent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
                 ),
                 onPressed: () => _startReading(context, text),
                 child: Text(
@@ -263,8 +259,7 @@ class _EstimatedGainSectionState extends State<_EstimatedGainSection> {
   Widget build(BuildContext context) {
     final gains = <double>[
       for (int i = 0; i < abilityCount; i++)
-        _learningGain(
-            widget.text.difficulties[i], widget.user.getAbility(i)),
+        _learningGain(widget.text.difficulties[i], widget.user.getAbility(i)),
     ];
     final total = gains.reduce((a, b) => a + b) / gains.length;
     final totalPct = (total * 100).toStringAsFixed(1);
@@ -321,64 +316,19 @@ class _EstimatedGainSectionState extends State<_EstimatedGainSection> {
         if (_expanded) ...[
           SizedBox(height: context.gapMedium),
           ...List.generate(
-              abilityCount, (i) => _buildGainBar(context, i, gains[i])),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildGainBar(BuildContext context, int idx, double gain) {
-    final pct = (gain * 100).toStringAsFixed(0);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: context.cardPaddingV),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              abilityLabels[idx],
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: context.appColors.inkSecondary,
-                  ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          SizedBox(width: context.gapMedium),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Container(
-                height: 10,
-                color: context.appColors.success.withAlpha(31),
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: gain.clamp(0.0, 1.0),
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: context.appColors.success,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
+            abilityCount,
+            (i) => Padding(
+              padding: EdgeInsets.only(bottom: context.cardPaddingV),
+              child: DimensionBar(
+                label: abilityLabels[i],
+                value: gains[i],
+                color: context.success,
+                labelWidth: 130,
               ),
             ),
           ),
-          SizedBox(width: context.gapMedium),
-          SizedBox(
-            width: 48,
-            child: Text(
-              '$pct%',
-              textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: context.appColors.inkSecondary,
-                  ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
         ],
-      ),
+      ],
     );
   }
 }

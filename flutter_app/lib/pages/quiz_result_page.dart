@@ -172,12 +172,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: context.accent,
-                    foregroundColor: context.appColors.onAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
                   ),
                   onPressed: () {
                     Navigator.of(context).popUntil((r) => r.isFirst);

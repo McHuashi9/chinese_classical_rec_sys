@@ -37,20 +37,14 @@ class FestivalDialog extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               festival.content,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(height: 1.7),
+              style:
+                  Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.7),
             ),
           ],
         ),
       ),
       actions: [
         FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: context.accent,
-            foregroundColor: context.appColors.onAccent,
-          ),
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('知道了'),
         ),

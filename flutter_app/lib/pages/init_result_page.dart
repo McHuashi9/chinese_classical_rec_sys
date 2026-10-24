@@ -63,8 +63,6 @@ class _InitResultPageState extends State<InitResultPage> {
               const SizedBox(height: 32),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: context.accent,
-                  foregroundColor: context.appColors.onAccent,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                 ),

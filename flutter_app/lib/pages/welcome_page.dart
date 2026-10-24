@@ -57,7 +57,8 @@ class _WelcomePageState extends State<WelcomePage> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// 系统返回键 / 手势返回的处理：建档前允许退出。
@@ -87,8 +88,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.auto_stories,
-                        size: 72, color: context.accent),
+                    Icon(Icons.auto_stories, size: 72, color: context.accent),
                     SizedBox(height: context.gapLg),
                     Text(
                       '欢迎使用文言文推荐系统',
@@ -119,12 +119,7 @@ class _WelcomePageState extends State<WelcomePage> {
                     SizedBox(height: context.gapLg),
                     FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: context.accent,
-                        foregroundColor: context.appColors.onAccent,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
                       ),
                       onPressed: _submitting ? null : _start,
                       child: Text(_submitting ? '正在初始化…' : '开始初始化'),

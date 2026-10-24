@@ -4,6 +4,7 @@ import 'package:chinese_classical_rec_sys/pages/review_list_page.dart';
 import 'package:chinese_classical_rec_sys/state/coordinator.dart';
 import 'package:chinese_classical_rec_sys/state/user_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
+import 'package:chinese_classical_rec_sys/widgets/dimension_bar.dart';
 import 'package:chinese_classical_rec_sys/widgets/radar_chart.dart';
 import 'package:chinese_classical_rec_sys/widgets/stats_card.dart';
 import 'package:chinese_classical_rec_sys/widgets/recent_reading_list.dart';
@@ -103,7 +104,18 @@ class _MyContent extends StatelessWidget {
           ],
 
           // dimension bars
-          ...List.generate(10, (i) => _buildDimBar(context, i)),
+          ...List.generate(
+            10,
+            (i) => Padding(
+              padding: EdgeInsets.only(bottom: context.cardPaddingV),
+              child: DimensionBar(
+                label: abilityLabels[i],
+                value: user.getAbility(i).toDouble(),
+                color: context.accent,
+                labelWidth: 76,
+              ),
+            ),
+          ),
           SizedBox(height: context.gapXxl),
 
           // recent reading list
@@ -259,68 +271,6 @@ class _MyContent extends StatelessWidget {
           coord.navCtrl.switchPage(0);
         }
       },
-    );
-  }
-
-  Widget _buildDimBar(BuildContext context, int idx) {
-    final val = user.getAbility(idx).toDouble().clamp(0.0, 1.0);
-    final pct = (val * 100).toStringAsFixed(0);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: context.cardPaddingV),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 76,
-            child: Text(
-              abilityLabels[idx],
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: context.appColors.inkSecondary,
-                  ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          SizedBox(width: context.gapMedium),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Container(
-                height: 10,
-                color: context.accent.withAlpha(31),
-                alignment: Alignment.centerLeft,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: val),
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  builder: (ctx, v, child) => FractionallySizedBox(
-                    widthFactor: v,
-                    child: child,
-                  ),
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: context.accent,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(width: context.gapMedium),
-          SizedBox(
-            width: 48,
-            child: Text(
-              '$pct%',
-              textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: context.appColors.inkSecondary,
-                  ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
