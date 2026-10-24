@@ -2,10 +2,12 @@
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-25
+
 ### Changed
 
-- **弹窗和主按钮改用统一的暖纸卡片风格**：弹窗不再使用 Material 默认的淡粉/紫褐色表面和 28px 大圆角，改为与应用卡片一致的暖色背景、细边框和 8px 小圆角；主按钮统一为 4px 圆角加粗文字，弹窗里的胶囊按钮与页面按钮不再各走一套样式。
-- **文章详情的阅读收益条展开更顺滑**：10 条收益明细与「我的」页能力条共用同一套组件，展开时会播放 300ms 缓动动画。
+- **弹窗和主按钮统一为暖纸卡片风格**：弹窗改用暖色卡片底色、细边框和 8px 圆角；主按钮统一 4px 圆角加粗，不再出现胶囊按钮与页面按钮各走一套样式。
+- **文章详情的阅读收益条更顺滑**：与「我的」页能力条共用组件，展开时播放 300ms 缓动动画。
 
 ## [1.6.0] - 2026-10-18
 
@@ -629,3 +631,4 @@ C++ CLI 原型。
 [1.4.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.4.1
 [1.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.5.0
 [1.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.6.0
+[1.6.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.6.1
