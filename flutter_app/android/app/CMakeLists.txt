@@ -39,7 +39,7 @@ add_library(chinese_core SHARED ${CORE_SOURCES})
 # v1.4.0：与根 CMakeLists.txt 的 desktop target 保持一致——默认隐藏符号，
 # 只有 bridge/export.h 的 CHINESE_CORE_EXPORT 显式标注的 40 个 C 符号进动态表。
 # 缺这段时 bridge 的跨域共享 helper（S()/copyCString/fillQuestionRow 等）会以默认
-# 可见性进入 APK 的 .so 动态符号表（桌面产物无此问题，故 verify-1「零泄漏」只在桌面成立）。
+# 可见性进入 APK 的 .so 动态符号表（桌面产物无此问题，故 verify-1“零泄漏”只在桌面成立）。
 set_target_properties(chinese_core PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN YES

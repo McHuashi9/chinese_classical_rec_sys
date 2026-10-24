@@ -1,7 +1,7 @@
 // 桥层推荐与知识追踪域（v1.4.0 工作项 3）：recommend / tracker_apply_read /
 // tracker_apply_forgetting / tracker_prune，共 4 个导出符号。
 //
-// 工作项 2：tracker_apply_read 的「阅读效应 + 历史写入 + 落库同事务」编排保留在桥层
+// 工作项 2：tracker_apply_read 的“阅读效应 + 历史写入 + 落库同事务”编排保留在桥层
 // （仓储已现成），事务走 SqlTransaction(DatabaseManager*)，桥层不再直接取原始连接。
 
 #include "bridge_internal.h"

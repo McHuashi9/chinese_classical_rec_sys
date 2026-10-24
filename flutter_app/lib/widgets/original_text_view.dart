@@ -11,7 +11,7 @@ import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/reading_frame.dart';
 
-/// 只读原文视图：供答题页「原文」用途内嵌使用（不再是独立路由）。
+/// 只读原文视图：供答题页“原文”用途内嵌使用（不再是独立路由）。
 ///
 /// 会话语义（与旧 ReadingPreviewPage 一致）：
 /// - [activeController] 非空且确为该篇活动会话：复用同一 ReadingController

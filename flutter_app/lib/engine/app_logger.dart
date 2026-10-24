@@ -24,7 +24,7 @@ class AppLogger {
   /// 桥未就绪期的日志缓冲，上限 [kAppLoggerPendingCapacity] 条（环形，超限丢最旧）。
   final ListQueue<(int, String)> _pending = ListQueue<(int, String)>();
 
-  /// 测试注入的写入通道；非 null 时视为「桥已就绪」并绕过 FFI（A7）。
+  /// 测试注入的写入通道；非 null 时视为“桥已就绪”并绕过 FFI（A7）。
   @visibleForTesting
   AppLogSink? sinkOverride;
 

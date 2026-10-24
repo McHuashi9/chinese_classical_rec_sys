@@ -34,7 +34,7 @@ class PrefsOneShotGuideStore implements OneShotGuideStore {
 /// 一次性引导浮层的编排：读 seen key → 插入 Overlay → 完成写 key / 仅移除。
 ///
 /// 浮层内容由调用方以 [builder] 提供（widgets 侧只负责外观），页面只保留
-/// 「何时可能展示」与「完成/销毁」的调用。
+/// “何时可能展示”与“完成/销毁”的调用。
 class OneShotGuide {
   /// 单个引导的持久化标记（[OneShotGuideStore] 中的 key）。
   final String seenKey;

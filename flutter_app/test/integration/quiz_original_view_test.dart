@@ -1,5 +1,5 @@
 // 集成测试（真实 .so + 资产库 + 真实 AppCoordinator）：覆盖做题页方案 D 的
-// 「进入做题页 → 页内切到原文 → 切回 → 退出」整条路径。
+// “进入做题页 → 页内切到原文 → 切回 → 退出”整条路径。
 //
 // 为什么单独建文件：quiz_page_test.dart 走的是假题目 + 假 coordinator，
 // 覆盖不到真实 FFI 取题、真实 getTextDetail 读全文、真实 ReadingController

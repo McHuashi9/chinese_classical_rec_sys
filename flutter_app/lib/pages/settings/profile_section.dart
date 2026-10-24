@@ -99,7 +99,7 @@ Future<void> _switchProfile(
   if (!context.mounted) return;
   if (ok) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已切换到「${profile.name}」')),
+      SnackBar(content: Text('已切换到“${profile.name}”')),
     );
   } else {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -241,7 +241,7 @@ Future<void> _showDeleteProfileDialog(
     BuildContext context, AppCoordinator coord, UserProfile profile) async {
   final confirmed = await showConfirmDialog(context,
       title: '删除用户档案',
-      content: '确定删除「${profile.name}」吗？该档案的学习记录将被永久删除，无法恢复。',
+      content: '确定删除“${profile.name}”吗？该档案的学习记录将被永久删除，无法恢复。',
       confirmLabel: '删除');
   if (confirmed && context.mounted) {
     if (!coord.deleteProfile(profile.id) && context.mounted) {

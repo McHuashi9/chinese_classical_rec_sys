@@ -37,7 +37,7 @@ class UserController extends ChangeNotifier {
   int _totalReviewCount = -1;
 
   /// 最近一次错题计数查询的 FFI 失败；null = 上次查询成功。
-  /// getter 为兼容 build 期调用不抛出，但调用方/诊断可据此区分「0 条」与「查询失败」。
+  /// getter 为兼容 build 期调用不抛出，但调用方/诊断可据此区分“0 条”与“查询失败”。
   FfiException? _quizDataError;
 
   UserController();
@@ -315,7 +315,7 @@ class UserController extends ChangeNotifier {
   /// 采纳新的用户状态并统一通知。
   ///
   /// prune 是增量清理的附带步骤：若它失败，主效应已经由 C++ 事务提交，
-  /// 此处记录失败并继续采纳 updated，避免把「主操作成功」误报为失败；
+  /// 此处记录失败并继续采纳 updated，避免把“主操作成功”误报为失败；
   /// 其他 FFI 失败仍向上抛，由调用方展示。
   bool _updateUser(User updated) {
     // 无变化（如空题组）：直接采纳，避免 dispose 后对悬垂指针 prune
@@ -379,7 +379,7 @@ class UserController extends ChangeNotifier {
   /// 返回每题结果（对错 + 答前能力）。
   ///
   /// 失败契约：状态前置条件不满足返回 null；C++ FFI 失败抛 [FfiException]，
-  /// 且 C++ 事务保证整批回滚——不存在「前几题已生效」的部分成功返回值。
+  /// 且 C++ 事务保证整批回滚——不存在“前几题已生效”的部分成功返回值。
   List<QuizAnswer>? submitQuiz(List<Question> questions, List<int> choices,
       {bool isReview = false}) {
     if (_user == null || _tracker == null) {

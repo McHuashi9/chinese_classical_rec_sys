@@ -21,14 +21,14 @@ using SqlParam = std::variant<std::string, double, int, int64_t>;
  * @brief 一行查询结果：具名列访问 + 类型化取值（内部 C++，不进 FFI）
  *
  * **形态已定稿（v1.4.0 工作项 1）**：后续工作项 4 的 `fillQuestionRow(const Row&, QuestionData&)`
- * 直接以 Row 为参数，不再出现「先用 sqlite3_stmt* 抽取、之后再改签名」的中间态。
+ * 直接以 Row 为参数，不再出现“先用 sqlite3_stmt* 抽取、之后再改签名”的中间态。
  *
  * 约定（新增使用方按此为准）：
  * - 列名取自 SQL 的列名/别名。表达式列（如 `json_extract(options,'$[0]')`）请在 SQL 里显式
  *   `AS opt0` 命名，否则只能按整型下标访问（整型下标恒定可用）。
  * - 越界下标或未知列名：hasColumn()==false、columnIndex()==-1、isNull()==true，
  *   取值返回空串/0/0.0 —— 不抛异常、不中断。
- * - NULL 列：isNull()==true，取值同上返回默认值；调用方需要区分「NULL」与「空串」时先查 isNull()。
+ * - NULL 列：isNull()==true，取值同上返回默认值；调用方需要区分“NULL”与“空串”时先查 isNull()。
  * - 数值取值沿用 sqlite3_column_int64 / sqlite3_column_double 的强制转换语义（REAL 截断、
  *   TEXT 尝试解析数字前缀）；text() 对数值列返回十进制字符串（整型精确，REAL 用最短往返表示）。
  *   BLOB 不建模，按空串处理。
@@ -91,7 +91,7 @@ private:
  * - 预处理或绑定失败不抛异常：ok()==false，错误文本经 error() 读取；构造时若传入 errOut，
  *   同一错误文本会同步写入该字符串（消费方沿用 `bool + lastError` 契约）。
  * - step() 原样返回 sqlite3_step 结果（SQLITE_ROW / SQLITE_DONE / 错误码），调用方自行判断
- *   「空结果（DONE）vs 出错」；reset() 保留参数绑定，可重新 step。
+ *   “空结果（DONE）vs 出错”；reset() 保留参数绑定，可重新 step。
  */
 class Statement {
 public:

@@ -18,7 +18,7 @@ class ReadingViewData {
   final List<bool>? pageStartsInTranslation;
 
   /// 仍在等待达标阅读的篇目 id（初始化引导用）。
-  /// 非空时底栏倒计时带「还需阅读」措辞，让用户知道当前是在等阅读时长。
+  /// 非空时底栏倒计时带“还需阅读”措辞，让用户知道当前是在等阅读时长。
   final List<int> pendingReadTextIds;
 
   final VoidCallback onToggleTranslation;

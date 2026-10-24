@@ -175,7 +175,7 @@ void Logger::setLevel(const std::string& level) {
         return;
     }
 
-    // A3：记住显式级别，供之后才发生的 init 使用（P2-7「init 覆盖」）。
+    // A3：记住显式级别，供之后才发生的 init 使用（P2-7“init 覆盖”）。
     levelOverride_ = target;
     hasLevelOverride_ = true;
     applyLevel(target);

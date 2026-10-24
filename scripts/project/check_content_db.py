@@ -8,8 +8,8 @@
 2. PRAGMA user_version == 1（db_version=1）；
 3. 6 个强制初始化 q_key 全部存在（须与 C++ 侧单一来源 initQKeys() 同步，见下）；
 4. questions.q_key 非空且唯一，题数与 build/data/questions.json 一致；
-5. PRAGMA foreign_key_check 为 0 行（v1.4.0 新增：兜住「文章集变化 → 题
-   库 text_id 悬空」这类 integrity_check 与前述闸门都发现不了的坏库）；
+5. PRAGMA foreign_key_check 为 0 行（v1.4.0 新增：兜住“文章集变化 → 题
+   库 text_id 悬空”这类 integrity_check 与前述闸门都发现不了的坏库）；
 6. db_version.txt 格式 YYYYMMDDHHMM-hash（兼容 YYYYMMDD-hash），
    其中 hash 为内容库的 Git blob hash 短哈希（git hash-object classical.db 前 7 位），
    不受 publish_data.sh 的 commit --amend 影响。
@@ -43,7 +43,7 @@ USER_TABLES = [
 # 6 个强制初始化 q_key：唯一来源是 C++ 侧 `initQKeys()`（include/database/QuizRepository.h
 # + src/database/QuizRepository.cpp）。v1.4.0 之前此处需与 bridge.cpp 的两份硬编码
 # （kInitQKeys[] / initQKeyList()）人工同步，bridge.cpp 已随分域拆分删除。
-# 现由 tests/test_review_scheduler.cpp 的「q_key 单源对拍」用例在构建期解析本文件逐项比对，
+# 现由 tests/test_review_scheduler.cpp 的“q_key 单源对拍”用例在构建期解析本文件逐项比对，
 # 改动任一处必须同步另一处。
 INIT_Q_KEYS = [
     "d648b695e1579dbe",

@@ -22,7 +22,7 @@ void main() {
         expect(
           SettingsController.normalizeLogLevel(dirty),
           SettingsController.defaultLogLevel,
-          reason: '脏值「$dirty」应回退到 ${SettingsController.defaultLogLevel}',
+          reason: '脏值“$dirty”应回退到 ${SettingsController.defaultLogLevel}',
         );
       }
     });

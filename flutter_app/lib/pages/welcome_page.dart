@@ -63,7 +63,7 @@ class _WelcomePageState extends State<WelcomePage> {
 
   /// 系统返回键 / 手势返回的处理：建档前允许退出。
   ///
-  /// 返回等价于「稍后继续」——只 `pop(false)`，由 `main.dart` 端决定不为本次
+  /// 返回等价于“稍后继续”——只 `pop(false)`，由 `main.dart` 端决定不为本次
   /// 退出写入 `new_user_welcome_seen`；初始化门禁照旧，下次启动仍会进入欢迎页。
   /// （`canPop:false` 只关闭默认 pop，必须在此显式收尾，否则返回事件被静默吞掉。）
   void _handlePop(bool didPop, Object? result) {

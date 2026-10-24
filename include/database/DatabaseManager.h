@@ -119,7 +119,7 @@ public:
     /**
      * @brief 执行带参数 SELECT 查询，按行收集到 out
      *
-     * 契约：返回值区分「空结果」与「出错」——成功且无行时返回 true 且 out 为空；
+     * 契约：返回值区分“空结果”与“出错”——成功且无行时返回 true 且 out 为空；
      * 出错返回 false，out 被清空，lastError 可用（消费方 `LOG_ERROR(getLastError())`）。
      *
      * @param sql SQL 语句，使用 ? 作为占位符

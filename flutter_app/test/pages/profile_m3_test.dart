@@ -160,6 +160,6 @@ void main() {
     await tester.tap(find.text('小明'));
     await tester.pumpAndSettle();
 
-    expect(find.text('已切换到「小明」'), findsOneWidget);
+    expect(find.text('已切换到“小明”'), findsOneWidget);
   });
 }

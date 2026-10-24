@@ -105,9 +105,9 @@ bool UserRepository::initTable() {
 
     // ── 迁移：按列存在性补/删列（v1.4.0 工作项 1）─────────────────────────────
     // 设计定稿：不提 PRAGMA user_version（它是 bridge 的打开门控，提升会让旧版二进制
-    // 拒绝打开用户库），也不再用「盲执行 ALTER + 忽略错误」；改用 dbschema::tableColumns()
+    // 拒绝打开用户库），也不再用“盲执行 ALTER + 忽略错误”；改用 dbschema::tableColumns()
     // 内省。对已存在库的最终 schema 与旧实现等价（旧实现对已存在列执行 ALTER 失败即忽略），
-    // 且可重复执行、幂等。注：本仓代码原无「版本号快路径短路」，此项是「不引入」，无删除动作。
+    // 且可重复执行、幂等。注：本仓代码原无“版本号快路径短路”，此项是“不引入”，无删除动作。
     {
         const std::set<std::string> userCols = tableColumns(c, "user");
         const auto addUserColumn = [&](const std::string& column, const std::string& ddl) {
@@ -336,7 +336,7 @@ bool UserRepository::saveUser(const User& user, int userId) {
         params.emplace_back(user.getQuizCount(i));
     }
     // 批次 4（明示排除）：last_read_time 列是 INTEGER，这里仍按 double 绑定
-    // （recon-db-access.md §5.5）；改 int64 是可测的行为变化，不属本版「不改行为」边界。
+    // （recon-db-access.md §5.5）；改 int64 是可测的行为变化，不属本版“不改行为”边界。
     params.emplace_back(static_cast<double>(user.getLastReadTime()));
 
     return db->executeSQL(
@@ -450,7 +450,7 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     }
 
     bool ok = true;
-    // 上限保护（防 UI 绕过/未来多端并发）：查询失败与旧实现一致——静默失败，不并进「已达上限」
+    // 上限保护（防 UI 绕过/未来多端并发）：查询失败与旧实现一致——静默失败，不并进“已达上限”
     int count = 0;
     if (!profileCountOk(db, count)) {
         ok = false;
@@ -462,7 +462,7 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     if (ok) {
         bool available = false;
         if (!profileNameAvailable(db, name, available)) {
-            ok = false;  // 查询失败：与旧 prepare 失败一致，不并进「重名拒绝」
+            ok = false;  // 查询失败：与旧 prepare 失败一致，不并进“重名拒绝”
         } else if (!available) {
             LOG_WARN("createProfile 重名拒绝: {}", name);
             ok = false;
@@ -711,7 +711,7 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
 
     bool ok = true;
     // 与 createProfile 相同的约束：上限、未删除档案重名拒绝。
-    // 现状语义（recon §4.2）：查询失败与超限共用同一条「已达上限」误导日志；
+    // 现状语义（recon §4.2）：查询失败与超限共用同一条“已达上限”误导日志；
     // 该合并只保留在调用点，helper 保持中性（返回是否查询成功）。
     int count = 0;
     if (!profileCountOk(db, count) || count >= kMaxProfiles) {

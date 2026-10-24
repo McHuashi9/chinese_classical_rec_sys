@@ -19,13 +19,13 @@ class FfiException implements Exception {
   String toString() => 'FFI $operation 失败: $codeName ($code) $description';
 }
 
-/// 校验「成功 / 失败」型 C 返回码。
+/// 校验“成功 / 失败”型 C 返回码。
 int requireBridgeOk(int rc, String operation) {
   if (rc == BridgeError.ok) return rc;
   throw _fail(rc, operation);
 }
 
-/// 校验「计数 / 列表长度」型 C 返回码：0 与正数都是成功，负数才是失败。
+/// 校验“计数 / 列表长度”型 C 返回码：0 与正数都是成功，负数才是失败。
 int requireBridgeCount(int rc, String operation) {
   if (rc >= 0) return rc;
   throw _fail(rc, operation);

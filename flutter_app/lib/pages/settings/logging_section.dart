@@ -9,7 +9,7 @@ import 'package:chinese_classical_rec_sys/pages/settings/platform.dart';
 import 'package:chinese_classical_rec_sys/state/settings_controller.dart';
 import 'package:chinese_classical_rec_sys/theme/theme.dart';
 
-/// 日志卡：日志级别选择；桌面端额外提供「打开日志目录」。
+/// 日志卡：日志级别选择；桌面端额外提供“打开日志目录”。
 class LoggingSection extends StatelessWidget {
   const LoggingSection({super.key});
 

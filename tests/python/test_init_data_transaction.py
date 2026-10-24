@@ -5,8 +5,8 @@
 覆盖项：
 1. 成功建库：integrity_check=ok、foreign_key_check 0 行、篇数/题数/user_version
    正确，并与 build/data/classical.db 逐行对拍 id→title、id→q_key、text_id 三向；
-2. 负向：注入「文章集截断 + 写入中途抛错」后，目标库 sha256 与运行前逐字节相同；
-3. 负向：失败后库内不存在「新文本 + 旧题库」组合，且不残留 <db>.tmp；
+2. 负向：注入“文章集截断 + 写入中途抛错”后，目标库 sha256 与运行前逐字节相同；
+3. 负向：失败后库内不存在“新文本 + 旧题库”组合，且不残留 <db>.tmp；
 4. 负向：目标库原本不存在时，失败不产生任何库文件；
 5. check_content_db.py 新增的 foreign_key_check 闸门：悬空外键库必须 FAIL，
    干净库必须打印 OK 5/6 且整体 PASS；
@@ -203,7 +203,7 @@ def test_success_build_and_match_reference(tmp_path):
 
 
 def test_failure_leaves_target_byte_identical(tmp_path):
-    """注入失败后目标库 sha256 逐字节不变，且无「新文本 + 旧题库」组合。"""
+    """注入失败后目标库 sha256 逐字节不变，且无“新文本 + 旧题库”组合。"""
     base = _build_reference_copy(tmp_path)
     target = tmp_path / "target.db"
     target.write_bytes(base.read_bytes())

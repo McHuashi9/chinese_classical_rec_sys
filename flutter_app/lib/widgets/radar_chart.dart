@@ -114,8 +114,8 @@ class _RadarChartPainter extends CustomPainter {
     const angleStep = 2 * pi / abilityCount;
     const startAngle = -pi / 2;
 
-    // 轴标签先排版：半径按「最长标签半宽 + 间隙」外扩预留，保证标签既不压在
-    // 图形上、也不越出画布（P6-a：真机验收发现「古PPL」等标签压在图上）。
+    // 轴标签先排版：半径按“最长标签半宽 + 间隙”外扩预留，保证标签既不压在
+    // 图形上、也不越出画布（P6-a：真机验收发现“古PPL”等标签压在图上）。
     // 居中排版的段落盒宽恒为 maxWidth，真实文本宽须取 maxIntrinsicWidth。
     const labelGap = 8.0;
     const labelMaxWidth = 72.0;
@@ -193,7 +193,7 @@ class _RadarChartPainter extends CustomPainter {
       }
       overlayPath.close();
 
-      // 难度层只描虚线轮廓、不填充，与能力的「填充 + 实线」形成形状/线型双编码
+      // 难度层只描虚线轮廓、不填充，与能力的“填充 + 实线”形成形状/线型双编码
       // （P6-c：仅靠红/灰绿两色区分，色觉障碍用户难分辨）。
       _drawDashedPath(
         canvas,

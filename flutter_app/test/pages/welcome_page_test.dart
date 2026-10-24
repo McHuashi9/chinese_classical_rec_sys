@@ -276,7 +276,7 @@ void main() {
 
     expect(find.byType(WelcomePage), findsNothing, reason: '返回应离开欢迎页，不得被静默吞掉');
     expect(popped, isTrue, reason: '路由 pop 完成后外层 await 应恢复');
-    expect(popResult, isFalse, reason: '返回等价「稍后继续」，返回 false 而非 true');
+    expect(popResult, isFalse, reason: '返回等价“稍后继续”，返回 false 而非 true');
     expect(coord.renameCalled, isFalse, reason: '返回不应触发重命名');
     expect(coord.userCtrl.profiles.first.name, '默认用户');
   });

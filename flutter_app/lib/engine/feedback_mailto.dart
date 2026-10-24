@@ -107,7 +107,7 @@ const String kMobileSystemLogNotice =
     '本平台日志在系统日志中（Android logcat / iOS 控制台），不含于反馈；'
     '反馈请附操作步骤或截图';
 
-/// 平台名是否属于「日志只进系统日志、无本地文件」的移动端（A4）。
+/// 平台名是否属于“日志只进系统日志、无本地文件”的移动端（A4）。
 bool isMobileLogPlatform(String platformName) {
   final name = platformName.toLowerCase();
   return name.contains('android') || name.contains('ios');
@@ -121,7 +121,7 @@ bool isEmptyLogTail(String? logTail) =>
 
 /// A4：移动端无本地日志时，把空占位换成平台事实说明；其余情况原样返回。
 ///
-/// 只改写「占位」，不会把真实日志内容替换掉；桌面端（本地有文件）也不改写。
+/// 只改写“占位”，不会把真实日志内容替换掉；桌面端（本地有文件）也不改写。
 String logTailForFeedback(String logTail, {required String platformName}) =>
     isMobileLogPlatform(platformName) && isEmptyLogTail(logTail)
         ? kMobileSystemLogNotice
@@ -130,8 +130,8 @@ String logTailForFeedback(String logTail, {required String platformName}) =>
 /// 读取应用支持目录下 `logs/` 的日志尾部。
 ///
 /// [logDirectory] 可注入，便于测试；为空时使用 [getApplicationSupportDirectory]。
-/// A6：除 `app.log` 外，按「旧 → 新」依次拼上 `app.2.log`、`app.1.log`
-/// 等轮转文件，再统一截尾——否则「上次会话（含崩溃前最后一段）」会被
+/// A6：除 `app.log` 外，按“旧 → 新”依次拼上 `app.2.log`、`app.1.log`
+/// 等轮转文件，再统一截尾——否则“上次会话（含崩溃前最后一段）”会被
 /// 轮转掉而取不到。默认最多 [maxLines] 行；若文本超过 [maxChars] 字符，
 /// 保留末尾部分。
 Future<String> readLogTail({

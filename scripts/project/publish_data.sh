@@ -1,7 +1,7 @@
 #!/bin/bash
 # 发布数据更新（独立 prerelease，不干扰 app 版本更新检查）
 # 用法: bash scripts/project/publish_data.sh
-# 前置: 数据变更已 commit（classical.db 已生成并同步到 assets，见 README「快速开始」）
+# 前置: 数据变更已 commit（classical.db 已生成并同步到 assets，见 README“快速开始”）
 # 流程: 校验工作树 → 刷新 db_version.txt 并 amend 进 HEAD → 可复现性检查
 #       → R15 内容库一致性校验 → gzip → gh release create（data-* prerelease）
 #       → 触发 repro-check CI → 提醒 push
@@ -19,7 +19,7 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 if [ ! -f "$DB_SRC" ]; then
-  echo "Error: 找不到 $DB_SRC，请先执行 init_data.py（README「快速开始」第 1 步）" >&2
+  echo "Error: 找不到 $DB_SRC，请先执行 init_data.py（README“快速开始”第 1 步）" >&2
   exit 1
 fi
 

@@ -23,7 +23,7 @@ import 'package:chinese_classical_rec_sys/widgets/spotlight_overlay.dart';
 /// 初始化门禁按钮文案。
 ///
 /// 门禁是 `allRead && allAnswered` 两条判据，文案必须说清**当前缺哪一条**：
-/// 只写「请先阅读两篇文章」会在「题已答满、阅读未达标」时误导用户。
+/// 只写“请先阅读两篇文章”会在“题已答满、阅读未达标”时误导用户。
 /// [unreadTitles] 为仍未达标阅读的篇名（按引导页顺序）。
 /// [initQuestionCount] 为初始化题数（用户可见文案里的固定值，与题组是否已加载无关）。
 String initGateButtonLabel({
@@ -117,7 +117,7 @@ class _InitOnboardingPageState extends State<InitOnboardingPage> {
 
     return PopScope(
       canPop: false,
-      // 系统返回不再静默吞键：等价于页面既有的「稍后继续」——离开本页，
+      // 系统返回不再静默吞键：等价于页面既有的“稍后继续”——离开本页，
       // 初始化门禁（allRead && allAnswered）不受影响；未初始化时入口会再引导。
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || !mounted) return;
@@ -311,11 +311,11 @@ class _InitArticleTile extends StatelessWidget {
     required this.onQuiz,
   });
 
-  /// 阅读进度文案：已达标显示「已读」，未达标显示还需多久，避免用户干等。
+  /// 阅读进度文案：已达标显示“已读”，未达标显示还需多久，避免用户干等。
   String get _readProgressLabel {
     if (isRead) return '已读';
     final remaining = (minReadSeconds - readSeconds).ceil();
-    return remaining > 0 ? '未读 · 还需 ${remaining}s' : '未读 · 可点「完成」';
+    return remaining > 0 ? '未读 · 还需 ${remaining}s' : '未读 · 可点“完成”';
   }
 
   @override
@@ -530,7 +530,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
     );
   }
 
-  /// 点「完成」：按初始化语义记录（不看阈值、不产生能力效应），并标记已读。
+  /// 点“完成”：按初始化语义记录（不看阈值、不产生能力效应），并标记已读。
   void _finish() {
     if (_recorded) return;
     _recorded = true;
@@ -541,10 +541,10 @@ class _InitReadingPageState extends State<InitReadingPage> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  /// 点「放弃」：不记录、不标记已读，只退出本页。
+  /// 点“放弃”：不记录、不标记已读，只退出本页。
   ///
   /// 与普通阅读页的放弃口径一致（未达阈值不保存）；此前这里误接 [_finish]，
-  /// 导致点「放弃」也会记成已读（真机实测：读 10s 就显示「已读」）。
+  /// 导致点“放弃”也会记成已读（真机实测：读 10s 就显示“已读”）。
   Future<void> _abandon() async {
     if (_recorded) return;
     _readingCtrl.pauseTimer();
@@ -598,7 +598,7 @@ class _InitReadingPageState extends State<InitReadingPage> {
                 isDark: isDark,
                 elapsedSeconds: _readingCtrl.elapsedSeconds,
                 alreadyTracked: false,
-                // 把仍在等阅读达标的初始化篇目透传给底栏：倒计时显示「还需阅读 Ns」，
+                // 把仍在等阅读达标的初始化篇目透传给底栏：倒计时显示“还需阅读 Ns”，
                 // 否则用户只看到一个裸数字、不知道在等什么。
                 pendingReadTextIds: readTracker.unreadTextIds(initTextIds),
                 annotations: widget.annotations,

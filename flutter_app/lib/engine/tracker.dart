@@ -82,7 +82,7 @@ class QuizAttemptSummary {
 /// 测试注入 Fake）——FFI 依赖链（NativeBridge→DynamicLibrary）无法在单测中构造。
 ///
 /// 失败契约：任何 FFI 负返回码都抛 [FfiException]（由引擎层统一记日志）；
-/// `null` 只用于显式的业务「不存在」，空列表/0 只表示成功但无数据。
+/// `null` 只用于显式的业务“不存在”，空列表/0 只表示成功但无数据。
 abstract class QuizTracker {
   /// 记录阅读事件，返回更新后的用户。FFI 失败抛 [FfiException]。
   User applyRead(User user, int textId, double readTime);

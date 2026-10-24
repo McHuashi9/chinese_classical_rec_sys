@@ -194,7 +194,7 @@ void main() {
     expect(find.text('初始化引导'), findsOneWidget);
     expect(find.text('严先生祠堂记'), findsOneWidget);
     expect(find.text('周郑交质'), findsOneWidget);
-    // 门禁是「已读 && 已答满」两条，按钮必须点名还缺哪一条。
+    // 门禁是“已读 && 已答满”两条，按钮必须点名还缺哪一条。
     expect(find.text('还需阅读：严先生祠堂记、周郑交质'), findsOneWidget);
   });
 
@@ -333,7 +333,7 @@ void main() {
       );
     }
 
-    /// 读满一篇（倒计时归零后点「完成」＝走生产 recordInitRead 路径）。
+    /// 读满一篇（倒计时归零后点“完成”＝走生产 recordInitRead 路径）。
     Future<void> completeReading(WidgetTester tester, int charCount) async {
       await tester.tap(find.text('阅读').first);
       await tester.pumpAndSettle();
@@ -348,7 +348,7 @@ void main() {
 
     /// 进入 [title] 篇的初始化答题页并答完 3 题（不做任何阅读）。
     ///
-    /// 按篇目卡片定位「做题」：篇 1 读完后按钮由「阅读」变为「做题」，
+    /// 按篇目卡片定位“做题”：篇 1 读完后按钮由“阅读”变为“做题”，
     /// 用 `.first` 会稳定命中部已读完的那一篇。
     Future<void> answerArticle(WidgetTester tester, String title) async {
       final card = find.ancestor(
@@ -370,7 +370,7 @@ void main() {
     }
 
     Future<void> pumpOnboarding(WidgetTester tester) async {
-      // 关掉一次性的操作教程浮层，否则它会拦住「做题」按钮的点击。
+      // 关掉一次性的操作教程浮层，否则它会拦住“做题”按钮的点击。
       SharedPreferences.setMockInitialValues({
         kInitTutorialSeenKey: true,
         kInitQuizGuideSeenKey: true,
@@ -380,7 +380,7 @@ void main() {
     }
 
     test('门禁文案分支：缺阅读 → 点名篇目；缺答题 → 要求答题；齐了 → 可提交', () {
-      // 核心回归：题答满但阅读未达标时，文案不能再是「请先阅读两篇文章」
+      // 核心回归：题答满但阅读未达标时，文案不能再是“请先阅读两篇文章”
       // （用户会以为系统没识别到已读，v1.3.0 验收实测卡住人）。
       expect(
         initGateButtonLabel(
@@ -459,7 +459,7 @@ void main() {
       expect(find.text('已完成 3/6 题 · 已保存，可稍后继续'), findsOneWidget);
       expect(find.text('请先阅读两篇文章'), findsNothing);
       expect(find.text('还需阅读：周郑交质'), findsOneWidget);
-      // 「已读」标记只在已读完那一篇的卡片上，另一篇仍是「阅读」按钮。
+      // “已读”标记只在已读完那一篇的卡片上，另一篇仍是“阅读”按钮。
       expect(find.text('已读'), findsOneWidget);
       expect(find.text('阅读'), findsOneWidget);
       final gate = tester.widget<FilledButton>(find.ancestor(
@@ -480,7 +480,7 @@ void main() {
       expect(find.textContaining('未读 · 还需'), findsOneWidget);
     });
 
-    testWidgets('阅读器点「放弃」：不记已读、不写初始化阅读记录', (tester) async {
+    testWidgets('阅读器点“放弃”：不记已读、不写初始化阅读记录', (tester) async {
       p0Coord.initTexts = [_text(41, '严先生祠堂记')];
       p0Coord.detailOverride = _text(41, '严先生祠堂记');
       SharedPreferences.setMockInitialValues({kInitTutorialSeenKey: true});
@@ -494,7 +494,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('放弃阅读？'), findsOneWidget);
 
-      // 弹窗的「放弃」在阅读器自己的「放弃」之后，取最后一个。
+      // 弹窗的“放弃”在阅读器自己的“放弃”之后，取最后一个。
       await tester.tap(find.widgetWithText(TextButton, '放弃').last);
       await tester.pumpAndSettle();
 
@@ -696,7 +696,7 @@ void main() {
   // 系统返回（Android 手势/导航键）必须真实触发 PopScope 回调：
   // `tester.binding.handlePopRoute()` → WidgetsApp.didPopRoute → Navigator.maybePop。
   group('系统返回键', () {
-    testWidgets('系统返回不被静默吞键：等价「稍后继续」离开本页，且不绕过门禁', (tester) async {
+    testWidgets('系统返回不被静默吞键：等价“稍后继续”离开本页，且不绕过门禁', (tester) async {
       // 教程浮层不参与本用例：seen 后不再插入 Overlay，避免遮罩吃掉返回语义。
       SharedPreferences.setMockInitialValues({kInitTutorialSeenKey: true});
       coord.initTexts = [_text(41, '严先生祠堂记'), _text(166, '周郑交质')];
@@ -722,7 +722,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
-      // 不静默吞键：系统返回等价页面既有的「稍后继续」，回到宿主页
+      // 不静默吞键：系统返回等价页面既有的“稍后继续”，回到宿主页
       expect(find.text('初始化引导'), findsNothing);
       expect(find.text('打开初始化'), findsOneWidget);
       // 门禁未被绕过：未完成初始化就离开，初始化状态仍为否

@@ -7,7 +7,7 @@ class ScreenshotController extends ChangeNotifier {
   bool _armed = false;
   String? _lastPath;
 
-  /// 是否已进入「截图待确认」模式。
+  /// 是否已进入“截图待确认”模式。
   bool get armed => _armed;
 
   /// 本次会话最近一次成功保存的截图路径。

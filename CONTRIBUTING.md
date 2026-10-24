@@ -69,6 +69,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 - `ChangeNotifier` 必须被 `context.watch` / `Selector` / `Consumer` 监听，否则不重建
 - 每次功能变更同时更新 `CHANGELOG.md`
+- 中文正文、注释与 UI 文案统一使用“”（嵌套用‘’）；「」仅用于专指该字符本身或历史兼容文本，不再用于普通引用。
 
 ## 维护者操作
 

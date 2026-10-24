@@ -381,7 +381,7 @@ class _QuizPageState extends State<QuizPage> {
                   Expanded(
                     flex: 2,
                     child: !_isLast && _choices[_index] == null
-                        // P3：未作答时「下一题」降级为次按钮样式（仍可跳过，行为不变）；
+                        // P3：未作答时“下一题”降级为次按钮样式（仍可跳过，行为不变）；
                         // 选中后恢复主按钮，避免"满血样式但点了才提示"的误导。
                         ? OutlinedButton(
                             style: OutlinedButton.styleFrom(
@@ -472,7 +472,7 @@ class _QuizPageState extends State<QuizPage> {
               key: _originalButtonKey,
               tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
               icon: Icon(
-                // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的「阅读」撞车
+                // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的“阅读”撞车
                 _viewIndex == 0 ? Icons.article_outlined : Icons.quiz_outlined,
                 color: context.appColors.ink,
               ),
@@ -574,7 +574,7 @@ class _QuizPageState extends State<QuizPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 圆形里的字母与选项正文已并入外层 Semantics.label，
-                  // 排除掉可避免读屏把「A / 选项文本」再念一遍。
+                  // 排除掉可避免读屏把“A / 选项文本”再念一遍。
                   ExcludeSemantics(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),

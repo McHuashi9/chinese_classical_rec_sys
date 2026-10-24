@@ -155,7 +155,7 @@ Future<List<Question>> _pumpQuiz(
 
 /// 初始化按篇答题页的公共挂载：在 [_pumpQuiz] 上叠加 seen 标记与引导开关。
 ///
-/// [seen] 写入 [kInitQuizGuideSeenKey] 模拟「引导已读」；[showGuide] 透传
+/// [seen] 写入 [kInitQuizGuideSeenKey] 模拟“引导已读”；[showGuide] 透传
 /// `QuizPage.showQuizGuide`（阅读教程第 4 步进入 → 强制展示第 5 步）。
 /// [answers] 为按篇模式的共享答案表；[inHost] 见 [_pumpQuiz]。
 /// 返回持有 owner 的 [UserController]（用完自动 dispose），供 `isInitialized` 断言。
@@ -278,7 +278,7 @@ void main() {
     expect(find.text('提交失败，请重试'), findsOneWidget);
   });
 
-  testWidgets('未作答时「下一题」为次按钮样式，选中后恢复主按钮（P3 降级样式）', (tester) async {
+  testWidgets('未作答时“下一题”为次按钮样式，选中后恢复主按钮（P3 降级样式）', (tester) async {
     await _pumpQuiz(tester, n: 2);
 
     // 未作答：次按钮，但仍可点（行为不变：不强制作答）

@@ -2,7 +2,7 @@
 // db_get_schema_versions，共 5 个导出符号。
 //
 // 本域保留 5 处原始连接访问（PRAGMA 读取 / 整库备份判断 / 内容库校验），
-// 与验收口径「残留 6 处 = 生命周期 5 + 共享事务 helper 1」对应。
+// 与验收口径“残留 6 处 = 生命周期 5 + 共享事务 helper 1”对应。
 
 #include "bridge_internal.h"
 

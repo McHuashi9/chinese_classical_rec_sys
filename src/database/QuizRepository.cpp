@@ -136,7 +136,7 @@ QuizQuestions QuizRepository::getInitQuestions(int maxCount)
     }
 
     const auto& keys = initQKeys();
-    // 单条 IN 查询取代原「按 6 个 q_key 逐个 prepare」（recon-db-access.md §3.2 附带项）；
+    // 单条 IN 查询取代原“按 6 个 q_key 逐个 prepare”（recon-db-access.md §3.2 附带项）；
     // q_key 有部分唯一索引，结果按 initQKeys() 顺序重排后再截断。
     std::string sql = std::string("SELECT ") + QUESTION_SELECT_COLUMNS + ", q_key FROM questions WHERE q_key IN (";
     for (size_t i = 0; i < keys.size(); i++) {
