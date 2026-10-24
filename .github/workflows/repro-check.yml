@@ -16,6 +16,7 @@ on:
       - 'scripts/project/features.json'
       - 'scripts/project/check_questions_reproducible.sh'
       - 'scripts/project/check_content_db.py'
+      - 'tests/python/test_init_data_transaction.py'
       - 'articles/**'
       - '.github/workflows/repro-check.yml'
   workflow_dispatch:
@@ -32,6 +33,10 @@ jobs:
 
       - name: Reproducibility check (generate twice, compare hashes)
         run: bash scripts/project/check_questions_reproducible.sh
+
+      - name: init_data transaction tests
+        # 复用上一步生成的 build/data/questions.json；id map/参考库缺失时自动跳过对拍
+        run: python3 tests/python/test_init_data_transaction.py
 
       - name: Download latest data-* release
         id: data_release

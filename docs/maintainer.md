@@ -78,6 +78,7 @@ bash scripts/project/publish_data.sh
 
 约束：
 
+- 数据管线改动由 CI `repro-check.yml` 串行把关：题库可复现性检查后运行数据管线事务测试（`tests/python/test_init_data_transaction.py`，覆盖建库事务/回滚/外键闸门），失败会阻断该 workflow。
 - 数据变更须先 commit，工作树除 `db_version.txt` 外必须干净，否则脚本拒绝。
 - 客户端启动时自动检查并同步新数据包，无需发布 App 新版本。
 
