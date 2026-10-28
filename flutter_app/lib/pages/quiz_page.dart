@@ -436,8 +436,8 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   Widget build(BuildContext context) {
-    // canPop: false + 共用 _onBack：系统返回与 AppBar 返回箭头等价，
-    // 不会像 v1.3.2 那样直接 pop 丢掉未提交答案。
+    // canPop: false + 共用 _onBack：系统返回与 AppBar 返回箭头等价；
+    // 直接 pop 会丢掉未提交答案。
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -472,7 +472,7 @@ class _QuizPageState extends State<QuizPage> {
               key: _originalButtonKey,
               tooltip: _viewIndex == 0 ? '查看原文' : '返回题目',
               icon: Icon(
-                // P4：成对的方向图标（文章 ⇄ 答题），不再与导航栏的“阅读”撞车
+                // 成对的方向图标（文章 ⇄ 答题），不与导航栏的“阅读”撞车
                 _viewIndex == 0 ? Icons.article_outlined : Icons.quiz_outlined,
                 color: context.appColors.ink,
               ),
@@ -544,8 +544,7 @@ class _QuizPageState extends State<QuizPage> {
     final isDark = context.select((SettingsController s) => s.darkMode);
     final selected = _choices[_index] == i;
     final optionText = q.option(i);
-    // 选中态必须进语义树：否则读屏读不出当前选项、自动化也无法断言选中状态
-    // （v1.3.0 真机验收只能靠人眼看截图，见 acceptance-v1.3.0-realdevice.md §7.2）。
+    // 选中态必须进语义树：否则读屏读不出当前选项，自动化也无法断言选中状态。
     return Semantics(
       button: true,
       selected: selected,

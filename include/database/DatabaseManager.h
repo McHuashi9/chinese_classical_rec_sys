@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// SqlParam（绑定参数类型）自 v1.4.0 工作项 1 起定义在 Statement.h，此处传递性导出。
+// SqlParam（绑定参数类型）定义在 Statement.h，此处传递性导出。
 
 /**
  * @brief 简单的 SQLite 数据库管理器
@@ -132,8 +132,7 @@ public:
     /**
      * @brief 整库快照备份（sqlite3_backup）：把当前主库完整复制到 destPath
      *
-     * v1.4.0 工作项 2：自 bridge 的 user_export 下沉（原 bridge.cpp:410-442 的
-     * sqlite3_open/sqlite3_backup_init/step/finish/close 编排），使桥层不再直接持有原始连接。
+     * 快照用 SQLite backup API；桥层不直接持有原始连接。
      * 失败返回 false，lastError 可用于 `LOG_ERROR(getLastError())`。
      *
      * @param destPath 目标文件路径（已存在时按 SQLite 语义覆盖）

@@ -19,10 +19,9 @@ struct ReviewItem {
 };
 
 /**
- * @brief 错题复习队列数据访问（v1.4.0 工作项 2：自 bridge.cpp 下沉）
+ * @brief 错题复习队列数据访问
  *
- * 收敛原 bridge.cpp 中三处近似重复的 review_items WHERE 片段
- * （:1655-1659 到期列表 / :1700-1702 到期计数 / :1734-1736 总数）为单源。
+ * review_items 的 WHERE 片段在本仓储内单源生成，到期列表、到期计数与总数共用同一口径。
  *
  * **悬空过滤作为可开关策略**：内容库删题后 review_items 会留下引用已不存在 question_id 的
  * 条目（db_replace 合并内容库后尤其明显）→ 默认开启过滤（且 questions 表存在时才生效），

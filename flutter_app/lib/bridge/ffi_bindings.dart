@@ -113,7 +113,7 @@ final class NativeBridge {
     int isReview,
   ) trackerApplyQuiz;
 
-  /// 批量答题（v1.6.0）：单次 FFI 调用完成整批判分+学习效应+落库。
+  /// 批量答题：单次 FFI 调用完成整批判分+学习效应+落库。
   /// 返回 BRIDGE_OK 时 outCorrect/outAbilityBefore 全量有效；失败时整批回滚。
   late final int Function(
     Pointer<UserData> user,

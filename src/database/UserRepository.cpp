@@ -103,11 +103,9 @@ bool UserRepository::initTable() {
         return false;
     }
 
-    // ── 迁移：按列存在性补/删列（v1.4.0 工作项 1）─────────────────────────────
-    // 设计定稿：不提 PRAGMA user_version（它是 bridge 的打开门控，提升会让旧版二进制
-    // 拒绝打开用户库），也不再用“盲执行 ALTER + 忽略错误”；改用 dbschema::tableColumns()
-    // 内省。对已存在库的最终 schema 与旧实现等价（旧实现对已存在列执行 ALTER 失败即忽略），
-    // 且可重复执行、幂等。注：本仓代码原无“版本号快路径短路”，此项是“不引入”，无删除动作。
+    // ── 迁移：按列存在性补/删列 ─────────────────────────────
+    // 不提 PRAGMA user_version（它是 bridge 的打开门控，提升会让旧版二进制拒绝打开用户库）；
+    // 用 dbschema::tableColumns() 内省、缺列才 ALTER，可重复执行、幂等。
     {
         const std::set<std::string> userCols = tableColumns(c, "user");
         const auto addUserColumn = [&](const std::string& column, const std::string& ddl) {
@@ -118,7 +116,7 @@ bool UserRepository::initTable() {
         };
 
         addUserColumn("last_read_time", "ALTER TABLE user ADD COLUMN last_read_time INTEGER DEFAULT 0;");
-        // v1.0.0：强制初始化标记
+        // 强制初始化标记
         addUserColumn("initialized",
                       "ALTER TABLE user ADD COLUMN initialized INTEGER NOT NULL DEFAULT 0;");
 
@@ -187,7 +185,7 @@ bool UserRepository::initTable() {
         };
         addAttemptColumn("user_id",
                          "ALTER TABLE quiz_attempts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1;");
-        // v1.0.0：初始化题标记
+        // 初始化题标记
         addAttemptColumn("is_init", "ALTER TABLE quiz_attempts ADD COLUMN is_init INTEGER DEFAULT 0;");
     }
 
@@ -307,8 +305,8 @@ bool UserRepository::getUser(User& user, int userId) {
 
     struct GetUserData { User* user; bool found = false; } gd = {&user, false};
 
-    // 批次 4（明示排除）：裸 sqlite3_exec + C 回调 + errMsg 空指针风险，本次工作项 1 不动。
-    // 该路径的 id 仍是字符串拼接 SQL（userId 为 int，无注入面），随批次 4 一并处理。
+    // TODO(维护者): 裸 sqlite3_exec + C 回调的 errMsg 在失败时可能为 nullptr；
+    // 改用 queryRows/Statement 后消除。该路径的 id 拼接无注入面（userId 为 int）。
     int rc = sqlite3_exec(db->getConnection(), sql.c_str(), getUserCallback, &gd, &errMsg);
     
     if (rc != SQLITE_OK) {
@@ -335,8 +333,7 @@ bool UserRepository::saveUser(const User& user, int userId) {
     for (int i = 0; i < 10; ++i) {
         params.emplace_back(user.getQuizCount(i));
     }
-    // 批次 4（明示排除）：last_read_time 列是 INTEGER，这里仍按 double 绑定
-    // （recon-db-access.md §5.5）；改 int64 是可测的行为变化，不属本版“不改行为”边界。
+    // TODO(维护者): last_read_time 是 INTEGER 列，这里按 double 绑定；改 int64 会改变行为，需单独回归。
     params.emplace_back(static_cast<double>(user.getLastReadTime()));
 
     return db->executeSQL(
@@ -441,7 +438,7 @@ bool UserRepository::createProfile(const std::string& name, int& outId) {
     if (!db || !db->getConnection()) return false;
     sqlite3* c = db->getConnection();
 
-    // 批次 4（明示排除）：裸 sqlite3_exec 事务控制 + err 空指针风险，本次不动
+    // TODO(维护者): 裸 sqlite3_exec 事务控制，err 可能为 nullptr；改用 SqlTransaction 后消除。
     char* err = nullptr;
     if (sqlite3_exec(c, "BEGIN IMMEDIATE", nullptr, nullptr, &err) != SQLITE_OK) {
         LOG_ERROR("createProfile BEGIN 失败: {}", err ? err : "?");
@@ -836,7 +833,7 @@ bool UserRepository::createProfileInherit(const std::string& name, int sourceId,
 
     // 自增序列对齐（profiles 已由 AUTOINCREMENT 自动维护，其余显式插入后保险对齐）
     if (ok) {
-        // 批次 4（明示排除）：裸 sqlite3_exec（拼接表名，来源为硬编码白名单）
+        // 表名来自硬编码白名单，可安全拼接；序列行不存在时 exec 失败属正常。
         for (const char* seqTable : {"reading_history", "learning_increments", "quiz_attempts", "profiles"}) {
             const std::string upd = "UPDATE sqlite_sequence SET seq = "
                 "(SELECT COALESCE(MAX(id),0) FROM " + std::string(seqTable) + ") "

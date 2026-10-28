@@ -103,8 +103,8 @@ bool DatabaseManager::executeSQL(const std::string& sql) {
         return false;
     }
 
-    // 批次 4（明示排除）：errMsg 在失败且未分配时为 nullptr，直接赋给 std::string 是 UB；
-    // 属裸 sqlite3_exec 路径的独立条目（recon-db-access.md §5.1），本次工作项 1 不动。
+    // TODO(维护者): errMsg 失败且未分配时为 nullptr，直接赋给 std::string 是 UB；
+    // 改用 Statement/queryRows 后消除。
     char* errMsg = nullptr;
     int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errMsg);
 

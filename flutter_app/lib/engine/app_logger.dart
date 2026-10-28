@@ -8,14 +8,14 @@ import 'log_redaction.dart';
 /// 底层日志写入通道：level 取值 0=DEBUG / 1=INFO / 2=WARN / 3=ERROR。
 typedef AppLogSink = void Function(int level, String message);
 
-/// 桥未就绪期内存环形缓冲的容量上限（A2，零 ABI）。
+/// 桥未就绪期内存环形缓冲的容量上限。
 const int kAppLoggerPendingCapacity = 200;
 
 /// 应用日志入口（硬单例）。
 ///
 /// 转发链路：`AppLogger` --FFI `log_write`--> `bridge_log.cpp` --> spdlog。
-/// 桥未就绪期（如核心库加载失败）不再直接丢日志：先落内存环形缓冲，
-/// 待桥与 C++ 文件 sink 就绪后由 [flushPending] 一次性回放（A2）。
+/// 桥未就绪期（如核心库加载失败）的日志先落内存环形缓冲，
+/// 待桥与 C++ 文件 sink 就绪后由 [flushPending] 一次性回放。
 class AppLogger {
   static AppLogger? _instance;
   AppLogger._();
@@ -24,7 +24,7 @@ class AppLogger {
   /// 桥未就绪期的日志缓冲，上限 [kAppLoggerPendingCapacity] 条（环形，超限丢最旧）。
   final ListQueue<(int, String)> _pending = ListQueue<(int, String)>();
 
-  /// 测试注入的写入通道；非 null 时视为“桥已就绪”并绕过 FFI（A7）。
+  /// 测试注入的写入通道；非 null 时视为“桥已就绪”并绕过 FFI。
   @visibleForTesting
   AppLogSink? sinkOverride;
 

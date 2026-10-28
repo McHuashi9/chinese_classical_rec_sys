@@ -40,7 +40,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 3. 确保 Commit 命名符合规范（见下文）
 4. 推送并提交 Pull Request 到 `dev`
 
-如果你只改一个文件，直接在 GitHub 网页上编辑并"Create a new branch for this commit" 提 Pull Request（PR）也行。
+如果你只改一个文件，直接在 GitHub 网页上编辑并“Create a new branch for this commit”提 Pull Request（PR）也行。
 
 ---
 
@@ -60,9 +60,9 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 | | 规范 | 例子 |
 |---|---|---|
-| 类名 | PascalCase | `AppState`, `LibraryPage` |
+| 类名 | PascalCase | `UserController`, `ReadHubPage` |
 | 方法/变量 | camelCase | `switchPage`, `loadTextForReading` |
-| 文件 | snake_case | `app_state.dart`, `library_page.dart` |
+| 文件 | snake_case | `user_controller.dart`, `read_hub_page.dart` |
 | 私有成员 | 前缀 `_` | `_pageIndex`, `_readingText` |
 
 颜色和字体从 `AppTheme` 取，不硬编码。

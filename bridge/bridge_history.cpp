@@ -1,4 +1,4 @@
-// 桥层历史域（v1.4.0 工作项 3）：history_add_record / history_get_recent /
+// 桥层历史域：history_add_record / history_get_recent /
 // history_get_total_count / history_get_tracked_text_ids，共 4 个导出符号。
 
 #include "bridge_internal.h"

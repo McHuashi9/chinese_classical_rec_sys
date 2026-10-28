@@ -241,7 +241,7 @@ class ArticleDetailPage extends StatelessWidget {
 }
 
 /// 预计阅读收益区块：默认折叠为“综合收益 + 10 维平均”，展开后才渲染
-/// 10 条维度明细（P6-b：真机验收反馈一次铺 10 条对普通用户认知负担重）。
+/// 10 条维度明细（一次铺 10 条对普通用户认知负担重）。
 class _EstimatedGainSection extends StatefulWidget {
   final ChineseText text;
   final User user;

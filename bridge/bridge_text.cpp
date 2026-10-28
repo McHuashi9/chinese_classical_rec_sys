@@ -1,7 +1,7 @@
-// 桥层文本域（v1.4.0 工作项 3）：text_get_count / text_get_all / text_get_detail /
+// 桥层文本域：text_get_count / text_get_all / text_get_detail /
 // text_get_annotations / text_get_translation，共 5 个导出符号。
 //
-// 工作项 2 下沉：annotations_raw / translation 单列读取 → TextRepository（原手写 stmt）。
+// annotations_raw / translation 单列读取 → TextRepository。
 
 #include "bridge_internal.h"
 

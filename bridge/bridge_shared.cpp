@@ -1,8 +1,7 @@
-// 桥层共享域（v1.4.0 工作项 3）：EngineState/S()/g_mtx + 跨域 helper + 事务 RAII。
+// 桥层共享域：EngineState/S()/g_mtx + 跨域 helper + 事务 RAII。
 //
 // 本文件必须留在 `chinese_core` target 内（hidden visibility），见 bridge_internal.h 顶部说明。
-// execRawSql 与 SqlTransaction 必须同址：原 SqlTransaction（bridge.cpp:142）依赖物理落在 quiz
-// 域的 execRawSql（bridge.cpp:1395），按域直搬即断链（recon-bridge.md §5.1）。
+// execRawSql 与 SqlTransaction 必须定义在同一 TU：SqlTransaction 直接依赖 execRawSql。
 
 #include "bridge_internal.h"
 
@@ -14,7 +13,7 @@ namespace {
 // 仅经 S() 暴露，避免 g_state 成为跨 TU 的可见全局符号
 EngineState g_engine;
 
-// 执行不返回结果集的 SQL；失败记日志（原 bridge.cpp:1395-1405）
+// 执行不返回结果集的 SQL；失败记日志。
 bool execRawSql(sqlite3* db, const char* sql)
 {
     char* err = nullptr;

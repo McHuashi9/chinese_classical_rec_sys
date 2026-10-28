@@ -17,7 +17,7 @@ namespace {
 #ifdef __ANDROID__
 constexpr const char* kAndroidTag = "chinese_core";
 #elif !defined(__APPLE__)
-// A8：轮转参数提具名常量，取值与拆分前完全一致（100 KiB × 3）。
+// 轮转参数（100 KiB × 3）提为具名常量。
 constexpr std::size_t kRotateMaxBytes = 100 * 1024;  // 单文件轮转阈值
 constexpr std::size_t kRotateMaxFiles = 3;           // 保留的历史文件数
 
@@ -171,11 +171,11 @@ void Logger::setLevel(const std::string& level) {
     } else if (level == "error") {
         target = spdlog::level::err;
     } else {
-        // 未知取值忽略（Dart 侧白名单归一属 A5，不在此处理）
+        // 未知取值忽略（Dart 侧白名单归一，不在此处理）
         return;
     }
 
-    // A3：记住显式级别，供之后才发生的 init 使用（P2-7“init 覆盖”）。
+    // 记住显式级别，供之后才发生的 init 使用（否则 init 会把级别覆盖回默认）。
     levelOverride_ = target;
     hasLevelOverride_ = true;
     applyLevel(target);

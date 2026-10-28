@@ -443,7 +443,7 @@ void main() {
     await tester.tap(find.text('选项2释义'));
     await tester.pumpAndSettle();
 
-    // 回归点：改前语义树里四项恒 selected=false，验收只能靠人眼看截图。
+    // 回归点：没有 selected 标记时，语义树里四项恒 false，读屏与自动化都判不出选中。
     expect(
       tester.getSemantics(find.text('选项2释义')),
       isSemantics(

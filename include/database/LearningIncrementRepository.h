@@ -70,8 +70,7 @@ public:
     /**
      * @brief 删除指定用户的指定维度增量（强制初始化清空被覆盖维度用）
      *
-     * v1.4.0 工作项 2：自 bridge 的 user_init_apply 内联 DELETE 下沉。
-     * @param userId 用户ID
+         * @param userId 用户ID
      * @param dimensions 库内维度值（1-based，即 Config 维度下标 + 1）
      * @return true 成功（空列表视为成功）
      */

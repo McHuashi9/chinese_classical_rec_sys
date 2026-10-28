@@ -543,8 +543,8 @@ class _InitReadingPageState extends State<InitReadingPage> {
 
   /// 点“放弃”：不记录、不标记已读，只退出本页。
   ///
-  /// 与普通阅读页的放弃口径一致（未达阈值不保存）；此前这里误接 [_finish]，
-  /// 导致点“放弃”也会记成已读（真机实测：读 10s 就显示“已读”）。
+  /// 与普通阅读页的放弃口径一致（未达阈值不保存）；点“放弃”若走 [_finish]，
+  /// 会记成已读。
   Future<void> _abandon() async {
     if (_recorded) return;
     _readingCtrl.pauseTimer();

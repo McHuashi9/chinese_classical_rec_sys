@@ -216,7 +216,7 @@ class KnowledgeTracker implements QuizTracker {
     return items;
   }
 
-  /// 到期错题总数：COUNT 聚合通道，无 500 上限（N15 方案 B）。
+  /// 到期错题总数：COUNT 聚合通道，无 500 上限。
   /// 失败抛 [FfiException]；0 仅表示成功且无到期错题。
   @override
   int getDueReviewCount(int textId) {

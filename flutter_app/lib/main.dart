@@ -16,8 +16,8 @@ import 'state/user_controller.dart';
 
 /// 未捕获异常的兜底记录：写进 `logs/app.log`，便于事后排查。
 ///
-/// 此前 main 没有任何全局错误处理，崩溃时 C++ 日志可能一行都不留，
-/// 只剩终端红字（且关掉终端即失去线索）。这里只做“记录”，不改控制流。
+/// 没有这段兜底时，崩溃可能一行日志都不留，只剩终端红字（关掉终端即失去线索）。
+/// 这里只做“记录”，不改控制流。
 void _logUncaughtError(String source, Object error, StackTrace? stack) {
   try {
     AppLogger().error('$source: $error${stack == null ? '' : '\n$stack'}');

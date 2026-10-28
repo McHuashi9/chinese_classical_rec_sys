@@ -1,7 +1,7 @@
 #ifndef BRIDGE_INTERNAL_H
 #define BRIDGE_INTERNAL_H
 
-// bridge/ 内部分域头（v1.4.0 工作项 3）：承载 8 个域文件共享的
+// bridge/ 内部分域头：承载 8 个域文件共享的
 //   EngineState / S() / g_mtx / 共享 helper 声明 / SqlTransaction / 7 条 ABI static_assert。
 //
 // ⚠ 本头与 bridge_shared.cpp 必须留在 `chinese_core` target（CXX_VISIBILITY_PRESET hidden）内：
@@ -38,7 +38,7 @@
 //
 // 以 EngineState + S() 访问器取代裸 g_state：S() 定义于 bridge_shared.cpp，
 // 避免 g_state 成为跨 TU 的可见全局符号（recon-bridge.md §5.5）。
-// 字段 = 原 g_state 的 12 个 + 工作项 2 新增的 2 个仓储（quizRepo / reviewRepo）。
+// 仓储按域持有：userRepo / textRepo / quizRepo / reviewRepo 等。
 struct EngineState {
     std::unique_ptr<DatabaseManager> db;
     std::unique_ptr<UserRepository> userRepo;
@@ -81,7 +81,7 @@ static_assert(sizeof(ProfileData) == 88, "ProfileData ABI 尺寸不符，检查 
 void copyCString(char* dst, size_t dstSize, const char* src);
 
 /**
- * @brief Row → QuestionData 回填（工作项 4 去重：取代原三份 14 行逐字重复的映射体）
+ * @brief Row → QuestionData 回填（映射体单源）
  *
  * 依赖 questions 查询的列清单见 src/database/QuizRepository.cpp 的
  * `QUESTION_SELECT_COLUMNS`（表达式列已 `AS opt0..opt3`）。进入时先 memset 清零。
@@ -103,8 +103,7 @@ int requireInitialized(const char* caller);
  * @brief 事务 RAII：确保异常/提前退出时不会把事务悬空在 sqlite 连接上
  *
  * 正常提交后析构不再回滚；未提交析构自动 ROLLBACK。
- * v1.4.0 工作项 2/3：与 execRawSql 一起上提到 bridge_shared.cpp（原 SqlTransaction 在桥头、
- * execRawSql 却物理落在 quiz 域，直搬即断链——recon-bridge.md §5.1）。
+ * 与 execRawSql 必须定义在同一 TU：SqlTransaction 直接依赖它。
  * 接收 DatabaseManager 而非裸 sqlite3*：桥层业务域不再直接取连接。
  */
 class SqlTransaction {

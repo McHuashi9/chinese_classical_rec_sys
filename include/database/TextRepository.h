@@ -41,8 +41,7 @@ public:
     /**
      * @brief 读取 classical_text.annotations_raw 单列
      *
-     * v1.4.0 工作项 2：自 bridge 的 text_get_annotations 下沉（原手写 stmt）。
-     * @param id 文章 id
+         * @param id 文章 id
      * @param out 输出（NULL 列按空串；调用方进入前无需清空）
      * @return true = 该行存在（查询成功）；false = 无该行或查询失败
      */

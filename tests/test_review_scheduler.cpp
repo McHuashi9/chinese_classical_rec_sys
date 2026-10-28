@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-// v1.4.0 工作项 2/3 的纯逻辑验收：
+// 纯逻辑验收（不碰 DB）：
 // - ReviewScheduler：间隔倍增/封顶、掌握判定、到期边界、答错后首次到期（无 DB 依赖）
 // - q_key 单一来源：C++ 侧 initQKeys() 与 scripts/project/check_content_db.py 的 INIT_Q_KEYS 对拍
 //   （路径由 tests/CMakeLists.txt 的 CHECK_CONTENT_DB_PATH 注入）

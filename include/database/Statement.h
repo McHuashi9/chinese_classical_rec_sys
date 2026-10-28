@@ -11,7 +11,7 @@
 /**
  * @brief SQL 参数类型（支持文本、实数、32 位整数、64 位整数——时间戳用 int64_t 绑定，避免 double 精度回环）
  *
- * v1.4.0 工作项 1 起随 Row/Statement 一起定义在本头文件；DatabaseManager.h 传递性导出该别名，
+ * SqlParam 随 Row/Statement 定义在本头文件；DatabaseManager.h 传递性导出该别名，
  * 既有调用方（含 bridge）无需改 include，绑定实现统一在 Statement::bind（原
  * DatabaseManager::bindMixedParameters）。
  */
@@ -20,8 +20,7 @@ using SqlParam = std::variant<std::string, double, int, int64_t>;
 /**
  * @brief 一行查询结果：具名列访问 + 类型化取值（内部 C++，不进 FFI）
  *
- * **形态已定稿（v1.4.0 工作项 1）**：后续工作项 4 的 `fillQuestionRow(const Row&, QuestionData&)`
- * 直接以 Row 为参数，不再出现“先用 sqlite3_stmt* 抽取、之后再改签名”的中间态。
+ * `fillQuestionRow(const Row&, QuestionData&)` 直接以 Row 为参数，不暴露 `sqlite3_stmt*`。
  *
  * 约定（新增使用方按此为准）：
  * - 列名取自 SQL 的列名/别名。表达式列（如 `json_extract(options,'$[0]')`）请在 SQL 里显式

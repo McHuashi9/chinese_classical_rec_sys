@@ -39,7 +39,7 @@ Future<void> showFeedbackDialog(
               platform: platform,
               contentDataVersion: contentDataVersion,
               schemaVersions: schemaVersions,
-              // A4：移动端无本地日志时，正文里不再写“（暂无日志文件）”占位，
+              // 移动端无本地日志时，正文不写“（暂无日志文件）”占位，
               // 而是给出平台事实说明（本平台日志在系统日志中，不含于反馈）。
               logTail: logTailForFeedback(logTail, platformName: platform),
             );

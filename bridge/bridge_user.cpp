@@ -1,9 +1,9 @@
-// 桥层用户域（v1.4.0 工作项 3）：user_load / user_save / user_init_default /
+// 桥层用户域：user_load / user_save / user_init_default /
 // user_is_initialized / user_init_questions / user_init_apply / user_list / user_active_id /
 // user_create / user_create_inherit / user_switch / user_rename / user_delete，共 13 个导出符号。
 //
-// 工作项 2 下沉：初始化取题（单条 IN 查询）→ QuizRepository；作答流水 → QuizRepository；
-// 清增量 → LearningIncrementRepository；q_key 清单 → initQKeys() 单源；事务 → SqlTransaction。
+// 初始化取题（单条 IN 查询）与作答流水 → QuizRepository；清增量 →
+// LearningIncrementRepository；q_key 清单 → initQKeys() 单源；事务 → SqlTransaction。
 
 #include "bridge_internal.h"
 

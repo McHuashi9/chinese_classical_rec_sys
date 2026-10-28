@@ -28,7 +28,7 @@
 
 ## 项目简介
 
-面向文言文学习者的个性化阅读推荐工具：用**知识追踪模型**建模你的古文能力，结合**多维文本特征**（字频、通假字密度、典故密度、语义复杂度等），推荐难度略高于当前水平的文章（"i+1"递进）——而不是简单的规则或标签分类。
+面向文言文学习者的个性化阅读推荐工具：用**知识追踪模型**建模你的古文能力，结合**多维文本特征**（字频、通假字密度、典故密度、语义复杂度等），推荐难度略高于当前水平的文章（“i+1”递进）——而不是简单的规则或标签分类。
 
 ---
 
@@ -70,7 +70,7 @@ cd flutter_app && flutter pub get && flutter run -d linux
 
 Windows 将 `-d linux` 换成 `-d windows`；Android 换成 `-d <设备名>`；iOS 见下方。
 
-> 数据重建 / 数据库结构（DB Schema）变更 / 数据发布是维护者操作，见 [docs/maintainer.md](docs/maintainer.md)。
+> 数据重建 / 数据库结构（DB Schema）变更 / 数据发布 / 版本发版是维护者操作，见 [docs/maintainer.md](docs/maintainer.md)。
 
 ### 运行测试
 
@@ -104,10 +104,10 @@ CI 自动构建未签名 `.ipa`，可使用 SideStore / AltStore 自签安装。
 
 ### Android 安装包签名验证
 
-v1.0.0 起 Android 使用正式签名。安装 APK 前可用 Android SDK 的 `apksigner` 核对证书指纹，确认安装包由作者发布：
+Android 安装包使用正式签名。安装 APK 前可用 Android SDK 的 `apksigner` 核对证书指纹，确认安装包由作者发布：
 
 ```bash
-$ANDROID_HOME/build-tools/<版本>/apksigner verify --print-certs chinese-classical-rec-sys-1.0.0-android.apk
+$ANDROID_HOME/build-tools/<版本>/apksigner verify --print-certs chinese-classical-rec-sys-<版本>-android.apk
 ```
 
 期望输出中的 SHA-256 指纹：
@@ -116,21 +116,17 @@ $ANDROID_HOME/build-tools/<版本>/apksigner verify --print-certs chinese-classi
 B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6:F5:36:FE:46:D7
 ```
 
-> 指纹是公开信息，不是密钥；它是用户验证 APK 真伪的锚点。v1.0.0 起签名已从 debug 切换为正式签名，旧 debug 版升级需卸载重装一次。
-
-### 维护者操作
-
-数据重建、数据库结构（DB Schema）变更、数据发布、版本发版等维护者流程见 [docs/maintainer.md](docs/maintainer.md)。
+> 指纹是公开信息，不是密钥；它是用户验证 APK 真伪的锚点。从 debug 签名版升级需卸载重装一次。
 
 ---
 
 ## 项目架构
 
-**C++ 核心** — 编译产物 `libchinese_core.so`，通过 41 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（v1.0.0 拆双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
+**C++ 核心** — 编译产物 `libchinese_core.so`，通过 41 个 C 跨语言函数接口（FFI）符号向 Flutter 暴露（双库：主连接 `user.db`，内容库 `classical.db` 以 `content` 附属库挂载）
 
 - `CMakeLists.txt` 顶层构建（C++17 · SQLite3 · spdlog）
 - `include/` 头文件（引擎 · 知识追踪 · 数据访问抽象与仓储）
-- `bridge/` C 跨语言函数接口（FFI）导出函数，v1.4.0 起按域拆分为 8 个文件（`bridge_internal.h` 承载 `EngineState`/`S()`/共享 helper/事务 RAII）：`bridge_shared` · `bridge_lifecycle` · `bridge_user` · `bridge_text` · `bridge_tracker` · `bridge_quiz` · `bridge_history` · `bridge_log`；错误码唯一源为 `bridge/error_codes.def`，答题提交走 `tracker_apply_quiz_batch` 单事务；`bridge/log_redact.h` 提供 C++ 日志路径/名称脱敏（hidden）
+- `bridge/` C 跨语言函数接口（FFI）导出函数，按域拆分为 8 个文件（`bridge_internal.h` 承载 `EngineState`/`S()`/共享 helper/事务 RAII）：`bridge_shared` · `bridge_lifecycle` · `bridge_user` · `bridge_text` · `bridge_tracker` · `bridge_quiz` · `bridge_history` · `bridge_log`；错误码唯一源为 `bridge/error_codes.def`，答题提交走 `tracker_apply_quiz_batch` 单事务；`bridge/log_redact.h` 提供 C++ 日志路径/名称脱敏（hidden）
 - `src/core/` 推荐引擎 · 知识追踪 · 复习调度（`ReviewScheduler`，纯逻辑无数据库依赖）
 - `src/database/` SQLite 访问封装（RAII `Statement`/`Row`/`queryRows` + `User`/`Text`/`ReadingHistory`/`LearningIncrement`/`Quiz`/`Review` 仓储）
 - `tests/` Catch2 单元测试（`tests/python/` 为数据管线端到端测试，`venv/bin/python3` 直接运行）
@@ -155,9 +151,9 @@ B7:2F:ED:D8:E8:42:52:A4:09:5B:1E:F9:B5:DE:1C:29:4F:F3:88:F3:2D:70:65:4F:0F:0C:E6
 - `lib/widgets/` reading_frame · original_text_view · radar_chart · dimension_bar · annotation_popup · marked_sentence · stats_card · recent_reading_list · text_card · empty_state · dialogs · announcement_dialog · festival_dialog · feedback_dialog · spotlight_overlay · init_quiz_guide_overlay · init_tutorial_overlay · accent_color_picker · font_scale_selector · profile_avatar · profile_dialogs · simple_markdown · screenshot_overlay
 - `assets/` 字体子集化产物（思源宋体 · LXGW 文楷 · HarmonyOS Sans）· 内置 classical.db · icon/app_icon.png · data/announcement.md
 
-**Cloudflare Worker 骨架（预研）** — `worker/`（`wrangler.toml` + `src/index.js`）：当前仅用于本地验证反馈接收链路，后续按遥测（telemetry）待办扩展限流 / Cloudflare R2 对象存储 / 服务端转发。
+**Cloudflare Worker 骨架（预研）** — `worker/`（`wrangler.toml` + `src/index.js`）：当前只做本地反馈接收链路（字段校验 + 写 Cloudflare R2）；限流与服务端转发未实现。
 
-**打包** — `packaging/`（AppImage / NSIS / iOS 脚本）
+**打包** — `packaging/`（AppImage / NSIS / Linux 桌面项）
 
 ---
 

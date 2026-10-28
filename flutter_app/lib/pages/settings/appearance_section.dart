@@ -5,9 +5,7 @@ import 'package:chinese_classical_rec_sys/theme/theme.dart';
 import 'package:chinese_classical_rec_sys/widgets/accent_color_picker.dart';
 import 'package:chinese_classical_rec_sys/widgets/font_scale_selector.dart';
 
-/// 外观卡：暗色模式、阅读显示选项、主题色与字号。
-///
-/// 依赖自行从 provider 取（不再由 shell 层层下传）。
+/// 外观卡：暗色模式、阅读显示选项、主题色与字号。依赖自行从 provider 取。
 class AppearanceSection extends StatelessWidget {
   const AppearanceSection({super.key});
 

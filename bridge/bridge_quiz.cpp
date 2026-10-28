@@ -1,10 +1,10 @@
-// 桥层题目与复习域（v1.4.0 工作项 3；v1.6.0 增批量提交）：question_get_by_text /
+// 桥层题目与复习域：question_get_by_text /
 // tracker_apply_quiz / tracker_apply_quiz_batch / quiz_get_review_items /
 // quiz_get_due_review_count / quiz_get_review_count / quiz_get_questions_by_ids /
 // quiz_get_attempt_summary，共 8 个导出符号。
 //
-// 工作项 2 下沉：取题池过滤 + 固定种子洗牌 → QuizRepository；review_items 读写（含悬空过滤）
-// → ReviewRepository；间隔/掌握/到期边界 → ReviewScheduler。本文件不再直接访问原始连接。
+// 取题池过滤 + 固定种子洗牌 → QuizRepository；review_items 读写（含悬空过滤）
+// → ReviewRepository；间隔/掌握/到期边界 → ReviewScheduler。本文件不得直接访问原始连接。
 
 #include "bridge_internal.h"
 
@@ -252,7 +252,7 @@ extern "C" CHINESE_CORE_EXPORT int tracker_apply_quiz(const UserData* user, int 
     });
 }
 
-// 批量答题（v1.6.0）：Dart submitQuiz 的唯一 FFI 入口。
+// 批量答题：Dart submitQuiz 的唯一 FFI 入口。
 // 先校验全部题目/选项，再在一个 BEGIN IMMEDIATE 事务内逐题应用判分、能力效应、
 // 作答流水与复习状态；任一题失败整批回滚，出参只在 COMMIT 成功后写入。
 // out_ability_before 为可选扁平数组 count*10（每题作答前 10 维能力，行优先）。
@@ -362,8 +362,8 @@ extern "C" CHINESE_CORE_EXPORT int quiz_get_review_items(int text_id, ReviewItem
 }
 
 // 到期错题总数：与 quiz_get_review_items 同一过滤条件（含悬空过滤），
-// COUNT 聚合不走行缓冲 → 无上限截断，徽标数字真实（N15 方案 B：
-// "总数"与"明细"语义分离，reviewCount 走此通道，列表仍走 quiz_get_review_items）
+// COUNT 聚合不走行缓冲 → 无上限截断，徽标数字真实；“总数”与“明细”语义分离，
+// reviewCount 走此通道，列表仍走 quiz_get_review_items。
 extern "C" CHINESE_CORE_EXPORT int quiz_get_due_review_count(int text_id)
 {
     return bridge_guard(g_mtx, [&]() -> int {

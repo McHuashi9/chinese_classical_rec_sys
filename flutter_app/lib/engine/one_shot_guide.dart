@@ -47,13 +47,13 @@ class OneShotGuide {
     OneShotGuideStore store = const PrefsOneShotGuideStore(),
   }) : _store = store;
 
-  /// 初始化答题页“回看原文”引导：seen key 由 engine 持有，页面不再接触 key。
+  /// 初始化答题页“回看原文”引导（seen key 归 engine）。
   factory OneShotGuide.initQuiz({
     OneShotGuideStore store = const PrefsOneShotGuideStore(),
   }) =>
       OneShotGuide(seenKey: kInitQuizGuideSeenKey, store: store);
 
-  /// 初始化第一篇阅读操作教程：seen key 由 engine 持有，页面不再接触 key。
+  /// 初始化第一篇阅读操作教程（seen key 归 engine）。
   factory OneShotGuide.initTutorial({
     OneShotGuideStore store = const PrefsOneShotGuideStore(),
   }) =>

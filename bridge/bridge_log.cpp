@@ -1,4 +1,4 @@
-// 桥层日志域（v1.4.0 工作项 3）：log_write / log_set_level，共 2 个导出符号。
+// 桥层日志域：log_write / log_set_level，共 2 个导出符号。
 
 #include "bridge_internal.h"
 

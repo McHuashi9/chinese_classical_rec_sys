@@ -11,7 +11,7 @@
 
 // 数据库结构内省工具：表存在性 / 建表语句 / 列名集合 / 共列复制。
 // 多用户迁移（UserRepository / ReadingHistoryRepository）与 db_replace
-// （bridge.cpp）共用，避免三处各写一份行为漂移；改这里时注意所有调用方。
+// 桥层共用，避免三处各写一份行为漂移；改这里时注意所有调用方。
 namespace dbschema {
 
 // 表是否存在（type='table'，排除 view/索引）

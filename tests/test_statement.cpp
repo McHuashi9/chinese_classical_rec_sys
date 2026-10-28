@@ -1,4 +1,4 @@
-// v1.4.0 工作项 1：RAII Statement / Row / queryRows 的单测，以及用户库迁移的幂等性守卫。
+// RAII Statement / Row / queryRows 的单测，以及用户库迁移的幂等性守卫。
 // 覆盖：Statement 析构必 finalize（sqlite3_next_stmt 计数）、queryRows 区分空结果与出错、
 // 多类型参数绑定、Row typed accessor 边界（NULL 列、越界列名/下标）。
 #include <catch_amalgamated.hpp>

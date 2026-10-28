@@ -18,7 +18,7 @@ SOURCES=$(find src -name '*.cpp' \
   ! -name 'ReadCommand.cpp' \
   ! -name 'RecommendCommand.cpp' \
   ! -name 'PathUtils.cpp')
-# v1.4.0 工作项 3：bridge.cpp 按域拆为 8 个 .cpp（与 CMakeLists.txt 同步；缺一即链接失败）
+# bridge/ 按域拆为 8 个 .cpp（与 CMakeLists.txt 同步；缺一即链接失败）
 SOURCES="$SOURCES bridge/bridge_shared.cpp"
 SOURCES="$SOURCES bridge/bridge_lifecycle.cpp"
 SOURCES="$SOURCES bridge/bridge_user.cpp"

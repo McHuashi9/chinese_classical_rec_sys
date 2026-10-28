@@ -8,15 +8,12 @@
 #include <vector>
 
 /**
- * @brief 6 个强制初始化题目的 q_key 清单（v1.4.0 工作项 3 收敛为单一来源）
+ * @brief 6 个强制初始化题目的 q_key 清单（单一来源）
  *
- * 【对拍点】`scripts/project/check_content_db.py` 的 `INIT_Q_KEYS`（该文件 :44-51）必须与本清单
+ * 【对拍点】`scripts/project/check_content_db.py` 的 `INIT_Q_KEYS` 必须与本清单
  * **逐字同序**一致；`tests/test_review_scheduler.cpp` 的“q_key 单源对拍”用例会在构建期路径下
  * 解析该 Python 文件并逐项比对（构建期路径由 tests/CMakeLists.txt 的
  * `CHECK_CONTENT_DB_PATH` 传入）。改动任一处必须同步另一处。
- *
- * 本函数取代了原 `bridge/bridge.cpp` 中重复的两份：`:241` 的 static `kInitQKeys[]`（内容库校验）
- * 与 `:596` 的 `initQKeyList()`（强制初始化），见 recon-bridge.md §3.3 跨域耦合表。
  */
 const std::vector<std::string>& initQKeys();
 
@@ -69,7 +66,7 @@ struct QuizQuestions {
 };
 
 /**
- * @brief questions 表相关读取（v1.4.0 工作项 2：自 bridge.cpp 下沉）
+ * @brief questions 表相关读取
  *
  * 桥层只负责“取参 → 调库 → 回填 → 返回码”；本类承载取题池过滤/洗牌、按 id 取题、
  * 初始化取题、作答流水写入与文章作答摘要。

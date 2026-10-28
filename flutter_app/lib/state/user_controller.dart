@@ -248,7 +248,7 @@ class UserController extends ChangeNotifier {
   FfiException? get quizDataError => _quizDataError;
 
   /// 到期错题数（懒查 quiz_get_due_review_count 计数，MyPage 等通过 watch/select 消费）
-  /// COUNT 聚合通道无 500 上限（N15 方案 B：总数与列表明细解耦，徽标数字真实）
+  /// COUNT 聚合通道无 500 上限（总数与列表明细解耦，徽标数字真实）。
   /// 懒加载可能发生在 build 期，只缓存不通知；置脏与通知走 _afterQuizSubmit。
   /// 这是有意设计：避免每次 build 都触发 FFI，同时保证提交/数据变更后能刷新。
   /// FFI 失败记录到 [quizDataError] 并返回 0 供旧 UI 继续渲染；0 本身不冒充成功。

@@ -86,7 +86,7 @@ class SettingsController extends ChangeNotifier {
 
   /// 把 `logLevel` 经既有 `log_set_level` 导出符号下发给 C++（零 ABI）。
   ///
-  /// A3：`main.dart` 在 `coord.init`（`db_open` → `Logger::init`）之前先调用
+  /// `main.dart` 在 `coord.init`（`db_open` → `Logger::init`）之前先调用
   /// [applySavedLogLevel]，使启动段（DB 打开/内置数据升级/档案加载）也受用户级别控制；
   /// [init] 之后再下发一次，留下一条不被自身级别过滤的切换回执。
   /// 原样下发调用方给的值（归一在 [normalizeLogLevel] 完成，不在此静默改写）。

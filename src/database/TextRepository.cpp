@@ -162,8 +162,8 @@ int TextRepository::getCount() {
         return 0;
     };
     
-    // 批次 4（明示排除）：裸 sqlite3_exec + C 回调节点；失败且未分配时 errMsg 为 nullptr，
-    // 下面的 LOG_ERROR(..., errMsg) 有空指针风险（recon-db-access.md §5.1），本次工作项 1 不动。
+    // TODO(维护者): 裸 sqlite3_exec + C 回调，失败时 errMsg 可能为 nullptr，
+    // 下面的 LOG_ERROR(..., errMsg) 有空指针风险；改用 queryRows 后消除。
     int rc = sqlite3_exec(db->getConnection(), sql, callback, &count, &errMsg);
     
     if (rc != SQLITE_OK) {

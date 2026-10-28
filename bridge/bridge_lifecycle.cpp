@@ -1,8 +1,7 @@
-// 桥层生命周期域（v1.4.0 工作项 3）：db_open / db_close / user_export / db_replace /
+// 桥层生命周期域：db_open / db_close / user_export / db_replace /
 // db_get_schema_versions，共 5 个导出符号。
 //
-// 本域保留 5 处原始连接访问（PRAGMA 读取 / 整库备份判断 / 内容库校验），
-// 与验收口径“残留 6 处 = 生命周期 5 + 共享事务 helper 1”对应。
+// 本域只允许这 5 处原始连接访问（PRAGMA 读取 / 整库备份判断 / 内容库校验）；其余域走仓储。
 
 #include "bridge_internal.h"
 
@@ -81,7 +80,7 @@ int validateContentConnection(sqlite3* db, const std::string& schema = "")
     }
 
     // 6 个强制初始化 q_key 必须存在（启动期拒绝，避免初始化流程卡死）。
-    // 清单单一来源 = initQKeys()（原 bridge.cpp:241 的 kInitQKeys[] 已删除）。
+    // 清单单一来源 = initQKeys()。
     for (const auto& qkey : initQKeys()) {
         const std::string sql = "SELECT 1 FROM " + prefix + "questions WHERE q_key = ? LIMIT 1;";
         sqlite3_stmt* q = nullptr;
@@ -258,7 +257,7 @@ extern "C" CHINESE_CORE_EXPORT void db_close()
     });
 }
 
-// 整库快照（sqlite3_backup 编排下沉至 DatabaseManager::backupTo；v1.4.0 工作项 2）
+// 整库快照：sqlite3_backup 编排在 DatabaseManager::backupTo。
 extern "C" CHINESE_CORE_EXPORT int user_export(const char* dest_path)
 {
     return bridge_guard(g_mtx, [&]() -> int {
