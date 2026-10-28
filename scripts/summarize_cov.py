@@ -3,7 +3,6 @@
 CI 中存在 $GITHUB_STEP_SUMMARY 时，把覆盖率数字同时写进 step summary
 （workflow run 页面该步骤的 Summary 折叠区直接可见）；本地跑不受影响"""
 import os
-import re
 import sys
 
 path = sys.argv[1] if len(sys.argv) > 1 else 'coverage/lcov.info'

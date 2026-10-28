@@ -1,0 +1,17 @@
+[tool.ruff]
+# 与数据管线脚本保持兼容的最低 Python 语法版本
+target-version = "py39"
+line-length = 100
+
+extend-exclude = [
+    "venv",
+    "build",
+    "flutter_app/build",
+    "third_party",
+    "external",
+    ".dart_tool",
+]
+
+[tool.ruff.lint]
+# 先启用低误报的基础规则；格式化与更激进的规则后续按需增加
+select = ["E4", "E7", "E9", "F"]

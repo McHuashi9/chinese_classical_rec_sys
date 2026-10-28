@@ -80,8 +80,12 @@ cmake --build build -j$(nproc) --target run_tests
 
 cd flutter_app && flutter analyze              # Dart 静态分析
 cd flutter_app && flutter test                 # Dart 单元测试
+
+ruff check .                                  # Python 静态检查（本地需先安装 ruff）
 ```
 
+> Ruff 由独立 `lint.yml` 在 CI 中临时安装固定版本并执行，本地安装是可选便利；规则配置见 `pyproject.toml`。
+>
 > `flutter test` 含真实加载核心引擎的跨语言函数接口（FFI）集成测试（`test/integration/db_replace_flow_test.dart`），需先执行上面的 `cmake --build`；未构建核心（或 CI 非 Linux 作业）时自动跳过，不影响通过。
 >
 > 数据管线事务测试：`venv/bin/python3 tests/python/test_init_data_transaction.py`（需先生成 `build/data/questions.json`）；CI 在 `repro-check.yml` 的题库可复现性检查后自动运行。

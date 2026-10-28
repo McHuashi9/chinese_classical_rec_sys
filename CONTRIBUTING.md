@@ -31,7 +31,7 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 
 ## 运行测试
 
-见 [README.md#运行测试](README.md#运行测试)（C++ Catch2 + `flutter analyze` + `flutter test`）。
+见 [README.md#运行测试](README.md#运行测试)（C++ Catch2 + `flutter analyze` + Ruff + `flutter test`）。
 
 ## 贡献代码流程
 

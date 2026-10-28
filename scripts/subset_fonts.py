@@ -13,7 +13,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 import zipfile
 from pathlib import Path
@@ -370,7 +369,7 @@ def verify_fonts(chars: set) -> bool:
             if missing:
                 sample = "".join(sorted(missing)[:10])
                 eprint(f"  [info] {output_name}: 缺 {len(missing)} 个字符 (前10: {sample})")
-                eprint(f"         注：这些字符原版字体也未包含，非子集化问题")
+                eprint("         注：这些字符原版字体也未包含，非子集化问题")
                 missing_all.update(missing)
             else:
                 eprint(f"  [ok]   {output_name}: 全部覆盖")
