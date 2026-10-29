@@ -27,7 +27,7 @@ import 'package:chinese_classical_rec_sys/engine/ffi_call.dart';
 import 'package:chinese_classical_rec_sys/engine/db_open_error_message.dart';
 
 class AppCoordinator {
-  static const currentVersion = '1.6.1';
+  static const currentVersion = '1.7.0';
 
   final NavigationController navCtrl;
   final SettingsController settingsCtrl;

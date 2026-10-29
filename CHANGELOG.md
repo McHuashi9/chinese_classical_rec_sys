@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-29
+
 ### Changed
 
 - **手机端反馈现在能附带日志尾部**：日志同时写入应用日志文件与系统日志；日志文件尚未生成时，反馈仍会提示查看系统日志。
@@ -636,3 +638,4 @@ C++ CLI 原型。
 [1.5.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.5.0
 [1.6.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.6.0
 [1.6.1]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.6.1
+[1.7.0]: https://github.com/McHuashi9/chinese_classical_rec_sys/releases/tag/v1.7.0
