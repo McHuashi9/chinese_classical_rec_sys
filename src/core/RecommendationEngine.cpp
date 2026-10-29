@@ -5,8 +5,6 @@
 #include <cmath>
 #include <algorithm>
 
-// CRITIC权重定义移入 Config.h
-
 RecommendationEngine::RecommendationEngine() {}
 
 double RecommendationEngine::gaussian(double x) const {

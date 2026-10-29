@@ -17,7 +17,6 @@ struct Config {
     static constexpr double GAMMA = 1.5;          // 学习率衰减指数 γ
     static constexpr double TAU = 10.0;           // 遗忘时间常数 τ (天)
     static constexpr double C = 0.70;             // 幂律遗忘指数 c
-    static constexpr double U_FLOOR = 0.15;       // 遗忘保留底线
     static constexpr double PSI_MIN = 0.05;       // 增量清理阈值（遗忘因子低于此值时合并到基础能力）
 
     // 答题效应参数（论文Section 5.3 + E4 默认值表 tab:e4_params）
@@ -29,10 +28,6 @@ struct Config {
     static constexpr double ETA_MIN = 0.02;       // 悟性下限 η_min
     static constexpr double ETA_MAX = 0.15;       // 悟性上限 η_max
     static constexpr double QUIZ_WEIGHT_FACTOR = 0.5; // 已答题维度的推荐权重衰减因子（降权后重新归一化）
-    
-    // 动态权重参数
-    static constexpr double ALPHA_0 = 0.40;       // 初始难度/兴趣权重 α₀
-    static constexpr double U_TARGET = 0.80;      // 目标能力阈值
 
     // 错题复习调度（测验闭环）：首次间隔 = ψ⁻¹(0.85)≈2.6 天取整 3 天；
     // 间隔倍增（SM-2 式启发，与幂律 ψ 无推导关系）与移除判据待上线后按再错率校准

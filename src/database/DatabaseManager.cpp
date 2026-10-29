@@ -1,7 +1,6 @@
 #include "database/DatabaseManager.h"
 #include "utils/Logger.h"
 #include <nowide/convert.hpp>
-#include <iostream>
 #include <utility>
 
 #ifdef _WIN32

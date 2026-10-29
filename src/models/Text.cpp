@@ -74,32 +74,32 @@ int Text::getCharCount() const {
 
 double Text::getDifficulty(int index) const {
     switch (index) {
-        case 0: return f1AvgSentenceLength;   // d1
-        case 1: return f3SentenceCount;       // d2
-        case 2: return f5FunctionWordRatio;   // d3
-        case 3: return f6AvgCharLogFreq;      // d4
-        case 4: return f8TongjiaziDensity;    // d5
-        case 5: return f9PplAncient;          // d6
-        case 6: return f10PplModern;          // d7
-        case 7: return f11Mattr;              // d8
-        case 8: return f12AllusionDensity;    // d9
-        case 9: return f13SemanticComplexity; // d10
+        case 0: return f1AvgSentenceLength;
+        case 1: return f3SentenceCount;
+        case 2: return f5FunctionWordRatio;
+        case 3: return f6AvgCharLogFreq;
+        case 4: return f8TongjiaziDensity;
+        case 5: return f9PplAncient;
+        case 6: return f10PplModern;
+        case 7: return f11Mattr;
+        case 8: return f12AllusionDensity;
+        case 9: return f13SemanticComplexity;
         default: return 0.0;
     }
 }
 
 void Text::setDifficulty(int index, double value) {
     switch (index) {
-        case 0: f1AvgSentenceLength = value;   break; // d1
-        case 1: f3SentenceCount = value;       break; // d2
-        case 2: f5FunctionWordRatio = value;   break; // d3
-        case 3: f6AvgCharLogFreq = value;      break; // d4
-        case 4: f8TongjiaziDensity = value;    break; // d5
-        case 5: f9PplAncient = value;          break; // d6
-        case 6: f10PplModern = value;          break; // d7
-        case 7: f11Mattr = value;              break; // d8
-        case 8: f12AllusionDensity = value;    break; // d9
-        case 9: f13SemanticComplexity = value; break; // d10
+        case 0: f1AvgSentenceLength = value;   break;
+        case 1: f3SentenceCount = value;       break;
+        case 2: f5FunctionWordRatio = value;   break;
+        case 3: f6AvgCharLogFreq = value;      break;
+        case 4: f8TongjiaziDensity = value;    break;
+        case 5: f9PplAncient = value;          break;
+        case 6: f10PplModern = value;          break;
+        case 7: f11Mattr = value;              break;
+        case 8: f12AllusionDensity = value;    break;
+        case 9: f13SemanticComplexity = value; break;
         default: break;
     }
 }

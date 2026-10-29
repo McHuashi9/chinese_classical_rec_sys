@@ -62,10 +62,6 @@ target_include_directories(sqlite3_static PUBLIC
 
 # ─── 核心逻辑静态库 ───────────────────────────────────────────────────────────
 file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
-list(FILTER LIB_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
-list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/Command(Registry|Parser)\\.cpp$")
-list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/(Exit|Help|Library|Log|Read|Recommend)Command\\.cpp$")
-list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/PathUtils\\.cpp$")
 add_library(chinese_classical_lib STATIC ${LIB_SOURCES})
 
 # 设置 PUBLIC 包含目录，使链接此库的目标自动获得头文件路径

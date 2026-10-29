@@ -37,10 +37,10 @@ class AppCoordinator {
 
   final ValueNotifier<bool> initialized = ValueNotifier(false);
 
-  /// 数据库替换窗口（引擎 g_state 关闭重开期间）为 true。
-  /// 当前实现替换段内无 await（原子），该闸门是防御性的：
-  /// 防未来在替换/回滚/重开之间插入异步间隙时，答题/阅读效应 FFI 调用落到
-  /// 已关闭的引擎上静默 NOT_INIT。UI 侧（quiz 提交、阅读效应）据此短路。
+  /// 数据库替换窗口为 true：替换/回滚期间拒绝答题/阅读效应 FFI 调用。
+  /// 当前替换在单次同步 FFI 调用内完成（无 await），闸门是防御性的：
+  /// 防未来在替换与后续调用之间插入异步间隙时，调用落到内容库半替换状态。
+  /// UI 侧（quiz 提交、阅读效应）据此短路。
   final ValueNotifier<bool> syncing = ValueNotifier(false);
 
   NativeBridge? _bridge;

@@ -2,8 +2,6 @@
 #include "database/schema_introspect.h"
 #include "utils/Logger.h"
 #include <sqlite3.h>
-#include <iostream>
-#include <sstream>
 #include <cstdlib>
 #include <ctime>
 #include <set>

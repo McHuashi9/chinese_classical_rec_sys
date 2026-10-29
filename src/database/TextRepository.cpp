@@ -1,8 +1,6 @@
 #include "database/TextRepository.h"
 #include "utils/Logger.h"
 #include <sqlite3.h>
-#include <iostream>
-#include <sstream>
 #include <cstdlib>
 #include <unordered_map>
 #include <functional>
