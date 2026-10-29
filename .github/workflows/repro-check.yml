@@ -13,10 +13,12 @@ on:
     paths:
       - 'scripts/project/generate_questions.py'
       - 'scripts/project/init_data.py'
+      - 'scripts/project/feature_normalization.py'
       - 'scripts/project/features.json'
       - 'scripts/project/check_questions_reproducible.sh'
       - 'scripts/project/check_content_db.py'
       - 'tests/python/test_init_data_transaction.py'
+      - 'tests/python/test_pipeline_hygiene.py'
       - 'articles/**'
       - '.github/workflows/repro-check.yml'
   workflow_dispatch:
@@ -37,6 +39,10 @@ jobs:
       - name: init_data transaction tests
         # 复用上一步生成的 build/data/questions.json；id map/参考库缺失时自动跳过对拍
         run: python3 tests/python/test_init_data_transaction.py
+
+      - name: pipeline hygiene tests
+        # 共享归一化固定 fixture、坏文件建库失败、重复 q_key/0 题非零退出
+        run: python3 tests/python/test_pipeline_hygiene.py
 
       - name: Download latest data-* release
         id: data_release

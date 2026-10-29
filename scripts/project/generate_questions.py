@@ -19,7 +19,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-import numpy as np
+from feature_normalization import FEATURE_KEYS, percentile_normalize
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -28,15 +28,12 @@ FEATURES_FILE = Path(__file__).resolve().parent / "features.json"
 EXTERNAL_TJ = Path(__file__).resolve().parents[2] / "external" / "tongjiazi" / "knowledge_base"
 # --sample 产物输出目录（相对仓库，与 --json 的 build/data/questions.json 同风格）
 OUT_DIR = Path(__file__).resolve().parents[2] / "build" / "data" / "questions_sample"
+# --json 的入库题库路径
+DB_JSON = Path(__file__).resolve().parents[2] / "build" / "data" / "questions.json"
 
 # CRITIC 权重（与 include/core/Config.h 一致，d1..d10）
 CRITIC_WEIGHTS = [0.09215, 0.09382, 0.13107, 0.09247, 0.10341,
                   0.11624, 0.08775, 0.08544, 0.10088, 0.09677]
-
-# 特征键（与 init_data.py FEATURE_KEYS 一致，顺序敏感）
-FEATURE_KEYS = ["f1_avg_sentence_length", "f3_sentence_count", "f5_function_word_ratio",
-                "f6_avg_char_log_freq", "f8_tongjiazi_density", "f9_ppl_ancient",
-                "f10_ppl_modern", "f11_mattr", "f12_allusion_density", "f13_semantic_complexity"]
 
 # 题型 → 维度（0-based，论文表 tab:question_mapping）
 TYPE_DIMS = {
@@ -114,25 +111,6 @@ except FileNotFoundError:
 POS_MEANING = _FW_DATA["pos_meaning"]
 FUNCTION_WORDS = _FW_DATA["words"]
 
-
-def percentile_normalize(features: dict, lower_pct: int = 2, upper_pct: int = 98) -> dict:
-    """复刻 init_data.py 的百分位标准化（P2-P98 + f6/f9 方向反转），输出 [0,1]"""
-    titles = list(features.keys())
-    raw = np.zeros((len(titles), len(FEATURE_KEYS)))
-    for i, t in enumerate(titles):
-        for j, k in enumerate(FEATURE_KEYS):
-            raw[i, j] = features[t].get(k, 0.0)
-    norm = np.zeros_like(raw)
-    for j in range(len(FEATURE_KEYS)):
-        lo, hi = np.percentile(raw, lower_pct, axis=0)[j], np.percentile(raw, upper_pct, axis=0)[j]
-        if hi - lo > 1e-9:
-            norm[:, j] = np.clip((raw[:, j] - lo) / (hi - lo), 0.0, 1.0)
-        else:
-            norm[:, j] = 0.5
-    norm[:, 3] = 1 - norm[:, 3]  # f6 反转
-    norm[:, 5] = 1 - norm[:, 5]  # f9 反转
-    return {t: {FEATURE_KEYS[j]: float(norm[i, j]) for j in range(len(FEATURE_KEYS))}
-            for i, t in enumerate(titles)}
 
 ANNO_RE = re.compile(r"〔(\d+)〕\s*(.*?)(?=〔\d+〕|$)", re.DOTALL)
 TONGJIA_RE = re.compile(r"[通同][“\"]([^”\"，。；]{1,4})[”\"]")
@@ -1024,6 +1002,19 @@ def validate(q: dict) -> bool:
     return True
 
 
+def _find_q_key_conflicts(questions: list) -> list:
+    """返回 [(q_key, 首次题干, 重复题干), ...]，按生成顺序记录所有冲突。"""
+    seen = {}
+    conflicts = []
+    for q in questions:
+        key = q["q_key"]
+        if key in seen:
+            conflicts.append((key, seen[key], q["stem"]))
+        else:
+            seen[key] = q["stem"]
+    return conflicts
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", type=int, default=0, help="随机抽 N 篇输出可读文本")
@@ -1110,11 +1101,22 @@ def main():
         if not qs:
             failures[art["title"]] = f"注释条目 {len(items)} 条"
 
+    # 写出任何题库产物之前先过全局闸门：0 题或 q_key 冲突都以非零码退出
+    if not all_qs:
+        print("错误: 未生成任何题目，不写出题库产物", file=sys.stderr)
+        return 1
+    conflicts = _find_q_key_conflicts(all_qs)
+    if conflicts:
+        for key, first_stem, dup_stem in conflicts:
+            print(f"错误: q_key 重复 {key}：{first_stem} / {dup_stem}", file=sys.stderr)
+        print(f"错误: q_key 重复 {len(conflicts)} 处，不写出题库产物", file=sys.stderr)
+        return 1
+
     (out / "all_questions.json").write_text(json.dumps(all_qs, ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=1), encoding="utf-8")
 
     if args.json:
-        db_json = Path(__file__).resolve().parents[2] / "build" / "data" / "questions.json"
+        db_json = DB_JSON
         db_json.parent.mkdir(parents=True, exist_ok=True)
         # 入库字段：answer_index = 正确答案在 options（已洗牌）中的下标；
         # dims 用 CSV（如 "3,4,9"），C++/Dart 两侧 split 即可解析，避免 JSON 解析
@@ -1175,7 +1177,8 @@ def main():
         sample_file = out / "sample_review.md"
         sample_file.write_text("\n".join(md), encoding="utf-8")
         print(f"样本 → {sample_file}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

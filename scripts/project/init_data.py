@@ -34,7 +34,7 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
+from feature_normalization import FEATURE_KEYS, percentile_normalize
 
 # Fix Windows console encoding for Chinese characters
 if sys.stdout.encoding != 'utf-8':
@@ -102,36 +102,42 @@ def strip_front_matter(content: str) -> str:
     return re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, count=1, flags=re.DOTALL)
 
 
+class TextFileError(Exception):
+    """一篇文本读取或解析失败；消息含文件路径与底层原因。"""
+
+
 def parse_text_file(file_path: str) -> dict | None:
-    """解析古文 txt 文件，从 front matter 提取元数据，从正文提取题解、原文和注释"""
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        
-        fm = parse_front_matter(content)
-        if not fm:
-            print(f"警告: {file_path} 缺少 front matter，跳过")
-            return None
-        
-        body = strip_front_matter(content)
-        original_text = extract_original_text(body)
-        background = extract_background(body)
-        annotations_raw = extract_annotations(body)
-        translation = extract_translation(body)
-        
-        return {
-            "title": fm.get('title', ''),
-            "author": fm.get('author', ''),
-            "dynasty": fm.get('dynasty', ''),
-            "content": original_text,
-            "background": background,
-            "source": fm.get('source', ''),
-            "annotations_raw": annotations_raw,
-            "translation": translation,
-        }
-    except Exception as e:
-        print(f"解析文件失败 {file_path}: {e}")
+    """解析古文 txt 文件，从 front matter 提取元数据，从正文提取题解、原文和注释
+
+    缺少 front matter 时返回 None（调用方按显式跳过处理）；读取或解析失败时
+    异常向上抛，由 init_database 在创建临时库之前终止建库。
+    """
+    content = Path(file_path).read_text(encoding="utf-8")
+
+    fm = parse_front_matter(content)
+    if not fm:
+        print(f"警告: {file_path} 缺少 front matter，跳过")
         return None
+
+    body = strip_front_matter(content)
+    return {
+        "title": fm.get('title', ''),
+        "author": fm.get('author', ''),
+        "dynasty": fm.get('dynasty', ''),
+        "content": extract_original_text(body),
+        "background": extract_background(body),
+        "source": fm.get('source', ''),
+        "annotations_raw": extract_annotations(body),
+        "translation": extract_translation(body),
+    }
+
+
+def _parse_text_file_with_path(path: Path) -> dict | None:
+    """返回 parse_text_file 的结果；失败时抛 TextFileError，消息含路径与原因。"""
+    try:
+        return parse_text_file(str(path))
+    except Exception as e:
+        raise TextFileError(f"{path}: {e}") from e
 
 
 def load_texts() -> dict:
@@ -147,7 +153,7 @@ def load_texts() -> dict:
     anthology_dir = Path(ANTHOLOGY_DIR)
     if anthology_dir.exists():
         for txt_file in anthology_dir.glob("*.txt"):
-            parsed = parse_text_file(str(txt_file))
+            parsed = _parse_text_file_with_path(txt_file)
             if parsed:
                 title = parsed["title"]
                 author = parsed.get("author", "")
@@ -160,7 +166,7 @@ def load_texts() -> dict:
     textbook_dir = Path(TEXTBOOK_DIR)
     if textbook_dir.exists():
         for txt_file in textbook_dir.glob("*.txt"):
-            parsed = parse_text_file(str(txt_file))
+            parsed = _parse_text_file_with_path(txt_file)
             if parsed:
                 title = parsed["title"]
                 author = parsed.get("author", "")
@@ -184,76 +190,6 @@ def load_features() -> dict:
     
     with open(features_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-# 10维特征键名（与论文Table 3一致）
-FEATURE_KEYS = [
-    "f1_avg_sentence_length",   # d1
-    "f3_sentence_count",        # d2
-    "f5_function_word_ratio",   # d3
-    "f6_avg_char_log_freq",     # d4
-    "f8_tongjiazi_density",     # d5
-    "f9_ppl_ancient",           # d6
-    "f10_ppl_modern",           # d7
-    "f11_mattr",                # d8
-    "f12_allusion_density",     # d9
-    "f13_semantic_complexity"   # d10
-]
-
-
-def percentile_normalize(features: dict, lower_pct: int = 2, upper_pct: int = 98) -> dict:
-    """百分位数标准化特征到 [0,1] 范围
-    
-    使用 P2-P98 替代 min/max，避免极端值影响。
-    与论文方法一致。
-    
-    Args:
-        features: 原始特征字典 {title: {feature_key: value, ...}}
-        lower_pct: 下百分位数（默认2）
-        upper_pct: 上百分位数（默认98）
-    
-    Returns:
-        标准化后的特征字典
-    """
-    if not features:
-        return features
-    
-    # 提取所有文章的特征矩阵
-    titles = list(features.keys())
-    n_texts = len(titles)
-    n_features = len(FEATURE_KEYS)
-    
-    raw_matrix = np.zeros((n_texts, n_features))
-    for i, title in enumerate(titles):
-        for j, key in enumerate(FEATURE_KEYS):
-            raw_matrix[i, j] = features[title].get(key, 0.0)
-    
-    # 计算每个特征的百分位数
-    lowers = np.percentile(raw_matrix, lower_pct, axis=0)
-    uppers = np.percentile(raw_matrix, upper_pct, axis=0)
-    
-    # 标准化
-    normalized_matrix = np.zeros_like(raw_matrix)
-    for j in range(n_features):
-        if uppers[j] - lowers[j] > 1e-9:
-            normalized_matrix[:, j] = np.clip(
-                (raw_matrix[:, j] - lowers[j]) / (uppers[j] - lowers[j]), 0.0, 1.0
-            )
-        else:
-            normalized_matrix[:, j] = 0.5  # 常量特征设为中间值
-    
-    # 方向性反转：↓难特征的语义反转（"值越大越难"）
-    normalized_matrix[:, 3] = 1 - normalized_matrix[:, 3]  # f6 (字平均对数频次, ↓难)
-    normalized_matrix[:, 5] = 1 - normalized_matrix[:, 5]  # f9 (古汉语困惑度, ↓难)
-    
-    # 构建标准化后的特征字典
-    normalized_features = {}
-    for i, title in enumerate(titles):
-        normalized_features[title] = {}
-        for j, key in enumerate(FEATURE_KEYS):
-            normalized_features[title][key] = float(normalized_matrix[i, j])
-    
-    return normalized_features
 
 
 def create_tables(conn: sqlite3.Connection) -> bool:
@@ -347,15 +283,22 @@ def init_database(db_path: str, id_map: dict | None = None,
 
     整个建库（schema → 清空 → 写入 → user_version → 纯净断言）在单个事务内完成，
     且先写到 <db>.tmp、提交成功后再原子替换目标库：任何失败都回到运行前状态。
+
+    文章或特征在创建临时库之前加载失败时返回 False（打印文件名与原因），
+    目标库与 <db>.tmp 都不动。
     """
     start_time = time.time()
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
-    
-    texts = load_texts()
-    features = load_features()
-    features = percentile_normalize(features)
+
+    try:
+        texts = load_texts()
+        features = percentile_normalize(load_features())
+    except Exception as e:
+        # 加载失败发生在临时库创建之前，返回 False 时目标库未被写入
+        print(f"数据加载失败: {e}")
+        return False
     
     # 特征匹配：先试 front matter title，失配则 fallback 到 filename.stem
     # （如 郑伯克段于鄢 文件名含括号，features.json 的 key 也含括号）

@@ -29,6 +29,8 @@ python3 scripts/project/init_data.py --id-map build/data/question_id_map.json
 cp build/data/classical.db flutter_app/assets/data/
 ```
 
+源文件解析失败、题库 0 题或全局 `q_key` 重复时，生成/建库以非零码退出且不写目标库；先修源文件，确需跳过的文件按显式白名单处理。
+
 ## 数据库结构（DB Schema）变更
 
 严格按以下顺序执行：
