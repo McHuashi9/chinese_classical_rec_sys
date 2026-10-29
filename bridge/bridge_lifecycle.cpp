@@ -237,7 +237,7 @@ extern "C" CHINESE_CORE_EXPORT int db_open(const char* content_path, const char*
     const bool logReady = Logger::getInstance().init((dbDir / "logs").string());
     if (logReady) {
 #if defined(__ANDROID__) || defined(__APPLE__)
-        LOG_INFO("bridge: 日志系统已初始化，输出到系统日志");
+        LOG_INFO("bridge: 日志系统已初始化，输出到系统日志与 logs/app.log");
 #else
         LOG_INFO("bridge: 日志系统已初始化, 输出到 logs/app.log");
 #endif

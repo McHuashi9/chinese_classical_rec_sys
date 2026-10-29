@@ -39,8 +39,8 @@ Future<void> showFeedbackDialog(
               platform: platform,
               contentDataVersion: contentDataVersion,
               schemaVersions: schemaVersions,
-              // 移动端无本地日志时，正文不写“（暂无日志文件）”占位，
-              // 而是给出平台事实说明（本平台日志在系统日志中，不含于反馈）。
+              // 移动端日志文件为空时，正文不写“（暂无日志文件）”占位，
+              // 而是说明日志同时写文件与系统日志、文件尚未生成时的反馈指引。
               logTail: logTailForFeedback(logTail, platformName: platform),
             );
           },
@@ -387,8 +387,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                             );
                           },
                         ),
-                      // A4：移动端无本地日志（readLogTail 恒空）时给出“系统日志
-                      // 不含于反馈”的指引，而不是静默显示“（暂无日志文件）”。
+                      // 移动端日志文件为空时给出“文件尚未生成、仍可查系统日志”
+                      // 的指引，而不是静默显示“（暂无日志文件）”。
                       FutureBuilder<String>(
                         future: _logTailFuture,
                         builder: (context, snapshot) {

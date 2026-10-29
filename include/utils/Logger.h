@@ -24,10 +24,14 @@ public:
      * @brief 初始化日志系统
      * @param logDir 日志目录路径，默认为 "logs"
      * @param logFileName 日志文件名，默认为 "app.log"
-     * @return true 初始化成功，false 初始化失败
+     * @return true 全部 sink 就绪；false 初始化失败或文件 sink 降级（系统 sink 可能仍可用）
      *
      * 桌面端：同目录重复 init 幂等；目录变化时创建新 sink，成功后替换，
-     * 失败保留旧 sink。Android/iOS 继续使用系统日志 sink，目录变化不改变 sink。
+     * 失败保留旧 sink。
+     *
+     * Android/iOS：系统 sink + 文件 sink 双写。同目录且文件 sink 可用时幂等；
+     * 目录变化时先建新 sink，成功后替换，失败保留旧 sink。文件 sink 失败但系统
+     * sink 可用时，日志仍写入系统日志，返回 false 供调用方记录降级。
      */
     bool init(const std::string& logDir = "logs",
               const std::string& logFileName = "app.log");
@@ -61,7 +65,7 @@ private:
     std::mutex mutex_;
     std::shared_ptr<spdlog::logger> logger_;
     bool initialized_ = false;
-    /// 桌面端当前文件 sink 对应的规范化目录；移动端为空。
+    /// 当前文件 sink 对应的规范化目录；文件 sink 不可用时为空。
     std::string currentLogDir_;
     /// A3：init 之前是否已显式下发过级别，以及该级别。
     bool hasLevelOverride_ = false;

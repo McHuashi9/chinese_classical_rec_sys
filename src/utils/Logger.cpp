@@ -7,21 +7,27 @@
 #else
 #include <nowide/iostream.hpp>
 #include <nowide/convert.hpp>
-#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#endif
+
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <filesystem>
-#include <chrono>
+#include <string>
+
+#if defined(__ANDROID__) || defined(__APPLE__)
+#include <spdlog/sinks/dist_sink.h>
 #endif
 
 namespace {
-#ifdef __ANDROID__
-constexpr const char* kAndroidTag = "chinese_core";
-#elif !defined(__APPLE__)
 // 轮转参数（100 KiB × 3）提为具名常量。
 constexpr std::size_t kRotateMaxBytes = 100 * 1024;  // 单文件轮转阈值
 constexpr std::size_t kRotateMaxFiles = 3;           // 保留的历史文件数
 
-std::string normalizeDesktopLogDir(const std::string& logDir)
+#ifdef __ANDROID__
+constexpr const char* kAndroidTag = "chinese_core";
+#endif
+
+std::string normalizeLogDir(const std::string& logDir)
 {
     try {
         return std::filesystem::absolute(logDir).lexically_normal().string();
@@ -30,7 +36,7 @@ std::string normalizeDesktopLogDir(const std::string& logDir)
     }
 }
 
-std::shared_ptr<spdlog::logger> makeDesktopFileLogger(
+std::shared_ptr<spdlog::sinks::sink> makeFileSink(
     const std::string& logPath, const std::string& logFileName)
 {
     std::filesystem::create_directories(logPath);
@@ -42,7 +48,28 @@ std::shared_ptr<spdlog::logger> makeDesktopFileLogger(
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         logFilePath, kRotateMaxBytes, kRotateMaxFiles);
     file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %s(%#) %v");
-    return std::make_shared<spdlog::logger>("app", file_sink);
+    return file_sink;
+}
+
+#if !defined(__ANDROID__) && !defined(__APPLE__)
+std::shared_ptr<spdlog::logger> makeFileLogger(
+    const std::string& logPath, const std::string& logFileName)
+{
+    return std::make_shared<spdlog::logger>("app", makeFileSink(logPath, logFileName));
+}
+#endif
+
+#if defined(__ANDROID__) || defined(__APPLE__)
+std::shared_ptr<spdlog::sinks::sink> makeSystemSink()
+{
+#ifdef __ANDROID__
+    auto sink = std::make_shared<spdlog::sinks::android_sink_mt>(kAndroidTag);
+    sink->set_pattern("%v");
+#else
+    auto sink = std::make_shared<ios_log_sink_mt>();
+    sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+#endif
+    return sink;
 }
 #endif
 }  // namespace
@@ -55,54 +82,77 @@ Logger& Logger::getInstance() {
 bool Logger::init(const std::string& logDir, const std::string& logFileName) {
     std::lock_guard<std::mutex> lock(mutex_);
 
+#if defined(__ANDROID__) || defined(__APPLE__)
+    const std::string normalizedDir = normalizeLogDir(logDir);
+
+    // 同目录且文件 sink 可用时幂等；上次文件 sink 失败（currentLogDir_ 为空）会重试。
+    if (initialized_ && !currentLogDir_.empty() && currentLogDir_ == normalizedDir) {
+        return true;
+    }
+
+    std::shared_ptr<spdlog::sinks::sink> systemSink;
+    try {
+        systemSink = makeSystemSink();
+    } catch (const std::exception& ex) {
+        if (initialized_) {
+            LOG_WARN("日志系统 sink 重建失败，保留旧 sink: {}", ex.what());
+            return false;
+        }
 #ifdef __ANDROID__
-    (void)logDir;
-    (void)logFileName;
-    if (initialized_) {
-        return true;
-    }
-    try {
-        auto android_sink = std::make_shared<spdlog::sinks::android_sink_mt>(kAndroidTag);
-        android_sink->set_pattern("%v");
-        logger_ = std::make_shared<spdlog::logger>("app", android_sink);
-        spdlog::set_default_logger(logger_);
-        applyLevel(hasLevelOverride_ ? levelOverride_ : spdlog::level::info);
-        spdlog::flush_on(spdlog::level::warn);
-        initialized_ = true;
-#ifndef APP_VERSION
-#define APP_VERSION ""
-#endif
-        LOG_INFO("===== v{} 启动 =====", APP_VERSION);
-        return true;
-    } catch (const std::exception& ex) {
         __android_log_print(ANDROID_LOG_ERROR, kAndroidTag, "日志初始化失败: %s", ex.what());
+#else
+        fprintf(stderr, "日志初始化失败: %s\n", ex.what());
+#endif
         return false;
     }
-#elif defined(__APPLE__)
-    (void)logDir;
-    (void)logFileName;
-    if (initialized_) {
-        return true;
-    }
+
+    std::shared_ptr<spdlog::logger> nextLogger;
+    bool fileReady = false;
+    std::string fileError;
     try {
-        auto os_sink = std::make_shared<ios_log_sink_mt>();
-        os_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-        logger_ = std::make_shared<spdlog::logger>("app", os_sink);
-        spdlog::set_default_logger(logger_);
-        applyLevel(hasLevelOverride_ ? levelOverride_ : spdlog::level::info);
-        spdlog::flush_on(spdlog::level::warn);
-        initialized_ = true;
+        auto dist = std::make_shared<spdlog::sinks::dist_sink_mt>();
+        dist->add_sink(systemSink);
+        dist->add_sink(makeFileSink(normalizedDir, logFileName));
+        nextLogger = std::make_shared<spdlog::logger>("app", dist);
+        fileReady = true;
+    } catch (const std::exception& ex) {
+        fileError = ex.what();
+        if (initialized_) {
+            // 已有可用 logger 时，重建失败保留旧 sink。
+            LOG_WARN("日志文件 sink 重建失败，保留旧 sink: {}", fileError);
+            return false;
+        }
+        try {
+            nextLogger = std::make_shared<spdlog::logger>("app", systemSink);
+        } catch (const std::exception& ex2) {
+#ifdef __ANDROID__
+            __android_log_print(ANDROID_LOG_ERROR, kAndroidTag, "日志初始化失败: %s", ex2.what());
+#else
+            fprintf(stderr, "日志初始化失败: %s\n", ex2.what());
+#endif
+            return false;
+        }
+    }
+
+    logger_ = std::move(nextLogger);
+    spdlog::set_default_logger(logger_);
+    applyLevel(hasLevelOverride_ ? levelOverride_ : spdlog::level::info);
+    spdlog::flush_on(spdlog::level::warn);
+    initialized_ = true;
+    currentLogDir_ = fileReady ? normalizedDir : std::string();
+
+    if (!fileReady) {
+        LOG_WARN("日志文件 sink 初始化失败，降级到系统日志: {}", fileError);
+        return false;
+    }
+
 #ifndef APP_VERSION
 #define APP_VERSION ""
 #endif
-        LOG_INFO("===== v{} 启动 =====", APP_VERSION);
-        return true;
-    } catch (const std::exception& ex) {
-        fprintf(stderr, "日志初始化失败: %s\n", ex.what());
-        return false;
-    }
+    LOG_INFO("===== v{} 启动 =====", APP_VERSION);
+    return true;
 #else
-    const std::string normalizedDir = normalizeDesktopLogDir(logDir);
+    const std::string normalizedDir = normalizeLogDir(logDir);
 
     // 同目录幂等；异目录先建新 sink，成功后再替换，失败保留旧 sink。
     if (initialized_) {
@@ -110,7 +160,7 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
             return true;
         }
         try {
-            auto nextLogger = makeDesktopFileLogger(normalizedDir, logFileName);
+            auto nextLogger = makeFileLogger(normalizedDir, logFileName);
             logger_ = std::move(nextLogger);
             currentLogDir_ = normalizedDir;
             spdlog::set_default_logger(logger_);
@@ -125,7 +175,7 @@ bool Logger::init(const std::string& logDir, const std::string& logFileName) {
     }
 
     try {
-        logger_ = makeDesktopFileLogger(normalizedDir, logFileName);
+        logger_ = makeFileLogger(normalizedDir, logFileName);
         currentLogDir_ = normalizedDir;
         spdlog::set_default_logger(logger_);
         applyLevel(hasLevelOverride_ ? levelOverride_ : spdlog::level::info);

@@ -123,6 +123,22 @@ TEST_CASE("Logger 初始化失败后可在有效目录恢复", "[logger]")
     Logger::getInstance().resetForTest();
 }
 
+TEST_CASE("Logger 文件达到轮转阈值后生成 app.1.log", "[logger]")
+{
+    Logger::getInstance().resetForTest();
+    TempLoggerDir dir("rotate");
+    REQUIRE(Logger::getInstance().init(dir.path.string()));
+
+    const std::string payload(200, 'x');
+    for (int i = 0; i < 700; ++i) {
+        LOG_WARN("rotate {} {}", i, payload);
+    }
+
+    CHECK(std::filesystem::exists(dir.path / "app.1.log"));
+    CHECK(std::filesystem::exists(dir.path / "app.log"));
+    Logger::getInstance().resetForTest();
+}
+
 TEST_CASE("日志路径脱敏只保留 basename", "[logger][redact]")
 {
     CHECK(bridge_log::redactPath("/home/alice/app/classical.db") ==

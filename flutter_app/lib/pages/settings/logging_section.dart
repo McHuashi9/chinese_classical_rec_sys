@@ -69,7 +69,7 @@ class LoggingSection extends StatelessWidget {
             ] else ...[
               SizedBox(height: context.gapSmall),
               Text(
-                // A4：事实描述——移动端日志只进系统日志，不随反馈自动附带。
+                // 移动端日志同时写文件与系统日志；文件尚未生成时给出反馈指引。
                 kMobileSystemLogNotice,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: context.appColors.inkSecondary,

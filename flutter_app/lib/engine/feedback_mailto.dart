@@ -100,14 +100,14 @@ const int kMaxRotatedLogFiles = 5;
 /// [readLogTail] 在没有可用本地日志文件时返回的占位文本（A6）。
 const String kEmptyLogTailPlaceholder = '（暂无日志文件）';
 
-/// 移动端只有系统日志、没有本地文件时的反馈说明（A4）。
+/// 移动端日志同时写入应用日志文件与系统日志；文件尚未生成时的反馈说明。
 ///
 /// 设置页日志卡与反馈弹窗共用同一句，避免两处口径漂移。
 const String kMobileSystemLogNotice =
-    '本平台日志在系统日志中（Android logcat / iOS 控制台），不含于反馈；'
-    '反馈请附操作步骤或截图';
+    '本平台日志同时写入应用日志文件与系统日志（Android logcat / iOS 控制台）；'
+    '日志文件尚未生成时，反馈可附操作步骤或截图';
 
-/// 平台名是否属于“日志只进系统日志、无本地文件”的移动端（A4）。
+/// 平台名是否属于移动端（日志同时写文件与系统日志）。
 bool isMobileLogPlatform(String platformName) {
   final name = platformName.toLowerCase();
   return name.contains('android') || name.contains('ios');
@@ -119,7 +119,7 @@ bool isEmptyLogTail(String? logTail) =>
     logTail.trim().isEmpty ||
     logTail == kEmptyLogTailPlaceholder;
 
-/// A4：移动端无本地日志时，把空占位换成平台事实说明；其余情况原样返回。
+/// 移动端日志为空时，把空占位换成平台事实说明；其余情况原样返回。
 ///
 /// 只改写“占位”，不会把真实日志内容替换掉；桌面端（本地有文件）也不改写。
 String logTailForFeedback(String logTail, {required String platformName}) =>
